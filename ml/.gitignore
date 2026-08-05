@@ -1,0 +1,10 @@
+# jangan pernah masuk repo: rekaman CCTV & potongan wajah karyawan
+*.mp4
+sampel/
+presentasi/
+reid_dataset*/
+reid_panen_mentah/
+
+# bobot model dikirim terpisah, bukan lewat git
+*.pt
+weights/
