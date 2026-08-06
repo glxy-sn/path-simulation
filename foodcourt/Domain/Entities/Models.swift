@@ -8,22 +8,31 @@
 import Foundation
 import CoreGraphics
 
-
 // MARK: - Import
 
 struct CameraClip: Identifiable, Hashable {
     let id = UUID()
     var label: String
     var fileName: String
-    var duration: String
     var resolution: String
+    var durationSec: Double
+    var url: URL? = nil
+    var duration: String { timecode(durationSec) }
+}
+
+/// Format detik -> "H:MM:SS" atau "M:SS".
+func timecode(_ sec: Double) -> String {
+    let x = max(0, Int(sec.rounded()))
+    let h = x / 3600, m = (x % 3600) / 60, s = x % 60
+    return h > 0 ? String(format: "%d:%02d:%02d", h, m, s)
+                 : String(format: "%d:%02d", m, s)
 }
 
 extension CameraClip {
     static let samples: [CameraClip] = [
-        .init(label: "Pintu Masuk", fileName: "cam_entrance.mp4", duration: "12:40", resolution: "1920×1080"),
-        .init(label: "Area Tengah", fileName: "cam_center.mp4",   duration: "12:40", resolution: "1920×1080"),
-        .init(label: "Kasir",       fileName: "cam_cashier.mp4",  duration: "12:38", resolution: "1280×720")
+        .init(label: "Pintu Masuk", fileName: "cam_entrance.mp4", resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Area Tengah", fileName: "cam_center.mp4",   resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Kasir",       fileName: "cam_cashier.mp4",  resolution: "1280×720",  durationSec: 5400)
     ]
 }
 
@@ -41,8 +50,15 @@ enum AnalysisMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var detail: String {
         switch self {
-        case .lengkap: return "Kalibrasi antar-kamera → bird's-eye gabungan & ID lintas kamera."
-        case .cepat:   return "Tanpa kalibrasi → analitik per-kamera saja (zero-config)."
+        // Deskripsi lama menjanjikan dua hal yang belum ada satu pun:
+        // bird's-eye tidak dibuat (homografi tidak dihitung) dan ID lintas
+        // kamera tidak dijalankan. Titik kalibrasi tetap bisa digambar dan
+        // disimpan, tapi pipeline tidak membacanya — jadi Mode Lengkap
+        // menghasilkan angka yang sama persis dengan Mode Cepat.
+        case .lengkap: return "Kalibrasi digambar dan disimpan, tapi BELUM dipakai pipeline — "
+            + "bird's-eye & ID lintas kamera masih dikerjakan. Hasilnya sama dengan Mode Cepat."
+        case .cepat:   return "Langsung proses, tanpa kalibrasi. "
+            + "Ini yang sesuai dengan kemampuan pipeline sekarang."
         }
     }
 }
@@ -74,10 +90,14 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Deteksi orang (YOLO11x)",         systemImage: "person.crop.rectangle"),
-        .init(name: "Tracking (BoT-SORT)",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
-        .init(name: "Fusion multi-kamera",             systemImage: "camera.metering.multispot"),
-        .init(name: "Analitik (heatmap, dwell, path)", systemImage: "chart.dots.scatter")
+        // Nama menyusul pipeline yang benar-benar dijalankan. Sebelumnya
+        // tertulis "YOLO11x" (detektornya YOLO11s fine-tune) dan "Fusion
+        // multi-kamera" (tidak ada fusion — yang terjadi penyambungan ID
+        // di dalam satu kamera).
+        .init(name: "Deteksi orang (YOLO11s fine-tune)", systemImage: "person.crop.rectangle"),
+        .init(name: "Tracking (BoT-SORT + OSNet Re-ID)", systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
+        .init(name: "Penyambungan ID (1 kamera)",        systemImage: "link"),
+        .init(name: "Analitik (heatmap, zona, path)",    systemImage: "chart.dots.scatter")
     ]
 }
 
@@ -201,6 +221,17 @@ struct HistoryEntry: Identifiable {
     let visitors: Int
     let avgDwellSeconds: Int
     let mode: String
+
+    /// Penanda lari di engine (`run-…`). nil untuk entri contoh — entri tanpa
+    /// ini tidak bisa dibuka atau dihapus, karena tidak ada apa pun di disk.
+    var runId: String? = nil
+    /// Diisi untuk lari sungguhan; kartu menampilkan ini alih-alih jumlah
+    /// pengunjung, karena puncak okupansi tidak punya galat sebesar itu.
+    var peakOccupancy: Int? = nil
+    var durationText: String? = nil
+    /// Besar folder di disk. Rekaman beranotasi 2–13 MB per lari menumpuk
+    /// cepat, dan pemiliknya berhak tahu sebelum memutuskan menghapus.
+    var ukuranByte: Int64 = 0
 
     var avgDwellText: String {
         let m = avgDwellSeconds / 60, s = avgDwellSeconds % 60
