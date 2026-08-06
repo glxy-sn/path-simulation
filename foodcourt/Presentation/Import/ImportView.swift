@@ -72,7 +72,9 @@ struct ImportView: View {
             if let track = try? await asset.loadTracks(withMediaType: .video).first,
                let size = try? await track.load(.naturalSize),
                let i = session.cameras.firstIndex(where: { $0.id == id }) {
-                session.cameras[i].resolution = "\(Int(abs(size.width)))×\(Int(abs(size.height)))"
+                let pixelSize = PixelSize(width: abs(size.width), height: abs(size.height))
+                session.cameras[i].resolution = "\(Int(pixelSize.width))×\(Int(pixelSize.height))"
+                session.cameras[i].framePixelSize = pixelSize
             }
         }
     }

@@ -8,12 +8,18 @@
 
 /* Begin PBXFileReference section */
 		45962BC130206CB500A4579F /* foodcourt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = foodcourt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A11C0DE10000000000000001 /* foodcourtTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = foodcourtTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		45962BC330206CB500A4579F /* foodcourt */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = foodcourt;
+			sourceTree = "<group>";
+		};
+		A11C0DE10000000000000002 /* foodcourtTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = foodcourtTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +39,7 @@
 			isa = PBXGroup;
 			children = (
 				45962BC330206CB500A4579F /* foodcourt */,
+				A11C0DE10000000000000002 /* foodcourtTests */,
 				45962BC230206CB500A4579F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,11 +48,22 @@
 			isa = PBXGroup;
 			children = (
 				45962BC130206CB500A4579F /* foodcourt.app */,
+				A11C0DE10000000000000001 /* foodcourtTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		A11C0DE10000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 45962BB930206CB500A4579F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 45962BC030206CB500A4579F;
+			remoteInfo = foodcourt;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXNativeTarget section */
 		45962BC030206CB500A4579F /* foodcourt */ = {
@@ -69,6 +87,29 @@
 			productName = foodcourt;
 			productReference = 45962BC130206CB500A4579F /* foodcourt.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A11C0DE10000000000000004 /* foodcourtTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A11C0DE10000000000000005 /* Build configuration list for PBXNativeTarget "foodcourtTests" */;
+			buildPhases = (
+				A11C0DE10000000000000006 /* Sources */,
+				A11C0DE10000000000000007 /* Frameworks */,
+				A11C0DE10000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A11C0DE10000000000000009 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A11C0DE10000000000000002 /* foodcourtTests */,
+			);
+			name = foodcourtTests;
+			packageProductDependencies = (
+			);
+			productName = foodcourtTests;
+			productReference = A11C0DE10000000000000001 /* foodcourtTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -100,12 +141,20 @@
 			projectRoot = "";
 			targets = (
 				45962BC030206CB500A4579F /* foodcourt */,
+				A11C0DE10000000000000004 /* foodcourtTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		45962BBF30206CB500A4579F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A11C0DE10000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +171,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A11C0DE10000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A11C0DE10000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A11C0DE10000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 45962BC030206CB500A4579F /* foodcourt */;
+			targetProxy = A11C0DE10000000000000003 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		45962BCC30206CB500A4579F /* Debug */ = {
@@ -253,11 +327,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -285,11 +359,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -306,6 +380,36 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A11C0DE10000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.foodcourtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/foodcourt.app/Contents/MacOS/foodcourt";
+				TEST_TARGET_NAME = foodcourt;
+			};
+			name = Debug;
+		};
+		A11C0DE10000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.foodcourtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/foodcourt.app/Contents/MacOS/foodcourt";
+				TEST_TARGET_NAME = foodcourt;
 			};
 			name = Release;
 		};
@@ -326,6 +430,15 @@
 			buildConfigurations = (
 				45962BCF30206CB500A4579F /* Debug */,
 				45962BD030206CB500A4579F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A11C0DE10000000000000005 /* Build configuration list for PBXNativeTarget "foodcourtTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A11C0DE10000000000000010 /* Debug */,
+				A11C0DE10000000000000011 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
