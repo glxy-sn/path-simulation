@@ -7,34 +7,65 @@
 import SwiftUI
 
 @Observable
+@MainActor
 final class ProcessingViewModel {
     var stages: [ProcessingStage] = ProcessingStage.pipeline
     var progress: Double = 0        // 0–1
     var isDone: Bool = false
+    var errorMessage: String?
+    /// Kalimat apa adanya dari engine ("Deteksi + tracking…"), bukan tebakan.
+    var stageText: String = "Menyiapkan…"
     private var task: Task<Void, Never>?
 
     var currentStageName: String {
-        stages.first { $0.state == .active }?.name ?? (isDone ? "Selesai" : "Menyiapkan…")
+        if let e = errorMessage { return e }
+        return isDone ? "Selesai" : stageText
     }
 
-    func start() {
+    /// Menjalankan analisis SUNGGUHAN lewat engine.
+    ///
+    /// Sebelumnya layar ini memutar animasi berdurasi acak yang selalu
+    /// berakhir sukses, apa pun isi videonya — bar penuh tanpa satu frame pun
+    /// benar-benar diproses.
+    func start(session: AnalysisSession, service: ProcessingService) {
         guard task == nil else { return }
         task = Task { @MainActor in
-            let steps = stages.count
-            for i in 0..<steps {
-                stages[i].state = .active
-                let segment = 1.0 / Double(steps)
-                var p = 0.0
-                while p < 1.0 {
-                    try? await Task.sleep(for: .milliseconds(90))
-                    if Task.isCancelled { return }
-                    p += Double.random(in: 0.05...0.12)
-                    progress = min(1.0, (Double(i) + min(p, 1.0)) * segment)
+            session.isProcessing = true
+            session.errorMessage = nil
+            defer { session.isProcessing = false }
+            do {
+                for try await update in service.run(session) {
+                    switch update {
+                    case let .progress(stage, fraction):
+                        stageText = stage
+                        progress = min(1.0, max(progress, fraction))
+                        session.stage = stage
+                        session.progress = progress
+                        tandai(progress)
+                    case let .finished(hasil):
+                        session.result = hasil
+                        progress = 1.0
+                        tandai(1.0)
+                        isDone = true
+                    }
                 }
-                stages[i].state = .done
+            } catch is CancellationError {
+                // dibatalkan pengguna lewat tombol Kembali — bukan kegagalan
+            } catch {
+                errorMessage = error.localizedDescription
+                session.errorMessage = errorMessage
             }
-            progress = 1.0
-            isDone = true
+        }
+    }
+
+    /// Empat baris tahap di UI dipetakan dari satu pecahan progres, memakai
+    /// batas yang sama dengan bobot di engine (lacak 0–0,75; sambung 0,76;
+    /// render 0,80–0,99; analitik saat selesai).
+    private func tandai(_ f: Double) {
+        let batas = [0.75, 0.78, 0.99, 1.0]
+        for i in stages.indices {
+            stages[i].state = f >= batas[i] ? .done
+                : (i == 0 || f >= batas[i - 1]) ? .active : .pending
         }
     }
 
@@ -44,21 +75,35 @@ final class ProcessingViewModel {
         stages = ProcessingStage.pipeline
         progress = 0
         isDone = false
+        errorMessage = nil
+        stageText = "Menyiapkan…"
     }
 }
 
 struct ProcessingView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
+    @Environment(AnalysisSession.self) private var session
+    @Environment(Sidecar.self) private var sidecar
     @State private var vm = ProcessingViewModel()
+
+    private var service: ProcessingService {
+        EngineProcessingService(api: EngineAPI(http: sidecar.http), sidecar: sidecar)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 SectionHeader(
                     title: "Memproses",
-                    subtitle: vm.isDone ? "Analisis selesai." : "Menjalankan pipeline pada footage kamu…"
+                    subtitle: vm.errorMessage != nil ? "Analisis gagal."
+                        : vm.isDone ? "Analisis selesai."
+                        : "Menjalankan pipeline pada footage kamu…"
                 )
+
+                if let e = vm.errorMessage {
+                    InfoNote(text: e, systemImage: "exclamationmark.triangle")
+                }
 
                 HStack(alignment: .top, spacing: Space.l * scale) {
                     stagesPanel
@@ -80,7 +125,7 @@ struct ProcessingView: View {
                 }
             }
         }
-        .task { vm.start() }
+        .task { vm.start(session: session, service: service) }
     }
 
     // MARK: Panel tahap
@@ -123,7 +168,11 @@ struct ProcessingView: View {
                     RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                         .strokeBorder(Theme.hairline)
                 )
-            Text("Bounding box, ID, dan titik kaki (untuk proyeksi lantai) divisualisasikan di sini.")
+            // Panel ini ILUSTRASI, bukan frame yang sedang diproses — membaca
+            // frame hidup dari engine belum ada. Video beranotasi yang
+            // sebenarnya muncul di layar Hasil setelah proses selesai.
+            Text("Ilustrasi cara kerja deteksi — bukan frame yang sedang diproses. "
+                 + "Video beranotasi sungguhan tampil di layar Hasil.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -216,5 +265,7 @@ private struct BoundingBoxPreview: View {
 #Preview {
     ProcessingView()
         .environment(AppRouter())
+        .environment(AnalysisSession())
+        .environment(Sidecar())
         .frame(width: 1180, height: 820)
 }

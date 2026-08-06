@@ -138,7 +138,11 @@ private struct ImportInspector: View {
                     field("Lebar (m)") { TextField("20", text: $session.widthM).textFieldStyle(.roundedBorder) }
                     field("Panjang (m)") { TextField("15", text: $session.heightM).textFieldStyle(.roundedBorder) }
                 }
-                InfoNote(text: "Dimensi venue jadi referensi skala. Tanpa ini, dwell & jarak tidak bermakna.")
+                // Dimensi venue BELUM dibaca pipeline — hasil analisis sama
+                // persis berapa pun diisi. Baru berarti setelah homografi ada.
+                InfoNote(text: "Dicatat sebagai keterangan venue. Belum dipakai menghitung — "
+                         + "skala meter baru berlaku setelah kalibrasi bidang lantai "
+                         + "tersambung ke pipeline.")
             }
             .card()
 

@@ -46,6 +46,14 @@ struct CalibrationView: View {
                     title: "Kalibrasi",
                     subtitle: "Cocokkan 4 titik yang sama antara frame CCTV dan denah lantai."
                 )
+                // Titiknya benar-benar tersimpan dan ikut terkirim ke engine,
+                // tapi pipeline belum membacanya. Tanpa keterangan ini, orang
+                // menggambar 4 titik per kamera dengan teliti dan mengira
+                // hasilnya berubah — padahal sama persis.
+                InfoNote(text: "Titik yang kamu gambar disimpan dan dikirim ke engine, "
+                         + "tapi pipeline BELUM memakainya — hasil analisis belum berubah "
+                         + "karenanya. Proyeksi bidang lantai masih dikerjakan.",
+                         systemImage: "exclamationmark.triangle")
                 cameraSelector
             }
             .spad(Space.xl, [.horizontal, .top])

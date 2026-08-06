@@ -6,8 +6,15 @@
 //
 
 import SwiftUI
-import AVKit
 import AVFoundation
+
+//  JANGAN kembalikan `import AVKit` dan `VideoPlayer` di berkas ini.
+//  `VideoPlayer` membungkus AVKit.AVPlayerView, dan di macOS kelas itu gagal
+//  dimuat saat runtime:
+//      failed to demangle superclass of VideoPlayerView
+//  Akibatnya aplikasi MATI seketika begitu video diimpor — pratinjau di bawah
+//  muncul tepat setelah berkas dipilih. LapisanVideo memakai AVFoundation
+//  saja dan tidak kena masalah itu; kontrolnya dibuat sendiri.
 
 struct GlobalTrimCard: View {
     @Binding var startSec: Double
@@ -17,6 +24,7 @@ struct GlobalTrimCard: View {
 
     @State private var player = AVPlayer()
     @State private var loadedURL: URL? = nil
+    @State private var sedangMain = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
@@ -33,7 +41,23 @@ struct GlobalTrimCard: View {
             // Preview video (native controls: play/pause/scrub)
             Group {
                 if previewURL != nil {
-                    VideoPlayer(player: player)
+                    ZStack(alignment: .bottomLeading) {
+                        LapisanVideo(player: player)
+                        // Kontrol bawaan AVKit hilang bersama VideoPlayer,
+                        // jadi play/pause-nya dibuat sendiri. Penggeser waktu
+                        // tidak perlu — RangeSlider di bawah sudah men-seek.
+                        Button {
+                            if sedangMain { player.pause() } else { player.play() }
+                            sedangMain.toggle()
+                        } label: {
+                            Image(systemName: sedangMain ? "pause.fill" : "play.fill")
+                                .font(.caption).foregroundStyle(.white)
+                                .padding(Space.s)
+                                .background(.black.opacity(0.45), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(Space.s)
+                    }
                         .frame(height: 260)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
                         .overlay(
@@ -74,6 +98,11 @@ struct GlobalTrimCard: View {
         if url == loadedURL { return }
         player.replaceCurrentItem(with: AVPlayerItem(url: url))
         loadedURL = url
+        // Video baru selalu mulai dalam keadaan jeda; tanpa ini ikon tombol
+        // bisa menunjukkan "pause" padahal videonya diam.
+        player.pause()
+        sedangMain = false
+        player.isMuted = true
         seek(to: startSec)
     }
 
