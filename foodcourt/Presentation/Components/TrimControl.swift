@@ -9,52 +9,114 @@ import SwiftUI
 import AVKit
 import AVFoundation
 
+@MainActor
+@Observable
+final class MultiTrimController {
+    struct Entry: Identifiable { let id: URL; let label: String; let player: AVPlayer }
+
+    private(set) var entries: [Entry] = []
+    var startSec: Double = 0
+    var endSec: Double = 0
+    private var observers: [ObjectIdentifier: Any] = [:]
+
+    func setRange(_ s: Double, _ e: Double) {
+        startSec = s
+        endSec = e
+    }
+
+    /// Bangun ulang player kalau daftar url berubah.
+    func setCameras(_ cams: [(label: String, url: URL)]) {
+        let newURLs = cams.map { $0.url }
+        if newURLs == entries.map({ $0.id }) { return }
+
+        for e in entries {
+            if let tok = observers[ObjectIdentifier(e.player)] {
+                e.player.removeTimeObserver(tok)
+            }
+        }
+        observers.removeAll()
+
+        let interval = CMTime(seconds: 0.12, preferredTimescale: 600)
+        entries = cams.map { c in
+            let p = AVPlayer(url: c.url)
+            p.actionAtItemEnd = .pause
+            let tok = p.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak p] time in
+                MainActor.assumeIsolated {
+                    guard let self, let p, p.rate != 0 else { return }
+                    let t = time.seconds
+                    if t >= self.endSec - 0.02 || t < self.startSec - 0.10 {
+                        self.seek(p, self.startSec)
+                    }
+                }
+            }
+            observers[ObjectIdentifier(p)] = tok
+            return Entry(id: c.url, label: c.label, player: p)
+        }
+        seekAll(startSec)
+    }
+
+    /// Menggeser handle: pause semua + tampilkan frame di t.
+    func scrub(to t: Double) {
+        for e in entries { e.player.pause() }
+        seekAll(t)
+    }
+
+    private func seekAll(_ t: Double) {
+        for e in entries { seek(e.player, t) }
+    }
+
+    private func seek(_ p: AVPlayer, _ t: Double) {
+        let tol = CMTime(seconds: 0.2, preferredTimescale: 600)
+        p.seek(to: CMTime(seconds: max(0, t), preferredTimescale: 600),
+               toleranceBefore: tol, toleranceAfter: tol)
+    }
+}
+
 struct GlobalTrimCard: View {
     @Binding var startSec: Double
     @Binding var endSec: Double
     let maxSec: Double
-    var previewURL: URL? = nil
+    var cameras: [(label: String, url: URL)] = []
 
-    @State private var player = AVPlayer()
-    @State private var loadedURL: URL? = nil
+    @State private var controller = MultiTrimController()
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Rentang Waktu").font(.headline)
-                    Text("Berlaku untuk semua kamera · total \(timecode(maxSec))")
+                    Text("Satu rentang untuk semua kamera · total \(timecode(maxSec))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Tag(text: timecode(endSec - startSec))
             }
 
-            // Preview video (native controls: play/pause/scrub)
-            Group {
-                if previewURL != nil {
-                    VideoPlayer(player: player)
-                        .frame(height: 260)
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                                .strokeBorder(Theme.hairline)
-                        )
-                } else {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                            .frame(height: 260)
-                        VStack(spacing: Space.s) {
-                            Image(systemName: "film").font(.system(size: 30)).foregroundStyle(.secondary)
-                            Text("Preview muncul setelah video punya file.").font(.caption).foregroundStyle(.secondary)
+            if cameras.isEmpty {
+                placeholder
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: Space.s)],
+                          spacing: Space.s) {
+                    ForEach(controller.entries) { e in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(e.label).font(.caption.weight(.medium)).lineLimit(1)
+                            VideoPlayer(player: e.player)
+                                .frame(height: 150)
+                                .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                                        .strokeBorder(Theme.hairline)
+                                )
                         }
                     }
                 }
             }
 
+            Text("Semua preview memutar bagian yang sama (loop di dalam potongan).")
+                .font(.caption2).foregroundStyle(.tertiary)
+
             RangeSlider(lower: $startSec, upper: $endSec, maxSec: maxSec,
-                        onScrub: { t in seek(to: t) })
+                        onScrub: { t in if let t { controller.scrub(to: t) } })
 
             HStack {
                 stat("Mulai", timecode(startSec))
@@ -65,24 +127,24 @@ struct GlobalTrimCard: View {
             }
         }
         .card()
-        .onAppear { loadPlayer() }
-        .onChange(of: previewURL) { _, _ in loadPlayer() }
+        .onAppear {
+            controller.setRange(startSec, endSec)
+            controller.setCameras(cameras)
+        }
+        .onChange(of: cameras.map { $0.url }) { _, _ in controller.setCameras(cameras) }
+        .onChange(of: startSec) { _, s in controller.setRange(s, endSec) }
+        .onChange(of: endSec) { _, e in controller.setRange(startSec, e) }
     }
 
-    private func loadPlayer() {
-        guard let url = previewURL else { return }
-        if url == loadedURL { return }
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        loadedURL = url
-        seek(to: startSec)
-    }
-
-    private func seek(to t: Double?) {
-        guard let t else { return }
-        player.pause()
-        let tol = CMTime(seconds: 0.3, preferredTimescale: 600)
-        player.seek(to: CMTime(seconds: t, preferredTimescale: 600),
-                    toleranceBefore: tol, toleranceAfter: tol)
+    private var placeholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+                .fill(Color.primary.opacity(0.05)).frame(height: 160)
+            VStack(spacing: Space.s) {
+                Image(systemName: "film").font(.system(size: 28)).foregroundStyle(.secondary)
+                Text("Preview muncul setelah video punya file.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
@@ -161,8 +223,8 @@ struct RangeSlider: View {
         @State var a: Double = 600
         @State var b: Double = 1500
         var body: some View {
-            GlobalTrimCard(startSec: $a, endSec: $b, maxSec: 7200, previewURL: nil)
-                .frame(width: 560).padding()
+            GlobalTrimCard(startSec: $a, endSec: $b, maxSec: 7200, cameras: [])
+                .frame(width: 620).padding()
         }
     }
     return Demo()

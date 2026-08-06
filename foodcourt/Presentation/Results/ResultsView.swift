@@ -4,33 +4,36 @@
 //
 //  Created by Shafa Tiara on 03/08/26.
 //
-
 import SwiftUI
 import Charts
+import AVKit
+import AppKit
 
 enum ResultVisual: String, CaseIterable, Identifiable {
-    case boundingBox = "Bounding Box"
+    case boundingBox = "Deteksi"
     case path = "Path Simulation"
     case heatmap = "Heatmap"
     case zona = "Zona"
     var id: String { rawValue }
-    var isVideo: Bool { self == .boundingBox || self == .path }
-}
-
-@Observable
-final class ResultsViewModel {
-    let summary = SampleResult.summary
-    let zones = SampleResult.zones
-    let stops = SampleResult.stops
-    let occupancy = SampleResult.occupancy
-    let blobs = SampleResult.blobs
-    let paths = SampleResult.paths
-    var visual: ResultVisual = .boundingBox
 }
 
 struct ResultsView: View {
     @Environment(\.uiScale) private var scale
-    @State private var vm = ResultsViewModel()
+    @Environment(AnalysisSession.self) private var session
+    @State private var visual: ResultVisual = .boundingBox
+
+    // Data: hasil engine bila ada, kalau tidak pakai contoh.
+    private var summary: VenueSummary { session.result?.summary ?? SampleResult.summary }
+    private var zones: [ZoneRank] { session.result?.zones ?? SampleResult.zones }
+    private var stops: [StopPoint] { session.result?.stops ?? SampleResult.stops }
+    private var occupancy: [OccupancyPoint] { session.result?.occupancy ?? SampleResult.occupancy }
+
+    private var heatmapURL: URL? { session.result?.heatmapURL }
+    private var pathVideoURL: URL? { session.result?.pathVideoURL }
+    private var boundingVideoURL: URL? {
+        session.result?.combinedVideoURL ?? session.result?.overlayVideos.first?.url
+    }
+    private var hasResult: Bool { session.result != nil }
 
     var body: some View {
         ScrollView {
@@ -48,63 +51,55 @@ struct ResultsView: View {
         }
     }
 
-    // MARK: Header + tombol atas
-
     private var header: some View {
         HStack(alignment: .center) {
-            SectionHeader(
-                title: "Hasil Analisis",
-                subtitle: "Pujasera Kampus · 3 kamera · durasi ~12 menit"
-            )
-            // Export → PDF generation (diimplementasi setelah slicing selesai)
+            SectionHeader(title: "Hasil Analisis", subtitle: subtitle)
             PrimaryButton(title: "Export Laporan", systemImage: "square.and.arrow.up") {}
         }
     }
 
-    // MARK: Metrik
+    private var subtitle: String {
+        if hasResult {
+            let name = session.venueName.isEmpty ? "Venue" : session.venueName
+            let dur = timecode(session.trimEndSec - session.trimStartSec)
+            return "\(name) · \(session.cameras.count) kamera · durasi \(dur)"
+        }
+        return "Contoh data — jalankan analisis untuk hasil nyata."
+    }
 
     private var metrics: some View {
         HStack(spacing: Space.m * scale) {
-            MetricTile(title: "Total Pengunjung",
-                       value: "\(vm.summary.totalVisitors)",
-                       systemImage: "person.2.fill")
-            MetricTile(title: "Rata-rata Dwell",
-                       value: vm.summary.avgDwellText,
-                       systemImage: "clock.fill", tint: .orange)
-            MetricTile(title: "Puncak Okupansi",
-                       value: "\(vm.summary.peakOccupancy)",
-                       systemImage: "chart.line.uptrend.xyaxis", tint: .pink)
-            MetricTile(title: "Capture Rate",
-                       value: vm.summary.captureRateText,
-                       systemImage: "arrow.down.right.circle.fill", tint: .green)
+            MetricTile(title: "Total Pengunjung", value: "\(summary.totalVisitors)", systemImage: "person.2.fill")
+            MetricTile(title: "Rata-rata Dwell", value: summary.avgDwellText, systemImage: "clock.fill", tint: .orange)
+            MetricTile(title: "Puncak Okupansi", value: "\(summary.peakOccupancy)", systemImage: "chart.line.uptrend.xyaxis", tint: .pink)
+            MetricTile(title: "Capture Rate", value: summary.captureRateText, systemImage: "arrow.down.right.circle.fill", tint: .green)
         }
     }
-
-    // MARK: Panel media (4 tab)
 
     private var mediaCard: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack {
                 Text("Visualisasi").font(.headline)
                 Spacer()
-                Picker("", selection: Binding(get: { vm.visual }, set: { vm.visual = $0 })) {
+                Picker("", selection: $visual) {
                     ForEach(ResultVisual.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
 
             ZStack {
-                switch vm.visual {
+                switch visual {
                 case .boundingBox:
-                    BoundingBoxContent(); VideoChrome()
+                    if let url = boundingVideoURL { FileVideoPlayer(url: url) }
+                    else { BoundingBoxContent(); VideoChrome() }
                 case .path:
-                    PathContent(paths: vm.paths); VideoChrome()
+                    if let url = pathVideoURL { FileVideoPlayer(url: url) }
+                    else { PathContent(paths: SampleResult.paths); VideoChrome() }
                 case .heatmap:
-                    HeatmapView(blobs: vm.blobs); HeatmapLegend()
+                    if let url = heatmapURL { FileImage(url: url) }
+                    else { HeatmapView(blobs: SampleResult.blobs); HeatmapLegend() }
                 case .zona:
-                    ZoneMapView(zones: vm.zones)
+                    ZoneMapView(zones: zones)
                 }
             }
             .frame(height: min(400, max(300, 360 * scale)))
@@ -121,26 +116,27 @@ struct ResultsView: View {
     }
 
     private var caption: String {
-        switch vm.visual {
-        case .boundingBox: return "Video deteksi: bounding box + ID + titik kaki tiap orang."
-        case .path:        return "Simulasi jalur pergerakan pengunjung di bidang lantai."
-        case .heatmap:     return "Kepadatan pergerakan diproyeksikan ke denah lantai."
-        case .zona:        return "Pembagian zona di denah. Warna sama dengan daftar ranking di bawah."
+        switch visual {
+        case .boundingBox:
+            return boundingVideoURL != nil
+                ? "Video deteksi + ID global antar-kamera (grid + BEV bila multi-kamera)."
+                : "Contoh — jalankan analisis untuk video nyata."
+        case .path:    return "Simulasi jalur pergerakan pengunjung di bidang lantai."
+        case .heatmap: return "Kepadatan pergerakan diproyeksikan ke denah lantai."
+        case .zona:    return "Pembagian zona di denah. Warna sama dengan daftar ranking di bawah."
         }
     }
-
-    // MARK: Ranking + stop points
 
     private var rankingCard: some View {
         VStack(alignment: .leading, spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.s) {
                 Text("Zona Paling Sering Dilewati").font(.headline)
-                ForEach(vm.zones) { zone in ZoneRow(zone: zone) }
+                ForEach(zones) { zone in ZoneRow(zone: zone) }
             }
             Divider()
             VStack(alignment: .leading, spacing: Space.s) {
                 Text("Stop Point Terlama").font(.headline)
-                ForEach(vm.stops) { stop in
+                ForEach(stops) { stop in
                     HStack {
                         Image(systemName: "mappin.circle.fill").foregroundStyle(.orange)
                         Text(stop.name).font(.callout)
@@ -153,12 +149,10 @@ struct ResultsView: View {
         .card()
     }
 
-    // MARK: Grafik okupansi
-
     private var occupancyCard: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("Okupansi dari Waktu ke Waktu").font(.headline)
-            Chart(vm.occupancy) { point in
+            Chart(occupancy) { point in
                 AreaMark(x: .value("Menit", point.minute), y: .value("Orang", point.count))
                     .foregroundStyle(LinearGradient(
                         colors: [Theme.accent.opacity(0.35), Theme.accent.opacity(0.02)],
@@ -172,6 +166,54 @@ struct ResultsView: View {
             .frame(minHeight: 220)
         }
         .card()
+    }
+}
+
+// MARK: - Player & gambar dari file (artifact engine)
+
+/// AVPlayerView (AppKit) → punya tombol full-screen + Picture-in-Picture bawaan.
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+    func makeNSView(context: Context) -> AVPlayerView {
+        let v = AVPlayerView()
+        v.player = player
+        v.controlsStyle = .floating
+        v.videoGravity = .resizeAspect
+        v.allowsPictureInPicturePlayback = true
+        if #available(macOS 13.0, *) {
+            v.showsFullScreenToggleButton = true
+        }
+        return v
+    }
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        if nsView.player !== player { nsView.player = player }
+    }
+}
+
+private struct FileVideoPlayer: View {
+    let url: URL
+    @State private var player: AVPlayer
+    init(url: URL) {
+        self.url = url
+        _player = State(initialValue: AVPlayer(url: url))
+    }
+    var body: some View {
+        PlayerView(player: player)
+            .onDisappear { player.pause() }
+    }
+}
+
+private struct FileImage: View {
+    let url: URL
+    var body: some View {
+        Group {
+            if let img = NSImage(contentsOf: url) {
+                Image(nsImage: img).resizable().scaledToFit()
+            } else {
+                ZStack { Color.black; ProgressView().tint(.white) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -406,6 +448,6 @@ private struct VideoChrome: View {
 
 #Preview {
     ResultsView()
-        .environment(AppRouter())
+        .environment(AnalysisSession())
         .frame(width: 1200, height: 900)
 }

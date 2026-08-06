@@ -7,6 +7,8 @@
 
 import Foundation
 
+// MARK: Request DTO
+
 struct PointDTO: Codable { let x: Double; let y: Double }
 
 struct VenueDTO: Codable {
@@ -62,6 +64,7 @@ struct OverlayDTO: Codable { let cam: String; let uri: String }
 struct ArtifactsDTO: Codable {
     let heatmapImage: String?
     let pathVideo: String?
+    let combinedVideo: String?
     let overlayVideos: [OverlayDTO]
 }
 

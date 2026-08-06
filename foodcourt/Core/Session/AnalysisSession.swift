@@ -28,9 +28,11 @@ struct AnalysisResult {
     var occupancy: [OccupancyPoint]
     var heatmapURL: URL?
     var pathVideoURL: URL?
+    var combinedVideoURL: URL?
     var overlayVideos: [(cam: String, url: URL)]
 }
 
+@MainActor
 @Observable
 final class AnalysisSession {
     // Venue
@@ -60,6 +62,10 @@ final class AnalysisSession {
     var venueHeightM: Double { Double(heightM) ?? 0 }
     var timelineMax: Double { cameras.compactMap { $0.durationSec > 0 ? $0.durationSec : nil }.min() ?? 0 }
     var previewURL: URL? { cameras.first { $0.url != nil }?.url }
+    /// Semua kamera yang punya file (untuk preview per-video di trim card).
+    var previews: [(label: String, url: URL)] {
+        cameras.compactMap { c in c.url.map { (label: c.label, url: $0) } }
+    }
     var allCalibrated: Bool { !cameras.isEmpty && cameras.allSatisfy { $0.isCalibrated } }
 
     func normalizeTrim() {
