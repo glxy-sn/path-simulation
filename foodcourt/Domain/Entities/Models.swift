@@ -8,22 +8,31 @@
 import Foundation
 import CoreGraphics
 
-
 // MARK: - Import
 
 struct CameraClip: Identifiable, Hashable {
     let id = UUID()
     var label: String
     var fileName: String
-    var duration: String
     var resolution: String
+    var durationSec: Double
+    var url: URL? = nil
+    var duration: String { timecode(durationSec) }
+}
+
+/// Format detik -> "H:MM:SS" atau "M:SS".
+func timecode(_ sec: Double) -> String {
+    let x = max(0, Int(sec.rounded()))
+    let h = x / 3600, m = (x % 3600) / 60, s = x % 60
+    return h > 0 ? String(format: "%d:%02d:%02d", h, m, s)
+                 : String(format: "%d:%02d", m, s)
 }
 
 extension CameraClip {
     static let samples: [CameraClip] = [
-        .init(label: "Pintu Masuk", fileName: "cam_entrance.mp4", duration: "12:40", resolution: "1920×1080"),
-        .init(label: "Area Tengah", fileName: "cam_center.mp4",   duration: "12:40", resolution: "1920×1080"),
-        .init(label: "Kasir",       fileName: "cam_cashier.mp4",  duration: "12:38", resolution: "1280×720")
+        .init(label: "Pintu Masuk", fileName: "cam_entrance.mp4", resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Area Tengah", fileName: "cam_center.mp4",   resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Kasir",       fileName: "cam_cashier.mp4",  resolution: "1280×720",  durationSec: 5400)
     ]
 }
 

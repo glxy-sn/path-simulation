@@ -9,6 +9,8 @@ import SwiftUI
 
 struct RootView: View {
     @State private var router = AppRouter()
+    @State private var session = AnalysisSession()
+    @State private var sidecar = Sidecar()
     private let referenceWidth: CGFloat = 1440
 
     var body: some View {
@@ -28,9 +30,12 @@ struct RootView: View {
             }
             .environment(\.uiScale, scale)
             .environment(router)
+            .environment(session)
+            .environment(sidecar)
         }
         .frame(minWidth: 1060, minHeight: 700)
         .background(WindowBackground())
+        .task { await sidecar.checkHealth() }
     }
 
     @ViewBuilder
@@ -42,6 +47,7 @@ struct RootView: View {
     }
 }
 
+/// Wizard: stepper horizontal di atas, layar aktif di bawah.
 private struct WizardContainer: View {
     @Environment(AppRouter.self) private var router
 
