@@ -9,74 +9,37 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-private struct CalibState {
-    var imagePoints: [NormPoint] = []
-    var planePoints: [NormPoint] = []
-    var isComplete: Bool { imagePoints.count == 4 && planePoints.count == 4 }
-}
-
-@Observable
-final class CalibrationViewModel {
-    let cameras: [CameraClip] = CameraClip.samples
-    var selectedID: UUID
-    var planeSource: PlaneSource = .canvas
-
-    var floorPlanImage: NSImage? = nil
-    var floorPlanName: String? = nil
-
-    private var states: [UUID: CalibState] = [:]
-
-    init() { selectedID = CameraClip.samples.first!.id }
-
-    private var current: CalibState {
-        get { states[selectedID] ?? CalibState() }
-        set { states[selectedID] = newValue }
-    }
-
-    var imagePoints: [NormPoint] { current.imagePoints }
-    var planePoints: [NormPoint] { current.planePoints }
-    var currentComplete: Bool { current.isComplete }
-    var needsFloorPlanUpload: Bool { planeSource == .floorplan && floorPlanImage == nil }
-
-    func isComplete(_ id: UUID) -> Bool { (states[id] ?? CalibState()).isComplete }
-    var completedCount: Int { cameras.filter { isComplete($0.id) }.count }
-
-    func addImagePoint(_ p: CGPoint) {
-        guard current.imagePoints.count < 4 else { return }
-        current.imagePoints.append(NormPoint(x: p.x, y: p.y))
-    }
-    func addPlanePoint(_ p: CGPoint) {
-        guard current.planePoints.count < 4 else { return }
-        current.planePoints.append(NormPoint(x: p.x, y: p.y))
-    }
-    func removeImagePoint(at i: Int) {
-        guard current.imagePoints.indices.contains(i) else { return }
-        current.imagePoints.remove(at: i)
-    }
-    func removePlanePoint(at i: Int) {
-        guard current.planePoints.indices.contains(i) else { return }
-        current.planePoints.remove(at: i)
-    }
-    func resetCurrent() { current = CalibState() }
-
-    func uploadFloorPlan() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        floorPlanName = url.lastPathComponent
-        floorPlanImage = NSImage(contentsOf: url)
-        planeSource = .floorplan
-    }
-}
-
 struct CalibrationView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
-    @State private var vm = CalibrationViewModel()
+    @Environment(AnalysisSession.self) private var session
+
+    @State private var selected = 0
+    @State private var planeSource: PlaneSource = .canvas
+    @State private var floorPlanImage: NSImage? = nil
+    @State private var floorPlanName: String? = nil
+
+    private var idx: Int { min(max(0, selected), max(0, session.cameras.count - 1)) }
 
     var body: some View {
+        if session.cameras.isEmpty {
+            emptyState
+        } else {
+            content
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: Space.m) {
+            Image(systemName: "camera.metering.none").font(.system(size: 40)).foregroundStyle(.secondary)
+            Text("Belum ada kamera").font(.headline)
+            Text("Import video dulu di langkah sebelumnya.").font(.callout).foregroundStyle(.secondary)
+            GhostButton(title: "Ke Import", systemImage: "chevron.left") { router.back() }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Space.m * scale) {
                 SectionHeader(
@@ -89,10 +52,8 @@ struct CalibrationView: View {
             .padding(.bottom, Space.m)
 
             HStack(alignment: .top, spacing: Space.l * scale) {
-                canvases
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                inspector
-                    .relativeWidth(0.24)
+                canvases.frame(maxWidth: .infinity, maxHeight: .infinity)
+                inspector.relativeWidth(0.24)
             }
             .spad(Space.xl, [.horizontal])
             .padding(.bottom, Space.m)
@@ -101,28 +62,25 @@ struct CalibrationView: View {
             WizardFooter(onBack: { router.back() }) {
                 PrimaryButton(title: "Lanjut ke Proses",
                               systemImage: "arrow.right",
-                              enabled: vm.currentComplete) {
+                              enabled: session.cameras[idx].isCalibrated) {
                     router.next()
                 }
             }
         }
     }
 
-    // MARK: Pemilih kamera
-
     private var cameraSelector: some View {
         HStack(spacing: Space.s) {
-            ForEach(vm.cameras) { cam in
-                let selected = cam.id == vm.selectedID
-                Button { vm.selectedID = cam.id } label: {
+            ForEach(Array(session.cameras.enumerated()), id: \.element.id) { i, cam in
+                let isSel = i == idx
+                Button { selected = i } label: {
                     HStack(spacing: Space.s) {
-                        Image(systemName: vm.isComplete(cam.id) ? "checkmark.circle.fill" : "camera")
-                            .foregroundStyle(vm.isComplete(cam.id) ? Color.green : (selected ? Color.white : Color.secondary))
-                        Text(cam.label).foregroundStyle(selected ? Color.white : Color.primary)
+                        Image(systemName: cam.isCalibrated ? "checkmark.circle.fill" : "camera")
+                            .foregroundStyle(cam.isCalibrated ? Color.green : (isSel ? Color.white : Color.secondary))
+                        Text(cam.label).foregroundStyle(isSel ? Color.white : Color.primary)
                     }
-                    .padding(.horizontal, Space.m)
-                    .padding(.vertical, Space.s)
-                    .background(selected ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
+                    .padding(.horizontal, Space.m).padding(.vertical, Space.s)
+                    .background(isSel ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -130,58 +88,66 @@ struct CalibrationView: View {
         }
     }
 
-    // MARK: Dua kanvas (dominan)
-
     private var canvases: some View {
-        HStack(spacing: Space.m * scale) {
+        let i = idx
+        return HStack(spacing: Space.m * scale) {
             InteractiveCanvas(
-                title: "Frame CCTV — \(currentLabel)",
+                title: "Frame CCTV — \(session.cameras[i].label)",
                 subtitle: "Klik untuk taruh titik · klik titik untuk hapus",
                 kind: .frame,
                 planeImage: nil,
                 needsUpload: false,
-                points: vm.imagePoints,
+                points: session.cameras[i].imagePoints,
                 accent: Theme.accent,
-                onAdd: vm.addImagePoint,
-                onDeleteIndex: vm.removeImagePoint,
+                onAdd: { p in
+                    if session.cameras[i].imagePoints.count < 4 {
+                        session.cameras[i].imagePoints.append(NormPoint(x: p.x, y: p.y))
+                    }
+                },
+                onDeleteIndex: { j in
+                    if session.cameras[i].imagePoints.indices.contains(j) {
+                        session.cameras[i].imagePoints.remove(at: j)
+                    }
+                },
                 onUpload: nil
             )
             InteractiveCanvas(
-                title: vm.planeSource == .canvas ? "Canvas Berskala" : "Floor Plan",
+                title: planeSource == .canvas ? "Canvas Berskala" : "Floor Plan",
                 subtitle: "Klik titik yang bersesuaian",
                 kind: .plane,
-                planeImage: vm.floorPlanImage,
-                needsUpload: vm.needsFloorPlanUpload,
-                points: vm.planePoints,
+                planeImage: floorPlanImage,
+                needsUpload: planeSource == .floorplan && floorPlanImage == nil,
+                points: session.cameras[i].planePoints,
                 accent: .orange,
-                onAdd: vm.addPlanePoint,
-                onDeleteIndex: vm.removePlanePoint,
-                onUpload: { vm.uploadFloorPlan() }
+                onAdd: { p in
+                    if session.cameras[i].planePoints.count < 4 {
+                        session.cameras[i].planePoints.append(NormPoint(x: p.x, y: p.y))
+                    }
+                },
+                onDeleteIndex: { j in
+                    if session.cameras[i].planePoints.indices.contains(j) {
+                        session.cameras[i].planePoints.remove(at: j)
+                    }
+                },
+                onUpload: { uploadFloorPlan() }
             )
         }
     }
 
-    private var currentLabel: String {
-        vm.cameras.first { $0.id == vm.selectedID }?.label ?? "-"
-    }
-
-    // MARK: Inspector
-
     private var inspector: some View {
-        VStack(alignment: .leading, spacing: Space.m * scale) {
+        let i = idx
+        return VStack(alignment: .leading, spacing: Space.m * scale) {
             VStack(alignment: .leading, spacing: Space.s) {
                 FieldLabel(text: "Sumber Denah")
-                Picker("", selection: Binding(get: { vm.planeSource }, set: { vm.planeSource = $0 })) {
+                Picker("", selection: $planeSource) {
                     ForEach(PlaneSource.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                if vm.planeSource == .floorplan {
-                    GhostButton(title: vm.floorPlanName == nil ? "Pilih File Denah" : "Ganti Denah",
-                                systemImage: "photo.on.rectangle") { vm.uploadFloorPlan() }
-                    if let name = vm.floorPlanName {
-                        Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .pickerStyle(.segmented).labelsHidden()
+                if planeSource == .floorplan {
+                    GhostButton(title: floorPlanName == nil ? "Pilih File Denah" : "Ganti Denah",
+                                systemImage: "photo.on.rectangle") { uploadFloorPlan() }
+                    if let n = floorPlanName {
+                        Text(n).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 } else {
                     Text("Canvas kosong berskala metrik (default).")
@@ -195,19 +161,22 @@ struct CalibrationView: View {
                 HStack {
                     FieldLabel(text: "Progress")
                     Spacer()
-                    Text("\(vm.imagePoints.count)/4 · \(vm.planePoints.count)/4")
+                    Text("\(session.cameras[i].imagePoints.count)/4 · \(session.cameras[i].planePoints.count)/4")
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
-                GhostButton(title: "Reset", systemImage: "arrow.counterclockwise") { vm.resetCurrent() }
+                GhostButton(title: "Reset", systemImage: "arrow.counterclockwise") {
+                    session.cameras[i].imagePoints = []
+                    session.cameras[i].planePoints = []
+                }
             }
             .card(padding: Space.m)
 
             VStack(alignment: .leading, spacing: Space.s) {
-                FieldLabel(text: "Kamera (\(vm.completedCount)/\(vm.cameras.count))")
-                ForEach(vm.cameras) { cam in
+                FieldLabel(text: "Kamera (\(session.cameras.filter { $0.isCalibrated }.count)/\(session.cameras.count))")
+                ForEach(session.cameras) { cam in
                     HStack(spacing: Space.s) {
-                        Image(systemName: vm.isComplete(cam.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(vm.isComplete(cam.id) ? Color.green : Color.secondary)
+                        Image(systemName: cam.isCalibrated ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(cam.isCalibrated ? Color.green : Color.secondary)
                         Text(cam.label).font(.callout).lineLimit(1)
                         Spacer()
                     }
@@ -217,6 +186,17 @@ struct CalibrationView: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    private func uploadFloorPlan() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        floorPlanName = url.lastPathComponent
+        floorPlanImage = NSImage(contentsOf: url)
+        planeSource = .floorplan
     }
 }
 
@@ -572,7 +552,10 @@ private struct GridScene: View {
 }
 
 #Preview {
-    CalibrationView()
+    let s = AnalysisSession()
+    s.cameras = [SessionCamera(label: "Kamera 1", url: nil, resolution: "1920×1080", durationSec: 7200)]
+    return CalibrationView()
         .environment(AppRouter())
+        .environment(s)
         .frame(width: 1180, height: 820)
 }
