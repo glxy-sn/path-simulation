@@ -8,17 +8,16 @@
 import Foundation
 import CoreGraphics
 
-
 struct EngineProcessingService: ProcessingService {
     let api: EngineAPI
     let sidecar: Sidecar
 
-    // Palet warna zona (dipetakan per-rank; senada dengan UI).
     private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
 
+    @MainActor
     func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
+            let task = Task { @MainActor in
                 do {
                     guard await sidecar.waitUntilReady() else { throw EngineError.notReady }
 
@@ -44,9 +43,7 @@ struct EngineProcessingService: ProcessingService {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
-
-    // MARK: build request
-
+    @MainActor
     private func buildRequest(_ s: AnalysisSession) throws -> JobRequestDTO {
         guard !s.cameras.isEmpty else { throw EngineError.job("Belum ada kamera.") }
         let duration = max(0, s.trimEndSec - s.trimStartSec)
@@ -76,8 +73,7 @@ struct EngineProcessingService: ProcessingService {
         )
     }
 
-    // MARK: map hasil -> model UI
-
+    @MainActor
     private func map(_ dto: JobResultDTO) -> AnalysisResult {
         let zones = dto.zones.enumerated().map { i, z in
             ZoneRank(rank: i + 1, code: z.code, visits: z.visits, share: z.share,
@@ -93,14 +89,28 @@ struct EngineProcessingService: ProcessingService {
             captureRate: dto.summary.captureRate
         )
         let overlays: [(cam: String, url: URL)] = dto.artifacts.overlayVideos.compactMap {
-            guard let u = URL(string: $0.uri) else { return nil }
+            guard let u = artifactURL($0.uri) else { return nil }
             return (cam: $0.cam, url: u)
         }
         return AnalysisResult(
             summary: summary, zones: zones, stops: stops, occupancy: occ,
-            heatmapURL: dto.artifacts.heatmapImage.flatMap(URL.init(string:)),
-            pathVideoURL: dto.artifacts.pathVideo.flatMap(URL.init(string:)),
+            heatmapURL: artifactURL(dto.artifacts.heatmapImage),
+            pathVideoURL: artifactURL(dto.artifacts.pathVideo),
+            combinedVideoURL: artifactURL(dto.artifacts.combinedVideo),
             overlayVideos: overlays
         )
+    }
+
+    /// `file:///.../heatmap.png`  ->  `http://127.0.0.1:8765/artifacts?path=/.../heatmap.png`
+    @MainActor
+    private func artifactURL(_ uri: String?) -> URL? {
+        guard let uri else { return nil }
+        guard uri.hasPrefix("file://") else { return URL(string: uri) }
+        let raw = String(uri.dropFirst("file://".count))
+        let path = raw.removingPercentEncoding ?? raw
+        var comps = URLComponents(url: sidecar.baseURL, resolvingAgainstBaseURL: false)
+        comps?.path = "/artifacts"
+        comps?.queryItems = [URLQueryItem(name: "path", value: path)]
+        return comps?.url
     }
 }

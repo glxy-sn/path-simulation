@@ -97,11 +97,19 @@ private struct ImportMainColumn: View {
                 }
 
                 VStack(spacing: Space.s) {
-                    ForEach($session.cameras) { $cam in
-                        CameraRow(cam: $cam) {
-                            session.cameras.removeAll { $0.id == cam.id }
-                            session.normalizeTrim()
-                        }
+                    ForEach(session.cameras) { cam in
+                        CameraRow(
+                            camera: cam,
+                            onLabelChange: { newLabel in
+                                if let i = session.cameras.firstIndex(where: { $0.id == cam.id }) {
+                                    session.cameras[i].label = newLabel
+                                }
+                            },
+                            onRemove: {
+                                session.cameras.removeAll { $0.id == cam.id }
+                                session.normalizeTrim()
+                            }
+                        )
                     }
                 }
 
@@ -109,7 +117,7 @@ private struct ImportMainColumn: View {
                     GlobalTrimCard(startSec: $session.trimStartSec,
                                    endSec: $session.trimEndSec,
                                    maxSec: session.timelineMax,
-                                   previewURL: session.previewURL)
+                                   cameras: session.previews)
                 }
             }
         }
@@ -168,7 +176,8 @@ private struct ImportInspector: View {
 // MARK: - Baris kamera
 
 private struct CameraRow: View {
-    @Binding var cam: SessionCamera
+    let camera: SessionCamera
+    var onLabelChange: (String) -> Void
     var onRemove: () -> Void
 
     var body: some View {
@@ -179,21 +188,28 @@ private struct CameraRow: View {
                 .overlay(Image(systemName: "film").foregroundStyle(.secondary))
 
             VStack(alignment: .leading, spacing: 2) {
-                TextField("Label kamera", text: $cam.label).textFieldStyle(.plain).font(.headline)
-                Text(cam.url?.lastPathComponent ?? "—").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                TextField("Label kamera",
+                          text: Binding(get: { camera.label }, set: { onLabelChange($0) }))
+                    .textFieldStyle(.plain).font(.headline)
+                Text(camera.url?.lastPathComponent ?? "—").font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(cam.durationSec > 0 ? timecode(cam.durationSec) : "—").font(.caption.monospacedDigit())
-                Text(cam.resolution).font(.caption).foregroundStyle(.secondary)
+                Text(camera.durationSec > 0 ? timecode(camera.durationSec) : "—").font(.caption.monospacedDigit())
+                Text(camera.resolution).font(.caption).foregroundStyle(.secondary)
             }
 
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+            Button(role: .destructive, action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
+            .help("Hapus video")
         }
         .card(padding: Space.m)
     }
