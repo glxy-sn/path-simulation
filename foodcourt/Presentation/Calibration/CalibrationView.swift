@@ -2,11 +2,11 @@
 //  CalibrationView.swift
 //  foodcourt
 //
-//  Created by Shafa Tiara on 03/08/26.
-//
 
 import SwiftUI
 import AppKit
+import AVFoundation
+import PDFKit
 import UniformTypeIdentifiers
 
 struct CalibrationView: View {
@@ -14,556 +14,847 @@ struct CalibrationView: View {
     @Environment(AppRouter.self) private var router
     @Environment(AnalysisSession.self) private var session
 
-    @State private var selected = 0
-    @State private var planeSource: PlaneSource = .canvas
-    @State private var floorPlanImage: NSImage? = nil
-    @State private var floorPlanName: String? = nil
+    @State private var selectedCameraIndex = 0
+    @State private var floorPlanImage: NSImage?
+    @State private var cameraFrameImage: NSImage?
+    @State private var isLoadingFrame = false
+    @State private var message: String?
+    @State private var reloadToken = UUID()
 
-    private var idx: Int { min(max(0, selected), max(0, session.cameras.count - 1)) }
+    private var selectedIndex: Int {
+        min(max(0, selectedCameraIndex), max(0, session.cameras.count - 1))
+    }
+
+    private var selectedCamera: SessionCamera? {
+        guard session.cameras.indices.contains(selectedIndex) else { return nil }
+        return session.cameras[selectedIndex]
+    }
 
     var body: some View {
-        if session.cameras.isEmpty {
-            emptyState
-        } else {
-            content
+        Group {
+            if session.cameras.isEmpty { emptyState }
+            else { calibrationContent }
         }
+        .task(id: reloadToken) {
+            await refreshImages()
+        }
+        .onChange(of: selectedCameraIndex) { _, _ in reloadToken = UUID() }
     }
 
     private var emptyState: some View {
         VStack(spacing: Space.m) {
-            Image(systemName: "camera.metering.none").font(.system(size: 40)).foregroundStyle(.secondary)
+            Image(systemName: "camera.metering.none")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
             Text("Belum ada kamera").font(.headline)
-            Text("Import video dulu di langkah sebelumnya.").font(.callout).foregroundStyle(.secondary)
+            Text("Import video dulu di langkah sebelumnya.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
             GhostButton(title: "Ke Import", systemImage: "chevron.left") { router.back() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var content: some View {
+    private var calibrationContent: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: Space.m * scale) {
-                SectionHeader(
-                    title: "Kalibrasi",
-                    subtitle: "Cocokkan 4 titik yang sama antara frame CCTV dan denah lantai."
-                )
-                // Titiknya benar-benar tersimpan dan ikut terkirim ke engine,
-                // tapi pipeline belum membacanya. Tanpa keterangan ini, orang
-                // menggambar 4 titik per kamera dengan teliti dan mengira
-                // hasilnya berubah — padahal sama persis.
-                InfoNote(text: "Titik yang kamu gambar disimpan dan dikirim ke engine, "
-                         + "tapi pipeline BELUM memakainya — hasil analisis belum berubah "
-                         + "karenanya. Proyeksi bidang lantai masih dikerjakan.",
-                         systemImage: "exclamationmark.triangle")
-                cameraSelector
-            }
-            .spad(Space.xl, [.horizontal, .top])
-            .padding(.bottom, Space.m)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.l * scale) {
+                    header
 
-            HStack(alignment: .top, spacing: Space.l * scale) {
-                canvases.frame(maxWidth: .infinity, maxHeight: .infinity)
-                inspector.relativeWidth(0.24)
+                    canvases
+                        .frame(height: 360 * scale)
+
+                    inspector
+                }
+                .spad(Space.xl, [.horizontal, .top])
+                .padding(.bottom, Space.xl)
             }
-            .spad(Space.xl, [.horizontal])
-            .padding(.bottom, Space.m)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             WizardFooter(onBack: { router.back() }) {
-                PrimaryButton(title: "Lanjut ke Proses",
-                              systemImage: "arrow.right",
-                              enabled: session.cameras[idx].isCalibrated) {
+                PrimaryButton(
+                    title: session.allCalibrated ? "Kalibrasi Selesai" : "Kalibrasi Semua Kamera",
+                    systemImage: "checkmark.seal",
+                    enabled: session.allCalibrated
+                ) {
                     router.next()
                 }
             }
         }
     }
 
-    private var cameraSelector: some View {
-        HStack(spacing: Space.s) {
-            ForEach(Array(session.cameras.enumerated()), id: \.element.id) { i, cam in
-                let isSel = i == idx
-                Button { selected = i } label: {
-                    HStack(spacing: Space.s) {
-                        Image(systemName: cam.isCalibrated ? "checkmark.circle.fill" : "camera")
-                            .foregroundStyle(cam.isCalibrated ? Color.green : (isSel ? Color.white : Color.secondary))
-                        Text(cam.label).foregroundStyle(isSel ? Color.white : Color.primary)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Space.m * scale) {
+            SectionHeader(
+                title: "Kalibrasi",
+                subtitle: "Pilih titik lantai yang sama pada CCTV dan denah. Gunakan 4–8 pasangan titik bebas."
+            )
+            HStack(spacing: Space.s) {
+                ForEach(Array(session.cameras.enumerated()), id: \.element.id) { index, camera in
+                    Button {
+                        selectedCameraIndex = index
+                    } label: {
+                        HStack(spacing: Space.s) {
+                            Image(systemName: camera.isCalibrated ? "checkmark.circle.fill" : "camera")
+                                .foregroundStyle(camera.isCalibrated ? .green : (index == selectedIndex ? .white : .secondary))
+                            Text(camera.label)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, Space.m)
+                        .padding(.vertical, Space.s)
+                        .foregroundStyle(index == selectedIndex ? Color.white : Color.primary)
+                        .background(index == selectedIndex ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
                     }
-                    .padding(.horizontal, Space.m).padding(.vertical, Space.s)
-                    .background(isSel ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Pilih \(camera.label)")
                 }
-                .buttonStyle(.plain)
+                Spacer()
+                Button("Impor Profil", systemImage: "square.and.arrow.down") { importProfile() }
+                    .buttonStyle(.bordered)
+                Button("Ekspor Profil", systemImage: "square.and.arrow.up") { exportProfile() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!session.allCalibrated)
             }
-            Spacer()
         }
     }
 
     private var canvases: some View {
-        let i = idx
+        let camera = selectedCamera
+        let calibration = camera?.calibration
         return HStack(spacing: Space.m * scale) {
-            InteractiveCanvas(
-                title: "Frame CCTV — \(session.cameras[i].label)",
-                subtitle: "Klik untuk taruh titik · klik titik untuk hapus",
-                kind: .frame,
-                planeImage: nil,
-                needsUpload: false,
-                points: session.cameras[i].imagePoints,
+            CalibrationCanvas(
+                title: "Frame CCTV — \(camera?.label ?? "")",
+                subtitle: isLoadingFrame ? "Memuat frame…" : "Klik titik lantai, lalu klik pasangan yang sama di denah.",
+                image: cameraFrameImage,
+                sourceSize: camera?.framePixelSize?.cgSize,
+                points: camera?.imagePoints ?? [],
+                projectedPoints: [],
                 accent: Theme.accent,
-                onAdd: { p in
-                    if session.cameras[i].imagePoints.count < 4 {
-                        session.cameras[i].imagePoints.append(NormPoint(x: p.x, y: p.y))
-                    }
-                },
-                onDeleteIndex: { j in
-                    if session.cameras[i].imagePoints.indices.contains(j) {
-                        session.cameras[i].imagePoints.remove(at: j)
-                    }
-                },
-                onUpload: nil
+                canInteract: cameraFrameImage != nil,
+                canvasAccessory: nil,
+                footerAccessory: nil,
+                emptyState: AnyView(
+                    ContentUnavailableView(
+                        "Frame belum tersedia",
+                        systemImage: "video.slash",
+                        description: Text("Pilih video pada langkah Import atau tunggu frame dimuat.")
+                    )
+                ),
+                onAdd: { addCameraPoint($0) },
+                onDeletePair: { deletePair(at: $0) }
             )
-            InteractiveCanvas(
-                title: planeSource == .canvas ? "Canvas Berskala" : "Floor Plan",
-                subtitle: "Klik titik yang bersesuaian",
-                kind: .plane,
-                planeImage: floorPlanImage,
-                needsUpload: planeSource == .floorplan && floorPlanImage == nil,
-                points: session.cameras[i].planePoints,
+            CalibrationCanvas(
+                title: session.usesScaledCanvas ? "Canvas Berskala" : (session.floorPlanName ?? "Floor Plan"),
+                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m.",
+                image: session.usesScaledCanvas ? nil : floorPlanImage,
+                sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize,
+                points: camera?.planePoints ?? [],
+                projectedPoints: validationPoints(calibration),
                 accent: .orange,
-                onAdd: { p in
-                    if session.cameras[i].planePoints.count < 4 {
-                        session.cameras[i].planePoints.append(NormPoint(x: p.x, y: p.y))
-                    }
-                },
-                onDeleteIndex: { j in
-                    if session.cameras[i].planePoints.indices.contains(j) {
-                        session.cameras[i].planePoints.remove(at: j)
-                    }
-                },
-                onUpload: { uploadFloorPlan() }
+                canInteract: session.usesScaledCanvas || floorPlanImage != nil,
+                canvasAccessory: floorPlanCanvasAction,
+                footerAccessory: AnyView(floorSourcePicker),
+                emptyState: nil,
+                onAdd: { addPlanePoint($0) },
+                onDeletePair: { deletePair(at: $0) }
             )
         }
     }
 
     private var inspector: some View {
-        let i = idx
-        return VStack(alignment: .leading, spacing: Space.m * scale) {
+        let camera = selectedCamera
+        let calibration = camera?.calibration
+        return ViewThatFits(in: .horizontal) {
+            regularInspector(camera: camera, calibration: calibration)
+                .frame(minWidth: 920)
+            compactInspector(camera: camera, calibration: calibration)
+        }
+    }
+
+    private func regularInspector(camera: SessionCamera?, calibration: CameraCalibration?) -> some View {
+        HStack(alignment: .top, spacing: Space.m * scale) {
+            referenceFramePanel(camera, height: panelHeight(172))
+            pointPairsPanel(camera, height: panelHeight(172))
+            validationPanel(calibration, height: panelHeight(172))
+            cameraStatusPanel(height: panelHeight(172))
+        }
+    }
+
+    private func compactInspector(camera: SessionCamera?, calibration: CameraCalibration?) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: Space.m * scale), GridItem(.flexible())],
+            alignment: .leading,
+            spacing: Space.m * scale
+        ) {
+            referenceFramePanel(camera, height: panelHeight(164))
+            pointPairsPanel(camera, height: panelHeight(164))
+            validationPanel(calibration, height: panelHeight(164))
+            cameraStatusPanel(height: panelHeight(164))
+        }
+    }
+
+    private func referenceFramePanel(_ camera: SessionCamera?, height: CGFloat) -> some View {
+        inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
-                FieldLabel(text: "Sumber Denah")
-                Picker("", selection: $planeSource) {
-                    ForEach(PlaneSource.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
-                if planeSource == .floorplan {
-                    GhostButton(title: floorPlanName == nil ? "Pilih File Denah" : "Ganti Denah",
-                                systemImage: "photo.on.rectangle") { uploadFloorPlan() }
-                    if let n = floorPlanName {
-                        Text(n).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                FieldLabel(text: "Frame Referensi")
+                if let camera {
+                    let range = referenceRange(for: camera)
+                    Slider(
+                        value: Binding(
+                            get: { clamp(session.cameras[selectedIndex].referenceFrameSeconds, to: range) },
+                            set: { value in
+                                session.cameras[selectedIndex].referenceFrameSeconds = clamp(value, to: range)
+                                invalidateCalibration(for: selectedIndex)
+                                reloadToken = UUID()
+                            }
+                    ),
+                    in: range
+                )
+                    HStack {
+                        Text(timecode(clamp(session.cameras[selectedIndex].referenceFrameSeconds, to: range)))
+                        Spacer()
+                        Text("\(timecode(range.lowerBound)) – \(timecode(range.upperBound))")
                     }
-                } else {
-                    Text("Canvas kosong berskala metrik (default).")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
-            .card(padding: Space.m)
+        }
+    }
 
+    private func pointPairsPanel(_ camera: SessionCamera?, height: CGFloat) -> some View {
+        inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
                 HStack {
-                    FieldLabel(text: "Progress")
+                    FieldLabel(text: "Pasangan Titik")
                     Spacer()
-                    Text("\(session.cameras[i].imagePoints.count)/4 · \(session.cameras[i].planePoints.count)/4")
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(camera?.imagePoints.count ?? 0)/8")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
-                GhostButton(title: "Reset", systemImage: "arrow.counterclockwise") {
-                    session.cameras[i].imagePoints = []
-                    session.cameras[i].planePoints = []
+                pointActionButton("Reset Kamera", systemImage: "arrow.counterclockwise", enabled: canUndoCameraPoint) {
+                    resetSelectedCamera()
+                }
+                pointActionButton("Undo CCTV", systemImage: "arrow.uturn.backward", enabled: canUndoCameraPoint) {
+                    undoCameraPoint()
+                }
+                pointActionButton("Undo Floor plan", systemImage: "arrow.uturn.backward", enabled: canUndoFloorPlanPoint) {
+                    undoFloorPlanPoint()
                 }
             }
-            .card(padding: Space.m)
+        }
+    }
 
+    private func pointActionButton(
+        _ title: String,
+        systemImage: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Space.s)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.42)
+    }
+
+    private func validationPanel(_ calibration: CameraCalibration?, height: CGFloat) -> some View {
+        inspectorPanel(height: height) { metricContent(calibration) }
+    }
+
+    private func cameraStatusPanel(height: CGFloat) -> some View {
+        inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
-                FieldLabel(text: "Kamera (\(session.cameras.filter { $0.isCalibrated }.count)/\(session.cameras.count))")
-                ForEach(session.cameras) { cam in
+                FieldLabel(text: "Status Kamera")
+                ForEach(session.cameras) { item in
                     HStack(spacing: Space.s) {
-                        Image(systemName: cam.isCalibrated ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(cam.isCalibrated ? Color.green : Color.secondary)
-                        Text(cam.label).font(.callout).lineLimit(1)
+                        Image(systemName: item.isCalibrated ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(item.isCalibrated ? .green : .secondary)
+                        Text(item.label).font(.callout).lineLimit(1)
                         Spacer()
                     }
                 }
             }
-            .card(padding: Space.m)
-
-            Spacer(minLength: 0)
         }
     }
 
-    private func uploadFloorPlan() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        floorPlanName = url.lastPathComponent
-        floorPlanImage = NSImage(contentsOf: url)
-        planeSource = .floorplan
+    private func panelHeight(_ base: CGFloat) -> CGFloat {
+        min(base * scale, base + 16)
     }
-}
 
-// ============================================================
-//  MARK: - InteractiveCanvas (zoom / pan / loupe / hapus titik)
-// ============================================================
+    private func inspectorPanel<Content: View>(height: CGFloat, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .card(padding: Space.m)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+    }
 
-private struct InteractiveCanvas: View {
-    enum Kind { case frame, plane }
-
-    let title: String
-    let subtitle: String
-    let kind: Kind
-    let planeImage: NSImage?
-    let needsUpload: Bool
-    let points: [NormPoint]
-    let accent: Color
-    let onAdd: (CGPoint) -> Void
-    let onDeleteIndex: (Int) -> Void
-    let onUpload: (() -> Void)?
-
-    @State private var zoom: CGFloat = 1
-    @State private var baseZoom: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var baseOffset: CGSize = .zero
-    @State private var loupeAt: CGPoint? = nil
-    @State private var hovered: Int? = nil
-
-    private let minZoom: CGFloat = 1
-    private let maxZoom: CGFloat = 5
-    private let hitRadius: CGFloat = 16
-
-    var body: some View {
+    @ViewBuilder
+    private func metricContent(_ calibration: CameraCalibration?) -> some View {
         VStack(alignment: .leading, spacing: Space.s) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            FieldLabel(text: "Validasi")
+            if let calibration {
+                metric("Median", String(format: "%.3f m", calibration.metrics.medianErrorM))
+                metric("P95", String(format: "%.3f m", calibration.metrics.p95ErrorM))
+                metric("Inlier", "\(calibration.metrics.inliers)/\(calibration.metrics.points)")
+            } else {
+                Text("Tambahkan minimal empat pasangan titik untuk menghitung homografi.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
 
-            GeometryReader { geo in
-                let W = geo.size.width, H = geo.size.height
-                ZStack(alignment: .topLeading) {
-                    scene(W: W, H: H)
-                        .frame(width: W, height: H)
-                        .scaleEffect(zoom, anchor: .center)
-                        .offset(offset)
-                }
-                .frame(width: W, height: H, alignment: .topLeading)
-                .clipped()
-                .contentShape(Rectangle())
-                .gesture(placeOrPanGesture(W: W, H: H))
-                .simultaneousGesture(zoomGesture(W: W, H: H))
-                .overlay(alignment: .topLeading) {
-                    if let l = loupeAt, !needsUpload {
-                        loupe(W: W, H: H, at: l).allowsHitTesting(false)
-                    }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if !needsUpload { zoomControls(W: W, H: H).padding(Space.s) }
-                }
-                .overlay {
-                    if needsUpload { uploadPrompt }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                    .strokeBorder(Theme.hairline)
+    private func metric(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.caption.monospacedDigit().weight(.medium))
+        }
+    }
+
+    private func addCameraPoint(_ point: CGPoint) {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        let camera = session.cameras[selectedIndex]
+        guard camera.imagePoints.count < HomographySolver.maximumPoints else {
+            message = "Gagal: maksimum 8 pasangan titik per kamera."; return
+        }
+        guard camera.imagePoints.count == camera.planePoints.count else {
+            message = "Klik pasangan titik di denah terlebih dahulu."; return
+        }
+        session.cameras[selectedIndex].imagePoints.append(NormPoint(x: point.x, y: point.y))
+        invalidateCalibration(for: selectedIndex)
+        message = "Titik CCTV \(camera.imagePoints.count + 1) ditambahkan. Klik pasangan yang sama di denah."
+    }
+
+    private func addPlanePoint(_ point: CGPoint) {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        let camera = session.cameras[selectedIndex]
+        guard camera.planePoints.count < camera.imagePoints.count else {
+            message = "Mulai pasangan baru dengan klik titik pada CCTV."; return
+        }
+        session.cameras[selectedIndex].planePoints.append(NormPoint(x: point.x, y: point.y))
+        recalculateSelectedCamera()
+    }
+
+    private func deletePair(at index: Int) {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        guard session.cameras[selectedIndex].imagePoints.indices.contains(index),
+              session.cameras[selectedIndex].planePoints.indices.contains(index) else { return }
+        session.cameras[selectedIndex].imagePoints.remove(at: index)
+        session.cameras[selectedIndex].planePoints.remove(at: index)
+        invalidateCalibration(for: selectedIndex)
+        recalculateSelectedCamera()
+    }
+
+    private func resetSelectedCamera() {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        session.cameras[selectedIndex].imagePoints = []
+        session.cameras[selectedIndex].planePoints = []
+        invalidateCalibration(for: selectedIndex)
+        message = "Titik \(session.cameras[selectedIndex].label) direset."
+    }
+
+    private var canUndoCameraPoint: Bool {
+        guard session.cameras.indices.contains(selectedIndex) else { return false }
+        return !session.cameras[selectedIndex].imagePoints.isEmpty
+    }
+
+    private var canUndoFloorPlanPoint: Bool {
+        guard session.cameras.indices.contains(selectedIndex) else { return false }
+        let camera = session.cameras[selectedIndex]
+        return !camera.planePoints.isEmpty && camera.imagePoints.count == camera.planePoints.count
+    }
+
+    private func undoCameraPoint() {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        let imageCount = session.cameras[selectedIndex].imagePoints.count
+        let floorCount = session.cameras[selectedIndex].planePoints.count
+        guard imageCount > 0 else { return }
+
+        session.cameras[selectedIndex].imagePoints.removeLast()
+        if imageCount == floorCount {
+            session.cameras[selectedIndex].planePoints.removeLast()
+        }
+        invalidateCalibration(for: selectedIndex)
+        recalculateSelectedCamera()
+        message = "Titik CCTV terakhir dihapus."
+    }
+
+    private func undoFloorPlanPoint() {
+        guard canUndoFloorPlanPoint else { return }
+        session.cameras[selectedIndex].planePoints.removeLast()
+        invalidateCalibration(for: selectedIndex)
+        message = "Titik floor plan terakhir dihapus. Pilih titik penggantinya di denah."
+    }
+
+    private func invalidateCalibration(for index: Int) {
+        guard session.cameras.indices.contains(index) else { return }
+        session.cameras[index].calibration = nil
+    }
+
+    private func referenceRange(for camera: SessionCamera) -> ClosedRange<Double> {
+        let upperLimit = max(0, camera.durationSec)
+        let lower = min(max(0, session.trimStartSec), upperLimit)
+        let requestedUpper = session.trimEndSec > lower ? session.trimEndSec : upperLimit
+        let upper = min(max(lower, requestedUpper), upperLimit)
+        return lower...upper
+    }
+
+    private func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        min(range.upperBound, max(range.lowerBound, value))
+    }
+
+    private func constrainReferenceFramesToTrim() {
+        for index in session.cameras.indices {
+            session.cameras[index].referenceFrameSeconds = clamp(
+                session.cameras[index].referenceFrameSeconds,
+                to: referenceRange(for: session.cameras[index])
             )
         }
     }
 
-    // MARK: Scene (background + polygon + dots)
+    private func recalculateSelectedCamera() {
+        guard session.cameras.indices.contains(selectedIndex) else { return }
+        let camera = session.cameras[selectedIndex]
+        guard camera.imagePoints.count == camera.planePoints.count else { return }
+        guard camera.imagePoints.count >= HomographySolver.minimumPoints else { return }
+        guard let frameSize = camera.framePixelSize, frameSize.isValid else {
+            message = "Gagal: frame CCTV belum dapat dibaca."; return
+        }
+        let cameraPoints = camera.imagePoints.map {
+            CalibrationPoint(x: $0.x * frameSize.width, y: $0.y * frameSize.height)
+        }
+        let floorSize = session.calibrationFloorSize
+        let floorPoints = camera.planePoints.map {
+            CalibrationPoint(x: $0.x * floorSize.width, y: $0.y * floorSize.height)
+        }
+        do {
+            session.cameras[selectedIndex].calibration = try HomographySolver.calibrate(
+                cameraPointsPx: cameraPoints,
+                floorPointsPx: floorPoints,
+                floorSize: floorSize,
+                venueWidthM: session.venueWidthM,
+                venueHeightM: session.venueHeightM
+            )
+            let metrics = session.cameras[selectedIndex].calibration?.metrics
+            message = "Kalibrasi valid: \(metrics?.inliers ?? 0)/\(metrics?.points ?? 0) inlier."
+        } catch {
+            session.cameras[selectedIndex].calibration = nil
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func validationPoints(_ calibration: CameraCalibration?) -> [ValidationPoint] {
+        guard let calibration else { return [] }
+        let floorSize = session.calibrationFloorSize
+        return calibration.projectedFloorPointsPx.enumerated().map { index, point in
+            ValidationPoint(
+                point: CGPoint(x: point.x / floorSize.width, y: point.y / floorSize.height),
+                isInlier: calibration.inlierMask.indices.contains(index) ? calibration.inlierMask[index] : false
+            )
+        }
+    }
+
+    private func chooseFloorPlan() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
+        guard panel.runModal() == .OK, let url = panel.url, let image = loadFloorPlanImage(url) else { return }
+        floorPlanImage = image
+        session.floorPlanURL = url
+        session.floorPlanName = url.lastPathComponent
+        session.floorPlanPixelSize = pixelSize(of: image)
+        session.usesScaledCanvas = false
+        invalidateAllCalibrations()
+        message = "Denah diperbarui. Kalibrasi tiap kamera perlu dihitung ulang."
+    }
+
+    private var floorSourcePicker: some View {
+        HStack(spacing: Space.s) {
+            floorSourceRadio(title: "Canvas", selected: session.usesScaledCanvas) {
+                selectScaledCanvas()
+            }
+            floorSourceRadio(title: "Floor plan", selected: !session.usesScaledCanvas) {
+                selectFloorPlan()
+            }
+        }
+        .font(.caption.weight(.medium))
+    }
+
+    private func floorSourceRadio(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(selected ? Theme.accent : .secondary)
+                Text(title).foregroundStyle(selected ? Color.primary : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Gunakan \(title)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func selectScaledCanvas() {
+        guard !session.usesScaledCanvas else { return }
+        session.usesScaledCanvas = true
+        invalidateAllCalibrations()
+        message = "Menggunakan Canvas Berskala. Kalibrasi tiap kamera perlu dihitung ulang."
+    }
+
+    private func selectFloorPlan() {
+        guard session.usesScaledCanvas else { return }
+        session.usesScaledCanvas = false
+        invalidateAllCalibrations()
+        if session.floorPlanURL == nil {
+            message = "Unggah floor plan untuk mulai memberi titik pada denah."
+        } else {
+            message = "Menggunakan floor plan tersimpan. Kalibrasi tiap kamera perlu dihitung ulang."
+        }
+    }
+
+    private var floorPlanCanvasAction: AnyView? {
+        guard !session.usesScaledCanvas else { return nil }
+        let hasFloorPlan = floorPlanImage != nil
+        return AnyView(
+            Button(hasFloorPlan ? "Update" : "Upload", systemImage: hasFloorPlan ? "arrow.triangle.2.circlepath" : "photo") {
+                chooseFloorPlan()
+            }
+            .buttonStyle(.bordered)
+        )
+    }
+
+    private func exportProfile() {
+        do {
+            let profile = try CalibrationProfileStore.exportProfile(from: session)
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.json]
+            panel.nameFieldStringValue = "camera_floorplan_calibration.json"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try CalibrationProfileStore.encode(profile).write(to: url, options: .atomic)
+            message = "Profil kalibrasi diekspor ke \(url.lastPathComponent)."
+        } catch {
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func importProfile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let profile = try CalibrationProfileStore.decode(Data(contentsOf: url))
+            try CalibrationProfileStore.apply(profile, to: session)
+            reloadToken = UUID()
+            message = "Profil kalibrasi diimpor. Cocokkan kembali frame referensi bila video berubah."
+        } catch {
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func invalidateAllCalibrations() {
+        for index in session.cameras.indices { session.cameras[index].calibration = nil }
+    }
+
+    @MainActor
+    private func refreshImages() async {
+        constrainReferenceFramesToTrim()
+        if let url = session.floorPlanURL { floorPlanImage = loadFloorPlanImage(url) }
+        else { floorPlanImage = nil }
+        guard let camera = selectedCamera, let url = camera.url else {
+            cameraFrameImage = nil; return
+        }
+        isLoadingFrame = true
+        let expectedID = camera.id
+        let image = await VideoFrameLoader.image(url: url, at: camera.referenceFrameSeconds)
+        guard selectedCamera?.id == expectedID else { return }
+        cameraFrameImage = image
+        if let image {
+            let size = pixelSize(of: image)
+            if size.isValid { session.cameras[selectedIndex].framePixelSize = size }
+        }
+        isLoadingFrame = false
+    }
+
+    private func loadFloorPlanImage(_ url: URL) -> NSImage? {
+        if url.pathExtension.lowercased() == "pdf", let page = PDFDocument(url: url)?.page(at: 0) {
+            return page.thumbnail(of: NSSize(width: 2400, height: 2400), for: .mediaBox)
+        }
+        return NSImage(contentsOf: url)
+    }
+
+    private func pixelSize(of image: NSImage) -> PixelSize {
+        if let rep = image.representations.first(where: { $0.pixelsWide > 0 && $0.pixelsHigh > 0 }) {
+            return PixelSize(width: Double(rep.pixelsWide), height: Double(rep.pixelsHigh))
+        }
+        return PixelSize(image.size)
+    }
+}
+
+private enum VideoFrameLoader {
+    static func image(url: URL, at seconds: Double) async -> NSImage? {
+        await Task.detached(priority: .userInitiated) {
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            let time = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
+            guard let frame = try? generator.copyCGImage(at: time, actualTime: nil) else { return nil }
+            return NSImage(cgImage: frame, size: NSSize(width: frame.width, height: frame.height))
+        }.value
+    }
+}
+
+private struct ValidationPoint: Identifiable {
+    let id = UUID()
+    let point: CGPoint
+    let isInlier: Bool
+}
+
+private struct CalibrationCanvas: View {
+    let title: String
+    let subtitle: String
+    let image: NSImage?
+    let sourceSize: CGSize?
+    let points: [NormPoint]
+    let projectedPoints: [ValidationPoint]
+    let accent: Color
+    let canInteract: Bool
+    let canvasAccessory: AnyView?
+    let footerAccessory: AnyView?
+    let emptyState: AnyView?
+    let onAdd: (CGPoint) -> Void
+    let onDeletePair: (Int) -> Void
+
+    @State private var zoom: CGFloat = 1
+    @State private var baseZoom: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var basePan: CGSize = .zero
+    @State private var hoveredIndex: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(alignment: .top, spacing: Space.s) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline).lineLimit(1)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            GeometryReader { geo in
+                let rect = fittedRect(in: geo.size)
+                ZStack {
+                    scene(size: rect.size)
+                        .frame(width: rect.width, height: rect.height)
+                        .scaleEffect(zoom)
+                        .offset(pan)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .contentShape(Rectangle())
+                .gesture(interactionGesture(rect: rect))
+                .simultaneousGesture(magnifyGesture(rect: rect))
+                .overlay(alignment: .bottomTrailing) {
+                    controls(rect: rect).padding(Space.s)
+                }
+                .overlay(alignment: .topTrailing) {
+                    canvasAccessory?.padding(Space.s)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    footerAccessory?.padding(Space.s)
+                }
+                .overlay {
+                    if !canInteract, let emptyState { emptyState }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).strokeBorder(Theme.hairline))
+        }
+    }
 
     @ViewBuilder
-    private func scene(W: CGFloat, H: CGFloat) -> some View {
+    private func scene(size: CGSize) -> some View {
         ZStack {
-            background
-
+            if let image {
+                Image(nsImage: image).resizable().interpolation(.high).scaledToFill()
+            } else {
+                ZStack {
+                    Color.primary.opacity(0.035)
+                    GridBackground()
+                }
+            }
             if points.count >= 2 {
                 Path { path in
-                    let pts = points.map { CGPoint(x: $0.x * W, y: $0.y * H) }
-                    path.addLines(pts)
-                    if points.count == 4 { path.closeSubpath() }
+                    let values = points.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+                    path.addLines(values)
                 }
-                .stroke(accent.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .stroke(accent.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
             }
-
-            ForEach(Array(points.enumerated()), id: \.element.id) { i, p in
-                DotView(number: i + 1, color: accent, hovered: hovered == i)
-                    .position(x: p.x * W, y: p.y * H)
-                    .onHover { inside in
-                        if inside { hovered = i }
-                        else if hovered == i { hovered = nil }
-                    }
+            ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
+                PointMarker(number: index + 1, color: accent, deleteMode: hoveredIndex == index)
+                    .position(x: point.x * size.width, y: point.y * size.height)
+                    .onHover { hoveredIndex = $0 ? index : nil }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var background: some View {
-        switch kind {
-        case .frame:
-            FrameScene()
-        case .plane:
-            if let img = planeImage {
-                Image(nsImage: img).resizable().scaledToFill()
-            } else {
-                ZStack { Color(hex: 0xF7F8FA); GridScene(cols: 8, rows: 5, color: Color(hex: 0x1E293B, alpha: 0.10)) }
+            ForEach(Array(projectedPoints.enumerated()), id: \.element.id) { index, point in
+                ProjectedMarker(number: index + 1, isInlier: point.isInlier)
+                    .position(x: point.point.x * size.width, y: point.point.y * size.height)
             }
         }
+        .clipShape(Rectangle())
     }
 
-    // MARK: Gestures
-
-    private func placeOrPanGesture(W: CGFloat, H: CGFloat) -> some Gesture {
+    private func interactionGesture(rect: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 0)
-            .onChanged { v in
-                loupeAt = v.location
-                let moved = hypot(v.translation.width, v.translation.height)
-                if moved > 6 && zoom > 1 {
-                    offset = clamped(CGSize(width: baseOffset.width + v.translation.width,
-                                            height: baseOffset.height + v.translation.height), W: W, H: H)
+            .onChanged { value in
+                guard canInteract else { return }
+                let distance = hypot(value.translation.width, value.translation.height)
+                if distance > 6, zoom > 1 {
+                    pan = clampedPan(CGSize(width: basePan.width + value.translation.width, height: basePan.height + value.translation.height), rect: rect)
                 }
             }
-            .onEnded { v in
-                loupeAt = nil
-                let moved = hypot(v.translation.width, v.translation.height)
-                if moved > 6 && zoom > 1 {
-                    baseOffset = offset
-                } else {
-                    if let idx = nearest(to: v.location, W: W, H: H) {
-                        onDeleteIndex(idx)
-                    } else {
-                        onAdd(normalize(v.location, W: W, H: H))
-                    }
-                }
+            .onEnded { value in
+                guard canInteract else { return }
+                let distance = hypot(value.translation.width, value.translation.height)
+                if distance > 6, zoom > 1 { basePan = pan; return }
+                guard let normalized = normalizedPoint(value.location, in: rect) else { return }
+                if let index = nearestPoint(to: normalized, in: rect) { onDeletePair(index) }
+                else { onAdd(normalized) }
             }
     }
 
-    private func zoomGesture(W: CGFloat, H: CGFloat) -> some Gesture {
+    private func magnifyGesture(rect: CGRect) -> some Gesture {
         MagnifyGesture()
-            .onChanged { v in
-                zoom = min(max(baseZoom * v.magnification, minZoom), maxZoom)
-                if zoom <= 1 { offset = .zero } else { offset = clamped(offset, W: W, H: H) }
+            .onChanged { value in
+                zoom = min(5, max(1, baseZoom * value.magnification))
+                pan = clampedPan(pan, rect: rect)
             }
             .onEnded { _ in
                 baseZoom = zoom
-                if zoom <= 1 { baseOffset = .zero }
+                if zoom == 1 { pan = .zero; basePan = .zero } else { basePan = pan }
             }
     }
 
-    // MARK: Zoom controls
-
-    private func zoomControls(W: CGFloat, H: CGFloat) -> some View {
+    private func controls(rect: CGRect) -> some View {
         HStack(spacing: Space.s) {
-            iconButton("minus") { setZoom(zoom - 0.5, W: W, H: H) }
-            Text("\(Int(zoom * 100))%")
-                .font(.caption.monospacedDigit())
-                .frame(width: 40)
-            iconButton("plus") { setZoom(zoom + 0.5, W: W, H: H) }
-            Divider().frame(height: 14)
-            iconButton("arrow.up.left.and.down.right.magnifyingglass") { resetZoom() }
+            Button { setZoom(zoom - 0.5, rect: rect) } label: { Image(systemName: "minus") }
+            Text("\(Int((zoom * 100).rounded()))%")
+                .font(.caption.monospacedDigit()).frame(width: 38)
+            Button { setZoom(zoom + 0.5, rect: rect) } label: { Image(systemName: "plus") }
+            Button {
+                zoom = 1; baseZoom = 1; pan = .zero; basePan = .zero
+            } label: { Image(systemName: "arrow.up.left.and.down.right.magnifyingglass") }
         }
+        .buttonStyle(.borderless)
         .padding(.horizontal, Space.s)
         .padding(.vertical, 5)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Theme.hairline))
     }
 
-    private func iconButton(_ symbol: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.caption).frame(width: 18, height: 18)
+    private func fittedRect(in container: CGSize) -> CGRect {
+        let source = sourceSize ?? CGSize(width: 4, height: 3)
+        guard source.width > 0, source.height > 0, container.width > 0, container.height > 0 else { return .zero }
+        let factor = min(container.width / source.width, container.height / source.height)
+        let size = CGSize(width: source.width * factor, height: source.height * factor)
+        return CGRect(x: (container.width - size.width) / 2, y: (container.height - size.height) / 2, width: size.width, height: size.height)
+    }
+
+    private func normalizedPoint(_ point: CGPoint, in rect: CGRect) -> CGPoint? {
+        guard rect.width > 0, rect.height > 0 else { return nil }
+        let x = ((point.x - rect.midX - pan.width) / zoom) + rect.midX
+        let y = ((point.y - rect.midY - pan.height) / zoom) + rect.midY
+        guard rect.contains(CGPoint(x: x, y: y)) else { return nil }
+        return CGPoint(x: (x - rect.minX) / rect.width, y: (y - rect.minY) / rect.height)
+    }
+
+    private func nearestPoint(to point: CGPoint, in rect: CGRect) -> Int? {
+        let hitRadius = 15 / max(zoom, 1)
+        return points.indices.min { first, second in
+            let firstDistance = hypot((points[first].x - point.x) * rect.width, (points[first].y - point.y) * rect.height)
+            let secondDistance = hypot((points[second].x - point.x) * rect.width, (points[second].y - point.y) * rect.height)
+            return firstDistance < secondDistance
+        }.flatMap { index in
+            let distance = hypot((points[index].x - point.x) * rect.width, (points[index].y - point.y) * rect.height)
+            return distance <= hitRadius ? index : nil
         }
-        .buttonStyle(.plain)
     }
 
-    private func setZoom(_ z: CGFloat, W: CGFloat, H: CGFloat) {
-        zoom = min(max(z, minZoom), maxZoom)
-        baseZoom = zoom
-        if zoom <= 1 { offset = .zero; baseOffset = .zero }
-        else { offset = clamped(offset, W: W, H: H); baseOffset = offset }
+    private func clampedPan(_ value: CGSize, rect: CGRect) -> CGSize {
+        let maxX = rect.width * (zoom - 1) / 2
+        let maxY = rect.height * (zoom - 1) / 2
+        return CGSize(width: min(max(value.width, -maxX), maxX), height: min(max(value.height, -maxY), maxY))
     }
 
-    private func resetZoom() {
-        zoom = 1; baseZoom = 1; offset = .zero; baseOffset = .zero
-    }
-
-    // MARK: Loupe / magnifier
-
-    private func loupe(W: CGFloat, H: CGFloat, at l: CGPoint) -> some View {
-        let n = normalize(l, W: W, H: H)
-        let M = max(2.5, zoom * 1.8)
-        let L: CGFloat = 132
-        // posisi loupe di atas kursor, di-clamp agar tetap di dalam frame
-        let cx = min(max(l.x, L / 2), W - L / 2)
-        var cy = l.y - L / 2 - 18
-        if cy < L / 2 { cy = min(l.y + L / 2 + 18, H - L / 2) }
-
-        return ZStack {
-            scene(W: W, H: H)
-                .frame(width: W, height: H)
-                .scaleEffect(M, anchor: .topLeading)
-                .offset(x: L / 2 - n.x * W * M, y: L / 2 - n.y * H * M)
-                .frame(width: L, height: L, alignment: .topLeading)
-                .clipShape(Circle())
-
-            // crosshair
-            Path { p in
-                p.move(to: CGPoint(x: L / 2 - 8, y: L / 2)); p.addLine(to: CGPoint(x: L / 2 + 8, y: L / 2))
-                p.move(to: CGPoint(x: L / 2, y: L / 2 - 8)); p.addLine(to: CGPoint(x: L / 2, y: L / 2 + 8))
-            }
-            .stroke(accent, lineWidth: 1.5)
-
-            Circle().strokeBorder(.white, lineWidth: 3)
-            Circle().strokeBorder(Theme.hairline)
-        }
-        .frame(width: L, height: L)
-        .background(Color.black.opacity(0.15), in: Circle())
-        .shadow(radius: 6)
-        .position(x: cx, y: cy)
-    }
-
-    // MARK: Upload prompt
-
-    private var uploadPrompt: some View {
-        VStack(spacing: Space.s) {
-            Image(systemName: "photo.badge.plus").font(.system(size: 34)).foregroundStyle(Theme.accent)
-            Text("Belum ada denah").font(.headline)
-            Text("Upload gambar / PDF floor plan").font(.caption).foregroundStyle(.secondary)
-            if let onUpload {
-                GhostButton(title: "Pilih File Denah", systemImage: "folder", action: onUpload)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: 0xF7F8FA).opacity(0.92))
-    }
-
-    // MARK: Transform helpers (anchor .center)
-
-    private func normalize(_ p: CGPoint, W: CGFloat, H: CGFloat) -> CGPoint {
-        let cx = W / 2, cy = H / 2
-        let px = (p.x - offset.width - cx) / zoom + cx
-        let py = (p.y - offset.height - cy) / zoom + cy
-        return CGPoint(x: min(max(px / W, 0), 1), y: min(max(py / H, 0), 1))
-    }
-
-    private func screenPoint(_ pt: NormPoint, W: CGFloat, H: CGFloat) -> CGPoint {
-        let cx = W / 2, cy = H / 2
-        return CGPoint(x: cx + (pt.x * W - cx) * zoom + offset.width,
-                       y: cy + (pt.y * H - cy) * zoom + offset.height)
-    }
-
-    private func nearest(to p: CGPoint, W: CGFloat, H: CGFloat) -> Int? {
-        var best: (Int, CGFloat)? = nil
-        for (i, pt) in points.enumerated() {
-            let s = screenPoint(pt, W: W, H: H)
-            let d = hypot(p.x - s.x, p.y - s.y)
-            if d <= hitRadius, best == nil || d < best!.1 { best = (i, d) }
-        }
-        return best?.0
-    }
-
-    private func clamped(_ o: CGSize, W: CGFloat, H: CGFloat) -> CGSize {
-        let maxX = W * (zoom - 1) / 2
-        let maxY = H * (zoom - 1) / 2
-        return CGSize(width: min(max(o.width, -maxX), maxX),
-                      height: min(max(o.height, -maxY), maxY))
+    private func setZoom(_ value: CGFloat, rect: CGRect) {
+        zoom = min(5, max(1, value)); baseZoom = zoom
+        pan = clampedPan(pan, rect: rect); basePan = pan
     }
 }
 
-// MARK: - Dot (dengan affordance hapus saat hover)
-
-private struct DotView: View {
+private struct PointMarker: View {
     let number: Int
     let color: Color
-    let hovered: Bool
+    let deleteMode: Bool
+
     var body: some View {
         ZStack {
-            Circle().fill(hovered ? Color.red : color)
-                .frame(width: hovered ? 26 : 22, height: hovered ? 26 : 22)
+            Circle().fill(deleteMode ? Color.red : color).frame(width: deleteMode ? 26 : 22, height: deleteMode ? 26 : 22)
                 .overlay(Circle().stroke(.white, lineWidth: 1.5))
-            if hovered {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-            } else {
-                Text("\(number)").font(.caption2.bold()).foregroundStyle(.white)
-            }
+            if deleteMode { Image(systemName: "xmark").font(.caption.bold()).foregroundStyle(.white) }
+            else { Text("\(number)").font(.caption2.bold()).foregroundStyle(.white) }
         }
         .shadow(radius: 1)
-        .help("Klik untuk hapus titik ini")
+        .help("Klik untuk menghapus pasangan titik \(number)")
     }
 }
 
-// MARK: - Background scenes
+private struct ProjectedMarker: View {
+    let number: Int
+    let isInlier: Bool
 
-/// Faux top-view "frame CCTV" supaya zoom/pan/loupe kelihatan bekerja.
-private struct FrameScene: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x2A2E37), Color(hex: 0x161922)],
-                           startPoint: .top, endPoint: .bottom)
-            Canvas { ctx, size in
-                let w = size.width, h = size.height
-                // garis perspektif lantai
-                var floor = Path()
-                for i in 1..<6 {
-                    let y = h * CGFloat(i) / 6
-                    floor.move(to: CGPoint(x: 0, y: y)); floor.addLine(to: CGPoint(x: w, y: y))
-                }
-                ctx.stroke(floor, with: .color(.white.opacity(0.06)), lineWidth: 1)
-
-                // beberapa "meja" (kotak) sebagai referensi visual
-                let tables: [CGRect] = [
-                    CGRect(x: 0.16, y: 0.30, width: 0.14, height: 0.10),
-                    CGRect(x: 0.46, y: 0.24, width: 0.14, height: 0.10),
-                    CGRect(x: 0.70, y: 0.34, width: 0.14, height: 0.10),
-                    CGRect(x: 0.30, y: 0.58, width: 0.14, height: 0.10),
-                    CGRect(x: 0.60, y: 0.60, width: 0.14, height: 0.10)
-                ]
-                for t in tables {
-                    let r = CGRect(x: t.minX * w, y: t.minY * h, width: t.width * w, height: t.height * h)
-                    ctx.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(.white.opacity(0.10)))
-                    ctx.stroke(Path(roundedRect: r, cornerRadius: 3), with: .color(.white.opacity(0.18)), lineWidth: 1)
-                }
+            Circle().strokeBorder(isInlier ? .green : .red, lineWidth: 2).frame(width: 18, height: 18)
+            Path { path in
+                path.move(to: CGPoint(x: -7, y: 0)); path.addLine(to: CGPoint(x: 7, y: 0))
+                path.move(to: CGPoint(x: 0, y: -7)); path.addLine(to: CGPoint(x: 0, y: 7))
             }
-            Image(systemName: "video.fill")
-                .font(.system(size: 30)).foregroundStyle(.white.opacity(0.10))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(10)
+            .stroke(isInlier ? .green : .red, lineWidth: 1.5)
+            Text("\(number)").font(.system(size: 8, weight: .bold)).foregroundStyle(isInlier ? .green : .red).offset(y: -14)
         }
+        .allowsHitTesting(false)
+        .help(isInlier ? "Proyeksi inlier" : "Proyeksi outlier")
     }
 }
 
-private struct GridScene: View {
-    let cols: Int
-    let rows: Int
-    let color: Color
+private struct GridBackground: View {
     var body: some View {
-        Canvas { ctx, size in
-            var grid = Path()
-            for c in 0...cols {
-                let x = size.width * CGFloat(c) / CGFloat(cols)
-                grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height))
+        Canvas { context, size in
+            var path = Path()
+            for index in 0...10 {
+                let x = size.width * CGFloat(index) / 10
+                path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height))
             }
-            for r in 0...rows {
-                let y = size.height * CGFloat(r) / CGFloat(rows)
-                grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y))
+            for index in 0...8 {
+                let y = size.height * CGFloat(index) / 8
+                path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y))
             }
-            ctx.stroke(grid, with: .color(color), lineWidth: 1)
+            context.stroke(path, with: .color(.secondary.opacity(0.16)), lineWidth: 1)
         }
     }
-}
-
-#Preview {
-    let s = AnalysisSession()
-    s.cameras = [SessionCamera(label: "Kamera 1", url: nil, resolution: "1920×1080", durationSec: 7200)]
-    return CalibrationView()
-        .environment(AppRouter())
-        .environment(s)
-        .frame(width: 1180, height: 820)
 }
