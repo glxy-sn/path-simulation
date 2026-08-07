@@ -1305,14 +1305,39 @@ private struct PathContent: View {
                 PetaKamera(rasio: rasio, ukuran: size, perbesar: peta.perbesar, hasil: $0)
             } ?? peta
             let paths = k?.paths ?? self.paths
+            let hasilIni = k ?? hasil
+            let fpsIni = hasilIni?.fpsSumber ?? 20
+            let langkahIni = hasilIni?.jejakLangkah ?? 20
 
             let batasLangkah = 0.15
             for (_, titik) in jejakTerpotong(k) where titik.count >= 2 {
                 var g = Path()
                 var mulaiBaru = true
                 for (a, b) in zip(titik, titik.dropFirst()) {
-                    let jauh = hypot((b.x - a.x) * rasio, b.y - a.y)
-                    if jauh > batasLangkah { mulaiBaru = true; continue }
+                    // DUA saringan, dan yang kedua wajib di mode denah.
+                    //
+                    // Ambang 0,15 lebar frame diukur di ruang GAMBAR. Di sana
+                    // langkah kecil milik orang yang JAUH dari kamera bisa
+                    // berarti bermeter-meter di lantai — jadi lompatan ID yang
+                    // paling parah justru yang paling mudah lolos. Terukur
+                    // pada rekaman ini: aturan gambar cuma membuang 6,4% ruas,
+                    // dan yang lolos mencapai 6,8 m/s di lantai — orang berlari
+                    // menyeberangi pantry. Ruas seperti itu yang menggores
+                    // gambar jadi coretan diagonal panjang.
+                    //
+                    // Di lantai satuannya meter, jadi bisa dibandingkan dengan
+                    // kecepatan orang: median ruas 0,20 m/s (kebanyakan duduk),
+                    // p90 1,15 m/s. Batas 2,0 m/s kira-kira jalan cepat, dan
+                    // membuang 3,4% ruas.
+                    if hypot((b.x - a.x) * rasio, b.y - a.y) > batasLangkah {
+                        mulaiBaru = true; continue
+                    }
+                    if peta.denah, let ma = hasilIni?.keLantai(a), let mb = hasilIni?.keLantai(b) {
+                        let detikPerTitik = fpsIni > 0 ? Double(langkahIni) / fpsIni : 1
+                        if hypot(mb.x - ma.x, mb.y - ma.y) / max(detikPerTitik, 0.01) > 2.0 {
+                            mulaiBaru = true; continue
+                        }
+                    }
                     // Di mode denah, ruas yang salah satu ujungnya tidak bisa
                     // diproyeksikan diputus, bukan dilewati diam-diam:
                     // menyambungkan dua titik yang mengapitnya menggambar
@@ -1327,11 +1352,24 @@ private struct PathContent: View {
                 // foto CCTV yang gelap, biru tua yang hilang. Warnanya
                 // mengikuti permukaan, kepekatannya tidak — yang menumpuk
                 // tetap harus jadi lebih terang.
+                // Saat animasi berjalan lapisan ini dipudarkan: perannya
+                // berubah dari "isi utama gambar" jadi "jejak yang sudah
+                // dilewati", dan titik orangnya yang harus menang.
+                let pekat = hingga == nil ? 1.0 : 0.45
                 ctx.stroke(g, with: .color(terang
-                                           ? Color(hex: 0x1D4ED8, alpha: 0.20)
-                                           : .cyan.opacity(0.18)),
+                                           ? Color(hex: 0x1D4ED8, alpha: 0.20 * pekat)
+                                           : .cyan.opacity(0.18 * pekat)),
                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             }
+
+            // Saat animasi berjalan, yang digambar ORANGNYA — satu titik per
+            // orang di posisinya pada detik itu, dengan ekor pendek. Itu yang
+            // membuat videonya terbaca: yang berjalan terlihat berpindah, yang
+            // duduk terlihat diam di tempatnya.
+            //
+            // Jalur berwarna panjang justru menghalangi di sini: ia sudah
+            // memperlihatkan SELURUH perjalanan sebelum perjalanannya terjadi.
+            if let hingga { gambarOrang(&ctx, hasilIni, peta, hingga) }
 
             for trace in (k == nil ? jalurTersorot : (hingga == nil ? paths : [])) {
                 // Potongan menerus terpanjang yang bisa diproyeksikan. Lingkaran
@@ -1411,6 +1449,62 @@ private struct PathContent: View {
     /// muncul kembali di gambar penuh. Menggambarnya utuh sejak detik nol akan
     /// memperlihatkan perjalanan yang belum terjadi.
     private var jalurTersorot: [PathTrace] { hingga == nil ? paths : [] }
+
+    /// Titik tiap orang pada detik `hingga`, dengan ekor pendek di belakangnya.
+    ///
+    /// Yang digambar hanya orang yang BENAR-BENAR terlihat di sekitar detik itu.
+    /// Menggambar posisi terakhir yang diketahui untuk orang yang sudah lama
+    /// hilang akan menaruh orang di ruangan yang sebenarnya sudah kosong.
+    private func gambarOrang(_ ctx: inout GraphicsContext, _ k: AnalysisResult?,
+                             _ peta: PetaKamera, _ hingga: Int) {
+        guard let k, !k.jejakWaktu.isEmpty else { return }
+        let fps = k.fpsSumber > 0 ? k.fpsSumber : 20
+        let langkah = max(1, k.jejakLangkah)
+        // Ekor 4 detik: cukup untuk memperlihatkan arah gerak, cukup pendek
+        // supaya orang yang duduk tidak menumbuhkan garis di tempatnya.
+        let ekorFrame = Int(4 * fps)
+        // Orang dianggap masih ada kalau cuplikan terakhirnya tidak lebih tua
+        // dari dua kali jarak cuplikan — satu cuplikan bolong itu hal biasa
+        // waktu orangnya tertutup meja, dua berarti dia memang pergi.
+        let batasHilang = langkah * 2
+
+        for (tid, deret) in k.jejakWaktu {
+            let sampai = deret.filter { $0.frame <= hingga }
+            guard let kini = sampai.last, hingga - kini.frame <= batasHilang else { continue }
+            guard let pKini = peta.titikSah(kini.titik) else { continue }
+
+            // Warna tetap per ID, jadi orang yang sama berwarna sama sepanjang
+            // video — dan pergantian warna di satu titik berarti ID-nya putus.
+            let rona = Double(abs(tid.hashValue) % 360) / 360.0
+            let warna = Color(hue: rona, saturation: 0.75, brightness: 0.85)
+
+            var ekor = Path()
+            var mulai = true
+            for (a, b) in zip(sampai, sampai.dropFirst())
+            where b.frame >= hingga - ekorFrame {
+                guard let pa = peta.titikSah(a.titik), let pb = peta.titikSah(b.titik) else {
+                    mulai = true; continue
+                }
+                if mulai { ekor.move(to: pa); mulai = false }
+                ekor.addLine(to: pb)
+            }
+            ctx.stroke(ekor, with: .color(warna.opacity(0.75)),
+                       style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+
+            let r: CGFloat = 5
+            ctx.fill(Path(ellipseIn: CGRect(x: pKini.x - r, y: pKini.y - r,
+                                            width: r * 2, height: r * 2)),
+                     with: .color(warna))
+            ctx.stroke(Path(ellipseIn: CGRect(x: pKini.x - r, y: pKini.y - r,
+                                              width: r * 2, height: r * 2)),
+                       with: .color(terang ? .white : .black), lineWidth: 1.5)
+
+            ctx.draw(Text(tid).font(.system(size: 9, weight: .bold).monospacedDigit())
+                        .foregroundStyle(terang ? Color.black.opacity(0.75)
+                                                : Color.white.opacity(0.85)),
+                     at: CGPoint(x: pKini.x + 8, y: pKini.y - 8), anchor: .bottomLeading)
+        }
+    }
 
     /// Deret titik kanvas menerus terpanjang; di luar mode denah selalu utuh.
     private func potonganTerpanjang(_ titik: [CGPoint], _ peta: PetaKamera) -> [CGPoint] {
