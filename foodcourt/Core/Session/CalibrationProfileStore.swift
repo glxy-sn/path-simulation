@@ -32,7 +32,13 @@ enum CalibrationProfileStore {
             floorplan: FloorplanProfile(
                 sourceName: session.usesScaledCanvas ? "Canvas berskala" : (session.floorPlanName ?? "Floor plan"),
                 pixelSize: floorSize,
-                usesCanvas: session.usesScaledCanvas
+                usesCanvas: session.usesScaledCanvas,
+                // Gambar denahnya ikut disematkan supaya profil ini utuh
+                // sendiri. Tanpa ini, mengimpornya mengembalikan titik tapi
+                // panel denahnya kosong.
+                imageData: session.usesScaledCanvas ? nil
+                    : session.floorPlanURL.flatMap { try? Data(contentsOf: $0) },
+                imagePath: session.usesScaledCanvas ? nil : session.floorPlanURL?.path
             ),
             homographyFloorToWorld: floorToWorld,
             homographyWorldToFloor: worldToFloor,
@@ -49,6 +55,10 @@ enum CalibrationProfileStore {
         if !profile.floorplan.usesCanvas {
             session.floorPlanName = profile.floorplan.sourceName
             session.floorPlanPixelSize = profile.floorplan.pixelSize
+            // Tanpa baris ini panel denah tetap kosong setelah impor: layar
+            // Kalibrasi memuat gambarnya dari `floorPlanURL`, dan dulu tidak
+            // ada satu pun yang mengisinya kembali.
+            session.floorPlanURL = pulihkanDenah(profile.floorplan)
         }
 
         for index in session.cameras.indices {
@@ -75,6 +85,37 @@ enum CalibrationProfileStore {
 
     static func decode(_ data: Data) throws -> CalibrationProfile {
         try JSONDecoder().decode(CalibrationProfile.self, from: data)
+    }
+
+    /// Kembalikan lokasi berkas denah yang bisa dibaca.
+    ///
+    /// Berkas aslinya dipakai lebih dulu kalau masih ada — kalau pengguna
+    /// mengganti gambarnya, yang terbaca versi terbarunya. Kalau tidak ada
+    /// (profil dari laptop lain), yang tersemat ditulis ke folder aplikasi.
+    private static func pulihkanDenah(_ f: FloorplanProfile) -> URL? {
+        if let p = f.imagePath, FileManager.default.fileExists(atPath: p) {
+            return URL(fileURLWithPath: p)
+        }
+        guard let data = f.imageData, !data.isEmpty else { return nil }
+        let folder = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("CrowdFlow/denah", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // Nama berkas dari isinya, bukan dari `sourceName`: nama bisa memuat
+        // spasi, garis miring, atau tabrakan antar-profil yang berbeda.
+        //
+        // AKHIRANNYA dipertahankan. Pemuat gambar memeriksa akhiran untuk
+        // memutuskan denah PDF dirender lewat PDFDocument, jadi menulis semua
+        // denah dengan akhiran seragam akan membuat denah PDF gagal dimuat —
+        // diam-diam, dan hanya untuk sebagian pengguna.
+        let akhiran = (f.sourceName as NSString).pathExtension.lowercased()
+        let nama = String(format: "%08x", UInt32(truncatingIfNeeded: data.hashValue))
+        let tujuan = folder.appendingPathComponent(
+            akhiran.isEmpty ? nama : "\(nama).\(akhiran)")
+        if !FileManager.default.fileExists(atPath: tujuan.path) {
+            do { try data.write(to: tujuan) } catch { return nil }
+        }
+        return tujuan
     }
 
     private static func number(_ value: Double) -> String {

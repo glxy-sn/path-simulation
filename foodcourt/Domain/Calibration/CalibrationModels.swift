@@ -138,11 +138,29 @@ struct FloorplanProfile: Codable {
     var sourceName: String
     var pixelSize: PixelSize
     var usesCanvas: Bool
+    /// Isi berkas denah, disematkan langsung di profil.
+    ///
+    /// Sebelumnya profil hanya menyimpan NAMA denahnya. Akibatnya "Impor
+    /// Profil" mengembalikan titik dan homografinya dengan benar, tapi panel
+    /// denahnya kosong — namanya tertulis di atas panel, gambarnya tidak ada,
+    /// dan tidak ada satu pun pesan yang menjelaskan kenapa.
+    ///
+    /// Disematkan, bukan sekadar disimpan lintasannya: profil ini memang
+    /// dibuat untuk dipindah-pindah — ke laptop lain, ke rekan setim — dan
+    /// lintasan berkas di laptop sendiri tidak berarti apa-apa di laptop
+    /// orang lain.
+    ///
+    /// Opsional, supaya profil lama tetap bisa dibaca.
+    var imageData: Data?
+    /// Lintasan asalnya, dipakai lebih dulu kalau berkasnya masih di tempat.
+    var imagePath: String?
 
     enum CodingKeys: String, CodingKey {
         case sourceName = "source_name"
         case pixelSize = "pixel_size"
         case usesCanvas = "uses_canvas"
+        case imageData = "image_data"
+        case imagePath = "image_path"
     }
 }
 
