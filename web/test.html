@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foodcourt Engine — Tes</title>
+<style>
+  :root { --bg:#0f1117; --card:#171a22; --line:#2a2f3a; --ink:#e7e9ee; --mut:#9aa2b1; --acc:#5457d6; --ok:#22c55e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px -apple-system,system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:960px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--mut); margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .card h2 { font-size:14px; margin:0 0 12px; color:var(--mut); text-transform:uppercase; letter-spacing:.5px; }
+  label { display:block; font-size:12px; color:var(--mut); margin-bottom:4px; }
+  input, textarea, button { font:inherit; }
+  input[type=text], input[type=number], textarea {
+    width:100%; background:#0f1219; border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:8px 10px; }
+  textarea { resize:vertical; min-height:44px; font-family:ui-monospace,monospace; font-size:12px; }
+  .row { display:flex; gap:12px; }
+  .row > * { flex:1; }
+  button { cursor:pointer; border:none; border-radius:8px; padding:9px 14px; font-weight:600; }
+  .btn { background:var(--acc); color:#fff; }
+  .btn.ghost { background:#222634; color:var(--ink); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .cam { border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .cam .top { display:flex; gap:10px; align-items:end; }
+  .cam .top .path { flex:3; } .cam .top .lbl { flex:1; }
+  .meta { color:var(--mut); font-size:12px; margin-top:6px; min-height:16px; }
+  details { margin-top:8px; } summary { cursor:pointer; color:var(--mut); font-size:12px; }
+  .thumb { width:100%; max-width:360px; aspect-ratio:16/9; background:#000; border:1px solid var(--line);
+    border-radius:8px; object-fit:cover; display:block; margin:0 auto 8px; }
+  .times { display:flex; justify-content:space-between; font-variant-numeric:tabular-nums; margin-top:6px; color:var(--mut); }
+  .times b { color:var(--ink); }
+  input[type=range] { width:100%; accent-color:var(--acc); }
+  .bar { height:8px; background:#0f1219; border-radius:99px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .kpi { background:#0f1219; border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .kpi b { display:block; font-size:20px; } .kpi span { color:var(--mut); font-size:12px; }
+  .zrow { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  .sw { width:12px; height:12px; border-radius:3px; }
+  pre { background:#0f1219; border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; font-size:11px; color:var(--mut); }
+  a { color:#8ab4ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Foodcourt Engine — Halaman Tes</h1>
+  <div class="sub">Tes pipeline lewat server (path video di Mac ini), termasuk slider trim & preview frame.</div>
+
+  <div class="card">
+    <h2>Venue</h2>
+    <div class="row">
+      <div><label>Nama</label><input type="text" id="vname" value="Pujasera Kampus"></div>
+      <div><label>Lebar (m)</label><input type="number" id="vw" value="20"></div>
+      <div><label>Tinggi (m)</label><input type="number" id="vh" value="15"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Kamera</h2>
+    <div id="cams"></div>
+    <button class="btn ghost" onclick="addCam()">+ Tambah kamera</button>
+  </div>
+
+  <div class="card">
+    <h2>Rentang Waktu (global — semua kamera)</h2>
+    <img id="thumb" class="thumb" alt="preview">
+    <label>Mulai</label>
+    <input type="range" id="rStart" min="0" max="600" value="0" step="1">
+    <label style="margin-top:8px">Selesai</label>
+    <input type="range" id="rEnd" min="0" max="600" value="600" step="1">
+    <div class="times">
+      <span>Mulai <b id="tStart">0:00</b></span>
+      <span>Durasi <b id="tDur">10:00</b></span>
+      <span>Selesai <b id="tEnd">10:00</b></span>
+    </div>
+    <div class="meta" id="trimNote">Klik "Cek" di kamera untuk baca durasi video → slider menyesuaikan.</div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="align-items:center">
+      <label style="display:flex; gap:6px; align-items:center; flex:0 0 auto; margin:0">
+        <input type="checkbox" id="renderVid" checked> render video (bbox + path)
+      </label>
+      <div style="flex:1"></div>
+      <button class="btn" id="runBtn" onclick="run()" style="flex:0 0 auto">Jalankan</button>
+    </div>
+    <div id="prog" style="display:none; margin-top:14px">
+      <div class="bar"><i id="progBar"></i></div>
+      <div class="meta" id="progText">…</div>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <h2>Hasil</h2>
+    <div class="kpis" id="kpis"></div>
+    <div id="combinedWrap" style="display:none; margin-top:14px">
+      <label>Gabungan multi-kamera (grid + BEV fusion)</label>
+      <video id="combinedVid" controls style="width:100%; border:1px solid var(--line); border-radius:8px; background:#000"></video>
+    </div>
+    <div style="display:flex; gap:16px; margin-top:14px; flex-wrap:wrap">
+      <div style="flex:2; min-width:280px">
+        <label>Heatmap</label>
+        <img id="heat" class="thumb" style="max-width:100%; aspect-ratio:auto">
+      </div>
+      <div style="flex:1; min-width:200px">
+        <label>Zona</label>
+        <div id="zones"></div>
+        <label style="margin-top:10px">Artifact</label>
+        <div id="arts" class="meta"></div>
+      </div>
+    </div>
+    <details style="margin-top:12px"><summary>JSON mentah</summary><pre id="raw"></pre></details>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = s => { s=Math.max(0,Math.round(s)); const h=(s/3600|0),m=((s%3600)/60|0),x=s%60;
+  return h>0? `${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}` : `${m}:${String(x).padStart(2,'0')}`; };
+const DEFAULT_PTS = JSON.stringify({
+  imagePoints:[[0.12,0.80],[0.88,0.82],[0.80,0.30],[0.20,0.30]],
+  planePoints:[[0.10,0.90],[0.90,0.90],[0.90,0.55],[0.10,0.55]]
+}, null, 0);
+
+let camId = 0;
+function addCam(){
+  camId++;
+  const el = document.createElement('div');
+  el.className = 'cam'; el.dataset.dur = '0';
+  el.innerHTML = `
+    <div class="top">
+      <div class="lbl"><label>Label</label><input type="text" class="c-label" value="Kamera ${camId}"></div>
+      <div class="path"><label>Path video</label><input type="text" class="c-path" placeholder="/Users/.../day1cam1.mp4"></div>
+      <button class="btn ghost c-check" style="flex:0 0 auto">Cek</button>
+      <button class="btn ghost c-del" style="flex:0 0 auto">✕</button>
+    </div>
+    <div class="meta c-meta"></div>
+    <details><summary>Titik kalibrasi (4 image + 4 plane, normalisasi 0–1)</summary>
+      <textarea class="c-pts">${DEFAULT_PTS}</textarea>
+    </details>`;
+  el.querySelector('.c-check').onclick = () => checkCam(el);
+  el.querySelector('.c-del').onclick = () => { el.remove(); recomputeMax(); };
+  $('#cams').appendChild(el);
+}
+
+async function checkCam(el){
+  const path = el.querySelector('.c-path').value.trim();
+  const meta = el.querySelector('.c-meta');
+  if(!path){ meta.textContent = 'isi path dulu'; return; }
+  meta.textContent = 'cek…';
+  try{
+    const r = await fetch('/video-info?path='+encodeURIComponent(path));
+    if(!r.ok) throw new Error((await r.json()).detail || r.status);
+    const info = await r.json();
+    el.dataset.dur = info.durationSec;
+    meta.textContent = `${info.width}×${info.height} · ${fmt(info.durationSec)} · ${info.fps.toFixed(0)} fps`;
+    recomputeMax();
+  }catch(e){ meta.textContent = 'gagal: '+e.message; }
+}
+
+function firstPath(){
+  const p = document.querySelector('.c-path');
+  return p ? p.value.trim() : '';
+}
+
+function recomputeMax(){
+  const durs = [...document.querySelectorAll('.cam')].map(c=>+c.dataset.dur).filter(d=>d>0);
+  const max = durs.length ? Math.floor(Math.min(...durs)) : 600;
+  const rs = $('#rStart'), re = $('#rEnd');
+  rs.max = max; re.max = max;
+  if(+re.value > max || +re.value <= +rs.value) re.value = Math.min(max, +rs.value + 600);
+  $('#trimNote').textContent = durs.length ? `Timeline = video terpendek (${fmt(max)}).` :
+    'Klik "Cek" di kamera untuk baca durasi video → slider menyesuaikan.';
+  updateTrim(null);
+}
+
+let thumbTimer = null;
+function updateTrim(which){
+  let rs = +$('#rStart').value, re = +$('#rEnd').value;
+  if(re <= rs){ if(which==='start') re = Math.min(+$('#rEnd').max, rs+1); else rs = Math.max(0, re-1); }
+  if(which==='start' && rs >= re) rs = re-1;
+  $('#rStart').value = rs; $('#rEnd').value = re;
+  $('#tStart').textContent = fmt(rs);
+  $('#tEnd').textContent = fmt(re);
+  $('#tDur').textContent = fmt(re-rs);
+  // preview frame (debounce)
+  const t = which==='end' ? re : rs;
+  const path = firstPath();
+  if(path){
+    clearTimeout(thumbTimer);
+    thumbTimer = setTimeout(()=>{ $('#thumb').src = `/thumbnail?path=${encodeURIComponent(path)}&t=${t}`; }, 120);
+  }
+}
+$('#rStart').addEventListener('input', ()=>updateTrim('start'));
+$('#rEnd').addEventListener('input', ()=>updateTrim('end'));
+
+function buildJob(){
+  const cams = [...document.querySelectorAll('.cam')].map(el=>{
+    const pts = JSON.parse(el.querySelector('.c-pts').value);
+    const toPts = a => a.map(p=>({x:p[0], y:p[1]}));
+    return {
+      label: el.querySelector('.c-label').value,
+      videoPath: el.querySelector('.c-path').value.trim(),
+      imagePoints: toPts(pts.imagePoints),
+      planePoints: toPts(pts.planePoints),
+      startSec: +$('#rStart').value,
+      durationSec: +$('#rEnd').value - +$('#rStart').value
+    };
+  });
+  return {
+    venue: { widthM:+$('#vw').value, heightM:+$('#vh').value, name:$('#vname').value, type:"pujasera" },
+    mode: "lengkap",
+    options: { renderVideos: $('#renderVid').checked },
+    cameras: cams
+  };
+}
+
+async function run(){
+  const job = buildJob();
+  if(!job.cameras.length || job.cameras.some(c=>!c.videoPath)){ alert('Isi minimal 1 kamera dengan path video.'); return; }
+  $('#runBtn').disabled = true;
+  $('#prog').style.display = 'block';
+  $('#resultCard').style.display = 'none';
+  $('#progBar').style.width = '0%';
+  $('#progText').textContent = 'mengirim job…';
+  try{
+    const r = await fetch('/jobs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(job)});
+    if(!r.ok) throw new Error(JSON.stringify(await r.json()));
+    const { jobId } = await r.json();
+    poll(jobId);
+  }catch(e){ $('#progText').textContent = 'error: '+e.message; $('#runBtn').disabled=false; }
+}
+
+function poll(id){
+  const iv = setInterval(async ()=>{
+    try{
+      const p = await (await fetch(`/jobs/${id}/progress`)).json();
+      $('#progBar').style.width = Math.round((p.fraction||0)*100)+'%';
+      $('#progText').textContent = `${p.stage} — ${Math.round((p.fraction||0)*100)}%`;
+      if(p.status==='error'){ clearInterval(iv); $('#progText').textContent='ERROR: '+p.error; $('#runBtn').disabled=false; }
+      if(p.status==='done'){ clearInterval(iv); showResult(id); }
+    }catch(e){ clearInterval(iv); $('#progText').textContent='error poll: '+e.message; $('#runBtn').disabled=false; }
+  }, 500);
+}
+
+const artUrl = uri => '/artifacts?path='+encodeURIComponent(decodeURIComponent(uri.replace('file://','')));
+
+async function showResult(id){
+  const res = await (await fetch(`/jobs/${id}/result`)).json();
+  $('#runBtn').disabled = false;
+  $('#resultCard').style.display = 'block';
+  const s = res.summary;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><b>${s.totalVisitors}</b><span>Pengunjung</span></div>
+    <div class="kpi"><b>${fmt(s.avgDwellSeconds)}</b><span>Rata-rata dwell</span></div>
+    <div class="kpi"><b>${s.peakOccupancy}</b><span>Puncak okupansi</span></div>
+    <div class="kpi"><b>${Math.round(s.captureRate*100)}%</b><span>Capture rate</span></div>`;
+  const pal = ['#5457d6','#f59e0b','#22c55e','#ec4899','#14b8a6','#3b82f6'];
+  $('#zones').innerHTML = res.zones.map((z,i)=>
+    `<div class="zrow"><span class="sw" style="background:${pal[i%pal.length]}"></span>Zona ${z.code} — ${z.visits} (${Math.round(z.share*100)}%)</div>`).join('');
+  if(res.artifacts.heatmapImage) $('#heat').src = artUrl(res.artifacts.heatmapImage);
+  const arts = [];
+  if(res.artifacts.combinedVideo){
+    arts.push(`<a href="${artUrl(res.artifacts.combinedVideo)}" target="_blank">combined.mp4 (grid + BEV)</a>`);
+    $('#combinedWrap').style.display = 'block';
+    $('#combinedVid').src = artUrl(res.artifacts.combinedVideo);
+  } else {
+    $('#combinedWrap').style.display = 'none';
+  }
+  if(res.artifacts.pathVideo) arts.push(`<a href="${artUrl(res.artifacts.pathVideo)}" target="_blank">path.mp4</a>`);
+  (res.artifacts.overlayVideos||[]).forEach(v=>arts.push(`<a href="${artUrl(v.uri)}" target="_blank">${v.cam}.mp4</a>`));
+  if(res.trajectories) arts.push(`<a href="${artUrl(res.trajectories)}" target="_blank">trajectories.parquet</a>`);
+  $('#arts').innerHTML = arts.join(' · ') || '—';
+  $('#raw').textContent = JSON.stringify(res, null, 2);
+}
+
+addCam();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "venue": {"widthM": 20, "heightM": 15, "name": "Test", "type": "pujasera"},
+  "mode": "lengkap",
+  "options": {"renderVideos": false},
+  "cameras": [
+    {"label":"Cam1","videoPath":"/Users/shafatiara/Documents/Challenge2/day1cam1.mp4",
+     "startSec": 0, "durationSec": 60,
+     "imagePoints":[{"x":0.12,"y":0.80},{"x":0.88,"y":0.82},{"x":0.80,"y":0.30},{"x":0.20,"y":0.30}],
+     "planePoints":[{"x":0.10,"y":0.90},{"x":0.90,"y":0.90},{"x":0.90,"y":0.55},{"x":0.10,"y":0.55}]}
+  ]
+}
