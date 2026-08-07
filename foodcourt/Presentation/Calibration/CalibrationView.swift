@@ -37,6 +37,14 @@ struct CalibrationView: View {
         }
         .task(id: reloadToken) {
             await refreshImages()
+            // Homografi DITURUNKAN dari titik + ukuran ruangan, jadi ia
+            // dihitung ulang tiap layar ini muncul, bukan disimpan lalu
+            // dipercaya. Ukuran ruangan diketik di layar Import — satu layar
+            // sebelum ini — dan sebelumnya mengubahnya di sana tidak
+            // menyentuh homografi sama sekali: titiknya tetap, centangnya
+            // tetap hijau, tapi angka meternya sudah tidak berlaku lagi.
+            // Persis kesalahan yang sama dengan penggantian denah.
+            recalculateAllCameras(diam: true)
         }
         .onChange(of: selectedCameraIndex) { _, _ in reloadToken = UUID() }
     }
@@ -457,7 +465,7 @@ struct CalibrationView: View {
 
     private func recalculateSelectedCamera() { recalculate(at: selectedIndex) }
 
-    private func recalculate(at selectedIndex: Int) {
+    private func recalculate(at selectedIndex: Int, diam: Bool = false) {
         guard session.cameras.indices.contains(selectedIndex) else { return }
         let camera = session.cameras[selectedIndex]
         guard camera.imagePoints.count == camera.planePoints.count else { return }
@@ -481,10 +489,12 @@ struct CalibrationView: View {
                 venueHeightM: session.venueHeightM
             )
             let metrics = session.cameras[selectedIndex].calibration?.metrics
-            message = "Kalibrasi valid: \(metrics?.inliers ?? 0)/\(metrics?.points ?? 0) inlier."
+            if !diam {
+                message = "Kalibrasi valid: \(metrics?.inliers ?? 0)/\(metrics?.points ?? 0) inlier."
+            }
         } catch {
             session.cameras[selectedIndex].calibration = nil
-            message = "Gagal: \(error.localizedDescription)"
+            if !diam { message = "Gagal: \(error.localizedDescription)" }
         }
     }
 
@@ -500,8 +510,8 @@ struct CalibrationView: View {
     /// Angka galatnya tetap dilaporkan apa adanya — kalau denah barunya
     /// ternyata ruangan lain, itu akan terlihat sebagai galat yang melonjak,
     /// bukan tersembunyi di balik centang hijau.
-    private func recalculateAllCameras() {
-        for index in session.cameras.indices { recalculate(at: index) }
+    private func recalculateAllCameras(diam: Bool = false) {
+        for index in session.cameras.indices { recalculate(at: index, diam: diam) }
     }
 
     private func validationPoints(_ calibration: CameraCalibration?) -> [ValidationPoint] {
