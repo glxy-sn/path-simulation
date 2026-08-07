@@ -50,15 +50,17 @@ enum AnalysisMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var detail: String {
         switch self {
-        // Deskripsi lama menjanjikan dua hal yang belum ada satu pun:
-        // bird's-eye tidak dibuat (homografi tidak dihitung) dan ID lintas
-        // kamera tidak dijalankan. Titik kalibrasi tetap bisa digambar dan
-        // disimpan, tapi pipeline tidak membacanya — jadi Mode Lengkap
-        // menghasilkan angka yang sama persis dengan Mode Cepat.
-        case .lengkap: return "Kalibrasi digambar dan disimpan, tapi BELUM dipakai pipeline — "
-            + "bird's-eye & ID lintas kamera masih dikerjakan. Hasilnya sama dengan Mode Cepat."
-        case .cepat:   return "Langsung proses, tanpa kalibrasi. "
-            + "Ini yang sesuai dengan kemampuan pipeline sekarang."
+        // Yang dijanjikan di sini harus persis yang dikerjakan. Homografi
+        // sekarang benar-benar dipakai — Jalur, Heatmap, dan Zona berpindah
+        // sendiri ke denah tampak atas begitu kalibrasinya sahih. ID lintas
+        // kamera masih BELUM, dan karena itu tetap disebut belum ada:
+        // terukur cuma ~20% pasangan yang benar, tidak layak dipakai.
+        case .lengkap: return "Gambar 4 titik lantai, lalu Jalur, Heatmap, dan Zona "
+            + "ditampilkan sebagai denah tampak atas — perspektif hilang dan jarak "
+            + "di gambar jadi jarak sebenarnya, dalam meter. ID lintas kamera belum ada."
+        case .cepat:   return "Langsung proses, tanpa kalibrasi. Angkanya sama, "
+            + "tapi gambarnya tetap dari sudut kamera: orang yang jauh tampak "
+            + "berpindah lebih sedikit daripada yang dekat walau jaraknya sama."
         }
     }
 }

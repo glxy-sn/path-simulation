@@ -57,9 +57,15 @@ struct ZonaEditorView: View {
     private func kotak(_ z: Binding<ZonaSunting>, peta: PetaKamera, ukuran: CGSize) -> some View {
         let r = peta.kotak(z.wrappedValue.rect)
         let warna = Color(hex: z.wrappedValue.colorHex)
+        // Kotak yang tidak bisa diproyeksikan ke denah dikembalikan sebagai
+        // .zero. Menggambarnya menaruh kotak sebesar nol di pojok kiri atas
+        // beserta labelnya — terbaca sebagai zona sungguhan di tempat yang
+        // salah.
+        let terproyeksi = r.width > 1 && r.height > 1
         let dipilih = terpilih == z.wrappedValue.id
         let n = angka(z.wrappedValue.rect)
 
+        if terproyeksi {
         ZStack {
             RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
                 .fill(warna.opacity(latar == nil ? 0.20 : 0.28))
@@ -97,6 +103,7 @@ struct ZonaEditorView: View {
                 .frame(width: 16, height: 16)
                 .position(x: r.maxX, y: r.maxY)
                 .gesture(ukur(z, peta: peta))
+        }
         }
     }
 

@@ -88,12 +88,66 @@ struct AnalysisResult {
 
     var adaDenah: Bool { homografi != nil && ukuranFramePx != nil && venueMeter != nil }
 
+    /// Seberapa jauh di luar venue sebuah titik masih dianggap masuk akal.
+    ///
+    /// Denah digambar tepat sebesar venue, jadi titik yang lebih jauh dari ini
+    /// pun tidak akan terlihat — batasnya ada supaya titik liar tidak ikut
+    /// menentukan apa pun, bukan supaya muat di layar.
+    static let marginDenahMeter: CGFloat = 1.0
+
     /// Titik hasil (0–1 terhadap frame) -> meter di lantai.
+    ///
+    /// Mengembalikan nil untuk titik yang proyeksinya tidak bisa dipercaya.
+    /// Ada DUA cara sebuah titik gagal, dan keduanya benar-benar terjadi:
+    ///
+    /// 1. **Di balik horizon.** Homografi memetakan garis horizon ke tak
+    ///    hingga. Di atas garis itu penyebutnya berganti tanda dan titiknya
+    ///    muncul TERCERMIN di belakang kamera — koordinatnya tetap berhingga
+    ///    dan tetap tampak wajar, jadi tidak ada yang menandainya sebagai
+    ///    salah. Tandanya dibandingkan dengan tepi bawah frame, yang pasti
+    ///    lantai dan pasti di depan kamera.
+    ///
+    /// 2. **Jauh di luar venue.** Titik dekat horizon meledak. Terukur pada
+    ///    kalibrasi pantry 10 × 7,5 m: kalau seluruh 8.160 sel petak heatmap
+    ///    diproyeksikan, hasilnya terentang −844 m sampai +862 m. Satu sel
+    ///    saja pada jarak segitu sudah cukup membuat lapisan blur heatmap
+    ///    menutupi seluruh kanvas.
+    ///
+    /// Pada data sungguhan (rekaman 3 menit, 941 titik jejak) 32% titik jatuh
+    /// di luar venue — bukan karena homografinya salah, melainkan karena empat
+    /// titik kalibrasinya tidak mencakup seluruh lantai yang terlihat kamera.
+    /// Angka itu ditampilkan ke pengguna, tidak dibuang diam-diam.
     func keLantai(_ p: CGPoint) -> CGPoint? {
-        guard let H = homografi, let px = ukuranFramePx else { return nil }
+        guard let H = homografi, let px = ukuranFramePx, let v = venueMeter else { return nil }
         let titik = CalibrationPoint(x: p.x * px.width, y: p.y * px.height)
+
+        // (1) sisi horizon yang benar
+        let acuan = penyebut(CalibrationPoint(x: px.width / 2, y: px.height), H)
+        let sini = penyebut(titik, H)
+        guard acuan != 0, sini.sign == acuan.sign else { return nil }
+
         guard let m = HomographySolver.transform(titik, with: H) else { return nil }
+
+        // (2) masih di sekitar venue
+        let b = Self.marginDenahMeter
+        guard m.x >= -b, m.x <= v.width + b, m.y >= -b, m.y <= v.height + b else { return nil }
         return CGPoint(x: m.x, y: m.y)
+    }
+
+    private func penyebut(_ p: CalibrationPoint, _ H: Matrix3x3) -> Double {
+        H[2, 0] * p.x + H[2, 1] * p.y + H[2, 2]
+    }
+
+    /// Berapa bagian titik kaki yang jatuh di luar denah, 0–1.
+    ///
+    /// Dihitung dari jejak semua orang — sumber yang sama dengan yang digambar
+    /// tab Path. nil kalau tidak ada kalibrasi atau tidak ada jejak.
+    var porsiDiLuarDenah: Double? {
+        guard adaDenah else { return nil }
+        let semua = jejak.values.flatMap { $0 }
+        guard !semua.isEmpty else { return nil }
+        let luar = semua.reduce(into: 0) { n, p in if keLantai(p) == nil { n += 1 } }
+        return Double(luar) / Double(semua.count)
     }
 
     // MARK: multi-kamera

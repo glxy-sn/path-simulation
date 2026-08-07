@@ -430,11 +430,12 @@ struct ResultsView: View {
                 + "sebagai perjalanan. Garis berwarna = "
                 + "\(vm.paths.count) orang dengan perpindahan terjauh, lingkaran = "
                 + "tempat mulai, panah = arah dan tempat berakhir (warna hanya "
-                + "membedakan orang). Belum diproyeksikan ke denah lantai, jadi "
-                + "panjang jalur belum sebanding dengan jarak sebenarnya."
+                + "membedakan orang). " + akhiranRuang
         // Heatmap dan zona dihitung dari titik kaki yang SAMA dengan tab
-        // Path, jadi keduanya juga berada di ruang gambar kamera. Menyebutnya
-        // "denah lantai" sama tidak benarnya seperti pada tab Path.
+        // Path, jadi ruangnya juga sama — kalau yang satu denah lantai, yang
+        // dua lagi denah lantai, dan sebaliknya. Karena itu ketiganya memakai
+        // kalimat penutup yang sama, `akhiranRuang`, bukan kalimat masing-
+        // masing yang bisa saling bertentangan setelah diedit terpisah.
         case .heatmap:
             // Skala log disebutkan karena mengubah cara membaca gambarnya:
             // warna merah BUKAN berarti 10x lebih ramai dari biru.
@@ -442,12 +443,39 @@ struct ResultsView: View {
             return "Kepadatan \(n): berapa sering ada orang berdiri di tiap petak. "
                 + "Makin terang makin sering. Skalanya logaritmik, jadi warna "
                 + "menunjukkan URUTAN keramaian, bukan kelipatannya — petak "
-                + "paling terang bukan berarti dua kali lebih ramai dari yang di tengah."
+                + "paling terang bukan berarti dua kali lebih ramai dari yang di tengah. "
+                + akhiranRuang
         case .zona:
             return "\(vm.zones.count) area terpadat, ditemukan otomatis dari kepadatan titik kaki. "
                 + "Angka di label = berapa ORANG berbeda yang pernah berada di kotak itu. "
-                + "Warna sama dengan daftar ranking di bawah."
+                + "Warna sama dengan daftar ranking di bawah. " + akhiranRuang
         }
+    }
+
+    /// Kalimat penutup yang menyebutkan gambarnya berada di ruang yang mana.
+    ///
+    /// Sebelum kalibrasi ada, ketiga tab menutup dengan "belum diproyeksikan ke
+    /// denah lantai". Kalimat itu jadi keliru begitu kalibrasinya dipakai, dan
+    /// keliru dengan cara yang paling merugikan: menyuruh orang meragukan
+    /// gambar yang justru sudah benar.
+    private var akhiranRuang: String {
+        guard let h = vm.hasil, h.adaDenah, let v = h.venueMeter else {
+            return "Belum dikalibrasi, jadi gambarnya masih dari sudut kamera — "
+                + "jarak di gambar belum sebanding dengan jarak sebenarnya. "
+                + "Pakai Mode Lengkap kalau ingin denah tampak atas."
+        }
+        var s = "Sudah diproyeksikan ke denah lantai lewat kalibrasi: "
+            + "tampak atas, ruangan \(bulat(v.width)) × \(bulat(v.height)) m, "
+            + "jarak di gambar = jarak sebenarnya."
+        // Titik yang jatuh di luar denah dibuang. Jumlahnya disebutkan, karena
+        // yang menentukan bukan pipeline melainkan letak empat titik kalibrasi
+        // — dan itu bisa diperbaiki pengguna, kalau tahu.
+        if let luar = h.porsiDiLuarDenah, luar >= 0.02 {
+            s += " \(Int((luar * 100).rounded()))% titik kaki jatuh di luar denah "
+                + "dan tidak digambar — titik kalibrasinya belum mencakup seluruh "
+                + "lantai yang terlihat kamera, atau ukuran ruangannya kekecilan."
+        }
+        return s
     }
 
     // MARK: Ranking + stop points
@@ -743,7 +771,11 @@ struct PetaKamera {
 
     private var bidang: CGRect {
         if denah, let v = hasil?.venueMeter {
-            return CGRect(x: 0, y: 0, width: v.width, height: v.height)
+            // Sedikit lebih besar dari ruangannya: batas dinding tidak menempel
+            // di tepi kanvas, dan keterangan skala di bawahnya punya tempat.
+            let napas = max(v.width, v.height) * 0.07
+            return CGRect(x: -napas, y: -napas,
+                          width: v.width + napas * 2, height: v.height + napas * 2)
         }
         return perbesar ?? CGRect(x: 0, y: 0, width: rasio, height: 1)
     }
@@ -755,12 +787,32 @@ struct PetaKamera {
     var geserX: CGFloat { (ukuran.width - bidang.width * skala) / 2 - bidang.minX * skala }
     var geserY: CGFloat { (ukuran.height - bidang.height * skala) / 2 - bidang.minY * skala }
 
-    /// Titik hasil (0–1 terhadap lebar & tinggi frame) -> titik di kanvas.
+    /// Titik hasil (0–1 terhadap lebar & tinggi frame) -> titik di kanvas,
+    /// nil kalau di mode denah proyeksinya tidak bisa dipercaya.
+    ///
+    /// Yang menggambar titik per titik WAJIB memakai versi ini, bukan `titik`:
+    /// titik di balik horizon tergambar di tempat yang masuk akal tapi salah,
+    /// dan tidak ada cara melihatnya dari gambar jadinya.
+    func titikSah(_ p: CGPoint) -> CGPoint? {
+        guard denah else { return titik(p) }
+        guard let m = hasil?.keLantai(p) else { return nil }
+        return CGPoint(x: m.x * skala + geserX, y: m.y * skala + geserY)
+    }
+
+    /// Seperti `titikSah`, tapi titik yang gagal dijatuhkan jauh di luar kanvas
+    /// supaya terpotong sendiri. Hanya untuk pemanggil yang tidak bisa
+    /// menangani nil (misalnya perhitungan kotak pembungkus).
     func titik(_ p: CGPoint) -> CGPoint {
-        if denah, let m = hasil?.keLantai(p) {
+        if denah {
+            guard let m = hasil?.keLantai(p) else { return CGPoint(x: -1e5, y: -1e5) }
             return CGPoint(x: m.x * skala + geserX, y: m.y * skala + geserY)
         }
         return CGPoint(x: p.x * rasio * skala + geserX, y: p.y * skala + geserY)
+    }
+
+    /// Titik denah (meter) -> titik kanvas. Untuk garis bantu, bukan data.
+    func dariMeter(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        CGPoint(x: x * skala + geserX, y: y * skala + geserY)
     }
     /// Kotak hasil -> kotak di kanvas.
     ///
@@ -770,9 +822,14 @@ struct PetaKamera {
     /// menaruh kotaknya di tempat yang salah.
     func kotak(_ r: CGRect) -> CGRect {
         if denah {
+            // Keempat sudut harus sahih. Kalau satu saja gagal — misalnya sel
+            // heatmap yang menyentuh dinding di atas horizon — kotak
+            // pembungkusnya ditarik oleh sudut yang tersisa dan jadi jauh lebih
+            // besar dari sel aslinya. Lebih baik tidak digambar.
             let sudut = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
                          CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)]
-                .map(titik)
+                .compactMap(titikSah)
+            guard sudut.count == 4 else { return .zero }
             let xs = sudut.map(\.x), ys = sudut.map(\.y)
             guard let x0 = xs.min(), let x1 = xs.max(),
                   let y0 = ys.min(), let y1 = ys.max() else { return .zero }
@@ -806,11 +863,57 @@ func gambarLatar(_ ctx: inout GraphicsContext, _ url: URL?, _ peta: PetaKamera,
     // sedangkan titik-titiknya sudah diratakan ke lantai. Menumpuk keduanya
     // akan menaruh orang di tempat yang tidak sesuai dengan gambar di
     // belakangnya — lebih menyesatkan daripada tidak ada latar sama sekali.
-    guard !peta.denah else { return }
+    if peta.denah { gambarDenah(&ctx, peta); return }
     guard let url, let img = NSImage(contentsOf: url) else { return }
     ctx.opacity = redup
     ctx.draw(Image(nsImage: img), in: peta.bidangFrame)
     ctx.opacity = 1
+}
+
+/// Latar mode denah: batas ruangan, kisi satu meter, dan penanda ukuran.
+///
+/// Tanpa ini denah cuma awan titik di bidang kosong — tidak ada yang bisa
+/// dibaca darinya, karena tidak ada satu pun acuan tempat maupun jarak. Kisi
+/// satu meter juga yang membuat gambar ini bisa dipakai mengukur: dua orang
+/// yang terpisah tiga kotak memang terpisah tiga meter, dan itu justru satu-
+/// satunya hal yang tidak bisa dilakukan tampilan berperspektif.
+private func gambarDenah(_ ctx: inout GraphicsContext, _ peta: PetaKamera) {
+    guard let v = peta.hasil?.venueMeter else { return }
+
+    // Lantai sedikit lebih terang dari luar ruangan: batas ruangan terbaca
+    // sebagai bidang, bukan cuma sebagai garis.
+    let lantai = CGRect(origin: peta.dariMeter(0, 0),
+                        size: CGSize(width: v.width * peta.skala, height: v.height * peta.skala))
+    ctx.fill(Path(lantai), with: .color(Color(hex: 0xFFFFFF, alpha: 0.05)))
+
+    // Kisi satu meter. Di ruangan yang sangat besar satu meter jadi terlalu
+    // rapat untuk dibaca, jadi langkahnya naik ke 2 atau 5 m.
+    let langkah: CGFloat = max(v.width, v.height) > 40 ? 5 : (max(v.width, v.height) > 18 ? 2 : 1)
+    var kisi = Path()
+    var x: CGFloat = 0
+    while x <= v.width + 1e-6 {
+        kisi.move(to: peta.dariMeter(x, 0)); kisi.addLine(to: peta.dariMeter(x, v.height))
+        x += langkah
+    }
+    var y: CGFloat = 0
+    while y <= v.height + 1e-6 {
+        kisi.move(to: peta.dariMeter(0, y)); kisi.addLine(to: peta.dariMeter(v.width, y))
+        y += langkah
+    }
+    ctx.stroke(kisi, with: .color(Color(hex: 0xFFFFFF, alpha: 0.10)), lineWidth: 1)
+
+    ctx.stroke(Path(lantai), with: .color(Color(hex: 0xFFFFFF, alpha: 0.35)), lineWidth: 1.5)
+
+    // Skala disebut angkanya, bukan cuma digambar kisinya: tanpa angka, kisi
+    // rapat dan kisi renggang terlihat sama saja.
+    let teks = Text("kisi \(bulat(langkah)) m · ruangan \(bulat(v.width)) × \(bulat(v.height)) m")
+        .font(.caption2.monospacedDigit())
+        .foregroundStyle(Color.white.opacity(0.55))
+    ctx.draw(teks, at: CGPoint(x: lantai.minX + 6, y: lantai.maxY + 12), anchor: .topLeading)
+}
+
+private func bulat(_ v: CGFloat) -> String {
+    v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
 }
 
 /// Jalur pergerakan di RUANG GAMBAR KAMERA.
@@ -866,8 +969,10 @@ private struct PathContent: View {
             gambarLatar(&ctx, latar, peta)
 
             // Grid hanya saat tidak ada foto — di atas foto, garis bantu
-            // menambah kekacauan tanpa menambah keterangan apa pun.
-            if latar == nil {
+            // menambah kekacauan tanpa menambah keterangan apa pun. Di mode
+            // denah, kisi meternya sudah digambar `gambarDenah` dan kisi 0,1
+            // bidang gambar ini tidak berarti apa-apa lagi.
+            if latar == nil && !peta.denah {
                 var grid = Path()
                 let langkah: CGFloat = 0.1
                 for i in 0...Int(rasio / langkah) {
@@ -908,15 +1013,27 @@ private struct PathContent: View {
                 for (a, b) in zip(titik, titik.dropFirst()) {
                     let jauh = hypot((b.x - a.x) * rasio, b.y - a.y)
                     if jauh > batasLangkah { mulaiBaru = true; continue }
-                    if mulaiBaru { g.move(to: peta.titik(a)); mulaiBaru = false }
-                    g.addLine(to: peta.titik(b))
+                    // Di mode denah, ruas yang salah satu ujungnya tidak bisa
+                    // diproyeksikan diputus, bukan dilewati diam-diam:
+                    // menyambungkan dua titik yang mengapitnya menggambar
+                    // perjalanan lurus yang tidak pernah terjadi.
+                    guard let pa = peta.titikSah(a), let pb = peta.titikSah(b) else {
+                        mulaiBaru = true; continue
+                    }
+                    if mulaiBaru { g.move(to: pa); mulaiBaru = false }
+                    g.addLine(to: pb)
                 }
                 ctx.stroke(g, with: .color(.cyan.opacity(0.18)),
                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             }
 
             for trace in paths {
-                let pts = trace.points.map(peta.titik)
+                // Potongan menerus terpanjang yang bisa diproyeksikan. Lingkaran
+                // "mulai" dan panah "berakhir" hanya boleh menandai satu
+                // perjalanan yang benar-benar utuh — kalau jejaknya terbelah
+                // karena sebagian keluar denah, menggambar keduanya di ujung
+                // yang tersisa akan menyebut tempat mulai yang keliru.
+                let pts = potonganTerpanjang(trace.points, peta)
                 guard pts.count >= 2 else { continue }
                 let warna = Color(hue: trace.hue, saturation: 0.72, brightness: 0.82)
 
@@ -955,7 +1072,18 @@ private struct PathContent: View {
                 ctx.fill(panah, with: .color(warna))
             }
         }
-        .background(latar == nil ? Color(hex: 0xF7F8FA) : .black)
+        .background(latar == nil && !(hasil?.adaDenah ?? false)
+                    ? Color(hex: 0xF7F8FA) : .black)
+    }
+
+    /// Deret titik kanvas menerus terpanjang; di luar mode denah selalu utuh.
+    private func potonganTerpanjang(_ titik: [CGPoint], _ peta: PetaKamera) -> [CGPoint] {
+        var terbaik: [CGPoint] = [], kini: [CGPoint] = []
+        for p in titik {
+            if let q = peta.titikSah(p) { kini.append(q) }
+            else { if kini.count > terbaik.count { terbaik = kini }; kini = [] }
+        }
+        return kini.count > terbaik.count ? kini : terbaik
     }
 }
 
@@ -1062,7 +1190,7 @@ private struct HeatmapView: View {
         ctx.addFilter(.blur(radius: 18))
         ctx.drawLayer { lapis in
             for blob in blobs {
-                let pusat = peta.titik(CGPoint(x: blob.x, y: blob.y))
+                guard let pusat = peta.titikSah(CGPoint(x: blob.x, y: blob.y)) else { continue }
                 let r = blob.radius * peta.skala * rasio
                 let kotak = CGRect(x: pusat.x - r, y: pusat.y - r, width: r * 2, height: r * 2)
                 lapis.fill(Path(ellipseIn: kotak), with: .radialGradient(
