@@ -29,11 +29,16 @@ struct ZonaEditorView: View {
         GeometryReader { geo in
             let peta = PetaKamera(rasio: rasio, ukuran: geo.size, perbesar: nil, hasil: hasil)
 
+            // Mode denah ikut permukaan TERANG, bukan hitam: denah lantainya
+            // sendiri putih, dan di atas hitam yang tampak cuma kotak
+            // melayang tanpa ruangan di belakangnya.
+            let terang = peta.denah || latar == nil
+
             ZStack(alignment: .topLeading) {
-                (latar == nil ? Color(hex: 0xF7F8FA) : Color.black)
+                (terang ? Color(hex: 0xF7F8FA) : Color.black)
 
                 Canvas { ctx, _ in
-                    gambarLatar(&ctx, latar, peta, redup: 0.5)
+                    gambarLatar(&ctx, latar, peta, redup: 0.5, gelap: !terang)
                 }
 
                 ForEach($zona) { $z in
@@ -68,7 +73,10 @@ struct ZonaEditorView: View {
         if terproyeksi {
         ZStack {
             RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-                .fill(warna.opacity(latar == nil ? 0.20 : 0.28))
+                // Di atas denah, isian kotak dibuat lebih tipis: yang harus
+                // tetap terbaca di baliknya adalah meja dan kursinya — itu
+                // seluruh alasan denahnya dipasang.
+                .fill(warna.opacity(peta.denah ? 0.16 : (latar == nil ? 0.20 : 0.28)))
             RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
                 .strokeBorder(warna, lineWidth: dipilih ? 3 : 2)
         }

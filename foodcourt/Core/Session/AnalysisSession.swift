@@ -85,6 +85,16 @@ struct AnalysisResult {
     var ukuranFramePx: PixelSize?
     /// Ukuran venue dalam meter — batas bidang gambar denah.
     var venueMeter: CGSize?
+    /// Gambar denah lantai yang diunggah pengguna, kalau ada.
+    ///
+    /// Dipasang sebagai latar di mode denah. Kisi meter memberi jarak, tapi
+    /// tidak memberi ARTI: tanpa meja, kursi, dan konter, jalur yang tergambar
+    /// tidak bisa ditafsirkan — sama saja seperti heatmap tanpa frame CCTV.
+    ///
+    /// Seluruh gambar dipetakan ke persegi venue, sama persis dengan yang
+    /// dilakukan layar Kalibrasi waktu menghitung `floorToWorld`. Jadi tidak
+    /// ada penyelarasan kedua di sini yang bisa meleset sendiri.
+    var denahURL: URL?
 
     var adaDenah: Bool { homografi != nil && ukuranFramePx != nil && venueMeter != nil }
 

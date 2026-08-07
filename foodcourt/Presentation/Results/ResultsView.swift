@@ -191,12 +191,18 @@ struct ResultsView: View {
         let venue = CGSize(width: session.venueWidthM, height: session.venueHeightM)
         guard venue.width > 0, venue.height > 0 else { return hasil }
 
+        // Hanya dipakai kalau denahnya gambar sungguhan. Dalam mode "Canvas
+        // berskala" tidak ada gambar apa pun untuk dipasang, dan kisi meter
+        // memang sudah jadi satu-satunya acuan yang tersedia.
+        let denah = session.usesScaledCanvas ? nil : session.floorPlanURL
+
         func pasang(_ r: inout AnalysisResult, _ cam: SessionCamera?) {
             guard let cam, let kal = cam.calibration, kal.isValid,
                   let px = cam.framePixelSize else { return }
             r.homografi = kal.homographyCameraToWorld
             r.ukuranFramePx = px
             r.venueMeter = venue
+            r.denahURL = denah
         }
 
         if hasil.perKamera.count > 1 {
@@ -858,36 +864,58 @@ struct PetaKamera {
 
 /// Foto CCTV sebagai latar, diredupkan supaya tanda di atasnya tetap terbaca.
 func gambarLatar(_ ctx: inout GraphicsContext, _ url: URL?, _ peta: PetaKamera,
-                         redup: Double = 0.55) {
+                 redup: Double = 0.55, gelap: Bool = true) {
     // Di mode denah, frame CCTV tidak digambar: fotonya berperspektif,
     // sedangkan titik-titiknya sudah diratakan ke lantai. Menumpuk keduanya
     // akan menaruh orang di tempat yang tidak sesuai dengan gambar di
     // belakangnya — lebih menyesatkan daripada tidak ada latar sama sekali.
-    if peta.denah { gambarDenah(&ctx, peta); return }
+    // Yang dipasang justru denah lantai yang diunggah pengguna.
+    if peta.denah { gambarDenah(&ctx, peta, redup: redup, gelap: gelap); return }
     guard let url, let img = NSImage(contentsOf: url) else { return }
     ctx.opacity = redup
     ctx.draw(Image(nsImage: img), in: peta.bidangFrame)
     ctx.opacity = 1
 }
 
-/// Latar mode denah: batas ruangan, kisi satu meter, dan penanda ukuran.
+/// Latar mode denah: gambar denah lantai yang diunggah, kisi meter, batas
+/// ruangan, dan penanda skala.
 ///
-/// Tanpa ini denah cuma awan titik di bidang kosong — tidak ada yang bisa
-/// dibaca darinya, karena tidak ada satu pun acuan tempat maupun jarak. Kisi
-/// satu meter juga yang membuat gambar ini bisa dipakai mengukur: dua orang
-/// yang terpisah tiga kotak memang terpisah tiga meter, dan itu justru satu-
-/// satunya hal yang tidak bisa dilakukan tampilan berperspektif.
-private func gambarDenah(_ ctx: inout GraphicsContext, _ peta: PetaKamera) {
+/// Kisi meter memberi JARAK, denah memberi ARTI. Dua-duanya perlu: tanpa kisi,
+/// gambar ini tidak bisa dipakai mengukur; tanpa denah, jalur yang tergambar
+/// tidak bisa ditafsirkan karena tidak ada yang tahu mana meja, mana konter,
+/// mana pintu. Persis alasan tampilan kamera memakai frame CCTV sebagai latar.
+///
+/// Seluruh gambar denah dipetakan ke persegi venue — sama persis dengan
+/// `floorToWorld` di layar Kalibrasi, jadi tidak ada penyelarasan kedua di sini
+/// yang bisa meleset sendiri terhadap titik-titiknya.
+///
+/// `gelap` menyatakan warna permukaan panel, dan menentukan warna tinta. Tab
+/// Heatmap memakai permukaan gelap karena skala warnanya (ungu -> kuning
+/// terang) memang disetel untuk latar gelap; Jalur dan Zona memakai permukaan
+/// terang supaya denahnya terbaca seperti denah di atas kertas.
+private func gambarDenah(_ ctx: inout GraphicsContext, _ peta: PetaKamera,
+                         redup: Double, gelap: Bool) {
     guard let v = peta.hasil?.venueMeter else { return }
 
-    // Lantai sedikit lebih terang dari luar ruangan: batas ruangan terbaca
-    // sebagai bidang, bukan cuma sebagai garis.
     let lantai = CGRect(origin: peta.dariMeter(0, 0),
                         size: CGSize(width: v.width * peta.skala, height: v.height * peta.skala))
-    ctx.fill(Path(lantai), with: .color(Color(hex: 0xFFFFFF, alpha: 0.05)))
 
-    // Kisi satu meter. Di ruangan yang sangat besar satu meter jadi terlalu
-    // rapat untuk dibaca, jadi langkahnya naik ke 2 atau 5 m.
+    let tinta = gelap ? Color.white : Color.black
+
+    if let url = peta.hasil?.denahURL, let img = NSImage(contentsOf: url) {
+        // Denah aslinya putih. Di panel gelap ia diredupkan supaya tanda di
+        // atasnya tetap menang; di panel terang dibiarkan hampir penuh.
+        ctx.opacity = gelap ? redup : 0.9
+        ctx.draw(Image(nsImage: img), in: lantai)
+        ctx.opacity = 1
+    } else {
+        // Tidak ada denah (mode "Canvas berskala"): lantai dibedakan tipis dari
+        // luar ruangan supaya batas ruangan terbaca sebagai bidang.
+        ctx.fill(Path(lantai), with: .color(tinta.opacity(0.05)))
+    }
+
+    // Kisi meter. Di ruangan yang sangat besar satu meter jadi terlalu rapat
+    // untuk dibaca, jadi langkahnya naik ke 2 atau 5 m.
     let langkah: CGFloat = max(v.width, v.height) > 40 ? 5 : (max(v.width, v.height) > 18 ? 2 : 1)
     var kisi = Path()
     var x: CGFloat = 0
@@ -900,16 +928,18 @@ private func gambarDenah(_ ctx: inout GraphicsContext, _ peta: PetaKamera) {
         kisi.move(to: peta.dariMeter(0, y)); kisi.addLine(to: peta.dariMeter(v.width, y))
         y += langkah
     }
-    ctx.stroke(kisi, with: .color(Color(hex: 0xFFFFFF, alpha: 0.10)), lineWidth: 1)
-
-    ctx.stroke(Path(lantai), with: .color(Color(hex: 0xFFFFFF, alpha: 0.35)), lineWidth: 1.5)
+    ctx.stroke(kisi, with: .color(tinta.opacity(0.14)), lineWidth: 1)
+    ctx.stroke(Path(lantai), with: .color(tinta.opacity(0.35)), lineWidth: 1.5)
 
     // Skala disebut angkanya, bukan cuma digambar kisinya: tanpa angka, kisi
     // rapat dan kisi renggang terlihat sama saja.
+    //
+    // Ditaruh DI DALAM lantai, bukan di bawahnya: di luar, tulisannya terpotong
+    // tepi panel — terukur pada tangkapan layar dua kamera, terpotong separuh.
     let teks = Text("kisi \(bulat(langkah)) m · ruangan \(bulat(v.width)) × \(bulat(v.height)) m")
         .font(.caption2.monospacedDigit())
-        .foregroundStyle(Color.white.opacity(0.55))
-    ctx.draw(teks, at: CGPoint(x: lantai.minX + 6, y: lantai.maxY + 12), anchor: .topLeading)
+        .foregroundStyle(tinta.opacity(0.75))
+    ctx.draw(teks, at: CGPoint(x: lantai.minX + 6, y: lantai.maxY - 6), anchor: .bottomLeading)
 }
 
 private func bulat(_ v: CGFloat) -> String {
@@ -966,7 +996,7 @@ private struct PathContent: View {
                     : nil,
                 hasil: hasil)
 
-            gambarLatar(&ctx, latar, peta)
+            gambarLatar(&ctx, latar, peta, gelap: !peta.denah)
 
             // Grid hanya saat tidak ada foto — di atas foto, garis bantu
             // menambah kekacauan tanpa menambah keterangan apa pun. Di mode
@@ -1023,7 +1053,13 @@ private struct PathContent: View {
                     if mulaiBaru { g.move(to: pa); mulaiBaru = false }
                     g.addLine(to: pb)
                 }
-                ctx.stroke(g, with: .color(.cyan.opacity(0.18)),
+                // Di atas denah putih, cyan nyaris tidak terlihat; di atas
+                // foto CCTV yang gelap, biru tua yang hilang. Warnanya
+                // mengikuti permukaan, kepekatannya tidak — yang menumpuk
+                // tetap harus jadi lebih terang.
+                ctx.stroke(g, with: .color(terang
+                                           ? Color(hex: 0x1D4ED8, alpha: 0.20)
+                                           : .cyan.opacity(0.18)),
                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             }
 
@@ -1043,7 +1079,7 @@ private struct PathContent: View {
                 // tanpa itu, jalur yang menumpuk terbaca sebagai satu.
                 // Garis kontras di bawahnya memisahkan jalur yang bersilangan,
                 // dan menahan warna jalur supaya tetap terbaca di atas foto.
-                ctx.stroke(garis, with: .color(latar == nil
+                ctx.stroke(garis, with: .color(terang
                                                ? Color(hex: 0xF7F8FA, alpha: 0.9)
                                                : .black.opacity(0.55)),
                            style: StrokeStyle(lineWidth: 5.5, lineCap: .round, lineJoin: .round))
@@ -1054,7 +1090,7 @@ private struct PathContent: View {
                 // tanpa perlu legenda hijau/merah.
                 let awal = pts[0]
                 ctx.fill(Path(ellipseIn: CGRect(x: awal.x - 4, y: awal.y - 4, width: 8, height: 8)),
-                         with: .color(latar == nil ? Color(hex: 0xF7F8FA) : .black))
+                         with: .color(terang ? Color(hex: 0xF7F8FA) : .black))
                 ctx.stroke(Path(ellipseIn: CGRect(x: awal.x - 4, y: awal.y - 4, width: 8, height: 8)),
                            with: .color(warna), lineWidth: 2)
 
@@ -1072,9 +1108,16 @@ private struct PathContent: View {
                 ctx.fill(panah, with: .color(warna))
             }
         }
-        .background(latar == nil && !(hasil?.adaDenah ?? false)
-                    ? Color(hex: 0xF7F8FA) : .black)
+        .background(terang ? Color(hex: 0xF7F8FA) : .black)
     }
+
+    /// Permukaan panel terang atau gelap.
+    ///
+    /// Ada TIGA keadaan, bukan dua, dan itu yang membuat `latar == nil` tidak
+    /// lagi cukup: ada frame CCTV (gelap, supaya foto menang), tidak ada frame
+    /// (terang), dan mode denah (terang — denah lantai terbaca seperti denah
+    /// di atas kertas, dan gambarnya memang putih).
+    private var terang: Bool { (hasil?.adaDenah ?? false) || latar == nil }
 
     /// Deret titik kanvas menerus terpanjang; di luar mode denah selalu utuh.
     private func potonganTerpanjang(_ titik: [CGPoint], _ peta: PetaKamera) -> [CGPoint] {
