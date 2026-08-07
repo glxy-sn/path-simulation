@@ -423,7 +423,9 @@ struct CalibrationView: View {
         }
     }
 
-    private func recalculateSelectedCamera() {
+    private func recalculateSelectedCamera() { recalculate(at: selectedIndex) }
+
+    private func recalculate(at selectedIndex: Int) {
         guard session.cameras.indices.contains(selectedIndex) else { return }
         let camera = session.cameras[selectedIndex]
         guard camera.imagePoints.count == camera.planePoints.count else { return }
@@ -454,6 +456,22 @@ struct CalibrationView: View {
         }
     }
 
+    /// Hitung ulang SEMUA kamera dari titik yang sudah ada.
+    ///
+    /// Dipakai setelah denah diganti. Titik denah disimpan ternormalkan 0–1,
+    /// jadi ia ikut menyesuaikan sendiri ke ukuran gambar yang baru dan tidak
+    /// perlu diklik ulang satu pun. Yang sebelumnya terjadi: kalibrasinya
+    /// dibatalkan tapi tidak ada yang menghitungnya kembali, jadi centang
+    /// hijaunya hilang dan pengguna harus mengutak-atik titik satu per satu
+    /// hanya untuk memicu perhitungan yang sebenarnya sudah bisa dilakukan.
+    ///
+    /// Angka galatnya tetap dilaporkan apa adanya — kalau denah barunya
+    /// ternyata ruangan lain, itu akan terlihat sebagai galat yang melonjak,
+    /// bukan tersembunyi di balik centang hijau.
+    private func recalculateAllCameras() {
+        for index in session.cameras.indices { recalculate(at: index) }
+    }
+
     private func validationPoints(_ calibration: CameraCalibration?) -> [ValidationPoint] {
         guard let calibration else { return [] }
         let floorSize = session.calibrationFloorSize
@@ -477,7 +495,13 @@ struct CalibrationView: View {
         session.floorPlanPixelSize = pixelSize(of: image)
         session.usesScaledCanvas = false
         invalidateAllCalibrations()
-        message = "Denah diperbarui. Kalibrasi tiap kamera perlu dihitung ulang."
+        // Titiknya tidak hilang, jadi tidak ada alasan menyuruh pengguna
+        // mengulang: hitung ulang saja dari titik yang sudah ada.
+        recalculateAllCameras()
+        let siap = session.cameras.filter(\.isCalibrated).count
+        message = siap > 0
+            ? "Denah diperbarui. \(siap) dari \(session.cameras.count) kamera terhitung ulang otomatis dari titik yang sudah ada."
+            : "Denah diperbarui. Titik kalibrasi belum cukup — butuh minimal 4 pasangan per kamera."
     }
 
     private var floorSourcePicker: some View {
