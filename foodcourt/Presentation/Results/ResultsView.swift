@@ -1581,7 +1581,22 @@ struct PathContent: View {
     /// yang diklik konsisten satu sama lain, walaupun seluruhnya tercermin.
     private func gambarJangkauan(_ ctx: inout GraphicsContext, _ k: AnalysisResult,
                                  _ peta: PetaKamera, nomor: Int?) {
-        guard peta.denah else { return }
+        guard peta.denah, let v = k.venueMeter else { return }
+
+        // Batasnya RUANGAN, bukan ruangan + margin.
+        //
+        // `titikSah` sengaja memberi kelonggaran 1 m supaya titik orang yang
+        // sedikit di luar tetap tergambar. Untuk bidang jangkauan kelonggaran
+        // itu justru merusak: tiap kolom mengejar sampai batas margin, dan
+        // karena tiap kolom berhenti di jarak yang berbeda, poligonnya keluar
+        // ruangan dengan tepi bergerigi — terbaca seperti kalibrasi yang kacau
+        // padahal cuma cara menggambarnya.
+        func diDalam(_ x: Double, _ y: Double) -> CGPoint? {
+            guard let m = k.keLantai(CGPoint(x: x, y: y)),
+                  m.x >= 0, m.x <= v.width, m.y >= 0, m.y <= v.height else { return nil }
+            return peta.dariMeter(m.x, m.y)
+        }
+
         var bawah: [CGPoint] = [], atas: [CGPoint] = []
         let kolom = 16
         for i in 0...kolom {
@@ -1589,7 +1604,7 @@ struct PathContent: View {
             var terbawah: CGPoint?, teratas: CGPoint?
             // dari tepi bawah frame naik ke atas
             for j in stride(from: 1.0, through: 0.3, by: -0.02) {
-                if let p = peta.titikSah(CGPoint(x: x, y: j)) {
+                if let p = diDalam(x, j) {
                     if terbawah == nil { terbawah = p }
                     teratas = p
                 } else if terbawah != nil {
@@ -1603,13 +1618,23 @@ struct PathContent: View {
         var bidang = Path()
         bidang.addLines(bawah + atas.reversed())
         bidang.closeSubpath()
+
+        // Dipotong lagi ke persegi ruangan: kolom yang bersebelahan bisa
+        // berhenti di jarak yang berbeda, jadi garis penghubungnya masih bisa
+        // memotong keluar walau semua titiknya di dalam.
+        let ruangan = CGRect(origin: peta.dariMeter(0, 0),
+                             size: CGSize(width: v.width * peta.skala,
+                                          height: v.height * peta.skala))
+        bidang = Path(bidang.cgPath.intersection(Path(ruangan).cgPath))
+        guard !bidang.isEmpty else { return }
         let w = FusiKamera.warna(nomor: (nomor ?? 1) * 7)
         let warna = Color(hue: w.rona, saturation: 0.7, brightness: 0.55)
         ctx.fill(bidang, with: .color(warna.opacity(0.07)))
         ctx.stroke(bidang, with: .color(warna.opacity(0.5)),
                    style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
 
-        if let nomor, let tengah = bawah.first {
+        if let nomor, let tengah = bidang.boundingRect.isEmpty ? nil : CGPoint(
+            x: bidang.boundingRect.minX, y: bidang.boundingRect.maxY) {
             ctx.draw(Text("jangkauan C\(nomor)")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(warna),
