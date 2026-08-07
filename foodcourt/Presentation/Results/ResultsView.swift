@@ -166,6 +166,7 @@ struct ResultsView: View {
     /// untuk ketiganya: kalau tiap tab punya sendiri, berpindah tab akan
     /// melompat waktu tanpa alasan yang bisa dijelaskan.
     @State private var lini = LiniMasa()
+    @State private var pemutarGabungan: PemutarGabungan?
     @State private var sedangMerekam = false
     @State private var pesanEkspor: String?
 
@@ -200,12 +201,21 @@ struct ResultsView: View {
         .onAppear {
             vm.semua = berkalibrasi(session.result)
             siapkanLini()
+            if vm.visual == .boundingBox { siapkanPemutar() }
         }
-        .onChange(of: vm.visual) { _, _ in lini.hentikan() }
+        .onChange(of: vm.visual) { _, lama in
+            lini.hentikan()
+            // Video dijeda begitu keluar dari tab Bounding Box: pemutar yang
+            // terus berjalan di balik tab lain menghabiskan tenaga dan membuat
+            // penggeser waktu bergerak sendiri tanpa ada yang menontonnya.
+            if lama == .boundingBox { pemutarGabungan?.jeda() }
+            if vm.visual == .boundingBox { siapkanPemutar() }
+        }
         .onChange(of: session.result?.jobIdentitas) {
             vm.semua = berkalibrasi(session.result)
             vm.kameraTerpilih = 0
             siapkanLini()
+            if vm.visual == .boundingBox { siapkanPemutar() }
         }
     }
 
@@ -395,6 +405,18 @@ struct ResultsView: View {
             // beranotasi tiap kamera apa adanya — bukan koordinat lantai —
             // jadi tidak ada yang bisa digabungkan: menyatukannya cuma akan
             // membuang salah satu videonya.
+            if vm.visual == .boundingBox, let pg = pemutarGabungan, !kameraTergambar.isEmpty {
+                // Video tiap kamera DAN jalur/heatmap-nya berjalan bersama.
+                // Kotak ID di video dan titik di denah berasal dari track yang
+                // SAMA — kalau seseorang berpindah di video tapi titiknya diam
+                // di denah, salah satunya keliru, dan itu cuma terlihat kalau
+                // keduanya berjalan pada detik yang sama.
+                PratinjauGabungan(kamera: kameraTergambar,
+                                  gabungkanDenah: vm.bisaDisatukan,
+                                  pemutar: pg,
+                                  hingga: batasWaktu)
+                    .frame(height: min(620, max(420, 540 * scale)))
+            } else {
             HStack(spacing: Space.m) {
                 if vm.banyakKamera && vm.bisaDisatukan && vm.visual != .boundingBox {
                     // Semua kamera dikalibrasi ke RUANGAN YANG SAMA, jadi
@@ -419,8 +441,11 @@ struct ResultsView: View {
             // dengan tinggi lama denahnya jadi kecil di tengah lautan kosong.
             .frame(height: satuPanel ? min(560, max(380, 480 * scale))
                                      : min(400, max(300, 360 * scale)))
+            }
 
-            if vm.visual != .boundingBox {
+            if vm.visual == .boundingBox {
+                if let pg = pemutarGabungan { KendaliGabungan(pemutar: pg, lini: lini) }
+            } else {
                 HStack(spacing: Space.m) {
                     if bisaDianimasi {
                         KendaliLiniMasa(lini: lini)
@@ -448,6 +473,19 @@ struct ResultsView: View {
     private var batasWaktu: Int? {
         guard bisaDianimasi, lini.maks > 0, lini.frame < lini.maks else { return nil }
         return lini.frame
+    }
+
+    private func siapkanPemutar() {
+        let k = kameraTergambar
+        // Video beranotasi tiap kamera. Kalau hasil ini tidak punya videonya,
+        // panel videonya kosong dan sisanya tetap jalan.
+        let sumber: [(label: String, url: URL)] = k.enumerated().compactMap { i, r in
+            guard let u = r.pathVideoURL else { return nil }
+            return (label: r.label.isEmpty ? "Kamera \(i + 1)" : r.label, url: u)
+        }
+        let fps = k.first(where: { $0.fpsSumber > 0 })?.fpsSumber ?? 20
+        if pemutarGabungan == nil { pemutarGabungan = PemutarGabungan(lini: lini) }
+        pemutarGabungan?.siapkan(sumber, fps: fps)
     }
 
     private func siapkanLini() {
@@ -1254,7 +1292,7 @@ private func bulat(_ v: CGFloat) -> String {
 ///    butuh homografi dari layar Kalibrasi, dan itu belum ada — jadi jangan
 ///    membaca panjang jalur di sini sebagai jarak sebenarnya. Keterangan di
 ///    bawah gambar menyebutkan hal ini.
-private struct PathContent: View {
+struct PathContent: View {
     let paths: [PathTrace]
     /// Lebar : tinggi video asli. Koordinat x dan y sudah dibagi lebar dan
     /// tinggi TERPISAH, jadi tanpa dikalikan rasio ini lagi, jalur di video
@@ -1570,7 +1608,7 @@ private struct PathContent: View {
 
 // MARK: - Heatmap + legend
 
-private struct HeatmapLegend: View {
+struct HeatmapLegend: View {
     /// Nilai sel tertinggi, supaya legendanya menyebut angka sungguhan dan
     /// bukan cuma "rendah/tinggi" yang tidak bisa dipakai membandingkan
     /// apa pun antar analisis.
@@ -1615,7 +1653,7 @@ private struct HeatmapLegend: View {
 ///
 /// `blobs` tetap dipakai kalau petaknya tidak ada, supaya hasil lama tetap
 /// tergambar.
-private struct HeatmapView: View {
+struct HeatmapView: View {
     let blobs: [HeatBlob]
     var grid: (w: Int, h: Int, total: Int, sel: [Int])?
     var rasio: Double = 16.0 / 9.0
