@@ -43,6 +43,22 @@ final class ResultsViewModel {
     var kamera: [AnalysisResult] { semua?.perKamera ?? [] }
     var banyakKamera: Bool { kamera.count > 1 }
 
+    /// Boleh digambar jadi SATU denah?
+    ///
+    /// Syaratnya semua kamera terkalibrasi ke venue yang berukuran sama —
+    /// hanya dengan begitu titiknya berada di satu sistem koordinat meter dan
+    /// boleh ditumpuk. Kalau salah satu belum dikalibrasi, panelnya tetap
+    /// terpisah: menumpuk koordinat gambar dua kamera yang berbeda sudut
+    /// menghasilkan gambar yang tidak berarti apa-apa.
+    var bisaDisatukan: Bool {
+        guard kamera.count > 1, let acuan = kamera.first?.venueMeter else { return false }
+        return kamera.allSatisfy { k in
+            k.adaDenah && k.venueMeter.map {
+                abs($0.width - acuan.width) < 0.01 && abs($0.height - acuan.height) < 0.01
+            } == true
+        }
+    }
+
     var adaHasil: Bool { semua != nil }
 
     var summary: VenueSummary { hasil?.summary ?? SampleResult.summary }
@@ -313,14 +329,22 @@ struct ResultsView: View {
             // sisi; melihatnya bergantian memaksa orang mengingat sisi yang
             // satunya, dan perbandingan yang jadi intinya justru hilang.
             HStack(spacing: Space.m) {
-                if vm.banyakKamera {
+                if vm.banyakKamera && vm.bisaDisatukan {
+                    // Semua kamera dikalibrasi ke RUANGAN YANG SAMA, jadi
+                    // titiknya sudah berada di satu sistem koordinat meter.
+                    // Menggambarnya di dua panel terpisah menyembunyikan
+                    // justru yang paling berguna: bagian ruangan mana yang
+                    // hanya terlihat satu kamera, dan bagian mana yang
+                    // dilewati orang menurut dua-duanya.
+                    panelVisual(vm.kamera, judul: judulGabungan)
+                } else if vm.banyakKamera {
                     ForEach(Array(vm.kamera.enumerated()), id: \.offset) { i, k in
-                        panelVisual(k, judul: k.label.isEmpty ? "Kamera \(i + 1)" : k.label)
+                        panelVisual([k], judul: k.label.isEmpty ? "Kamera \(i + 1)" : k.label)
                     }
                 } else if let h = vm.hasil {
-                    panelVisual(h, judul: nil)
+                    panelVisual([h], judul: nil)
                 } else {
-                    panelVisual(nil, judul: nil)
+                    panelVisual([], judul: nil)
                 }
             }
             .frame(height: min(400, max(300, 360 * scale)))
@@ -328,6 +352,13 @@ struct ResultsView: View {
             Text(caption).font(.caption).foregroundStyle(.secondary)
         }
         .card()
+    }
+
+    private var judulGabungan: String {
+        let nama = vm.kamera.enumerated().map { i, k in
+            k.label.isEmpty ? "Kamera \(i + 1)" : k.label
+        }
+        return nama.joined(separator: " + ")
     }
 
     private func orangPerZona(_ hasil: AnalysisResult?) -> [String: Int] {
@@ -341,9 +372,13 @@ struct ResultsView: View {
     /// `hasil` nil berarti belum ada analisis sama sekali — yang tampil data
     /// contoh, dan itu sudah diberi peringatan di atas layar.
     @ViewBuilder
-    private func panelVisual(_ hasil: AnalysisResult?, judul: String?) -> some View {
+    private func panelVisual(_ kamera: [AnalysisResult], judul: String?) -> some View {
+        // Kamera pertama menentukan latar dan rasio panel. Di mode gabungan
+        // keduanya tidak dipakai sama sekali — bidang gambarnya venue, bukan
+        // frame kamera mana pun.
+        let hasil: AnalysisResult? = kamera.first
         let rasio = hasil?.rasioVideo ?? 16.0 / 9.0
-        let latar = hasil?.latarURL
+        let latar = kamera.count > 1 ? nil : hasil?.latarURL
         ZStack(alignment: .topLeading) {
             ZStack {
                 switch vm.visual {
@@ -367,11 +402,11 @@ struct ResultsView: View {
                     PathContent(paths: hasil?.paths ?? SampleResult.paths,
                                 rasio: rasio, latar: latar,
                                 jejak: hasil?.jejak ?? [:],
-                                hasil: hasil)
+                                hasil: hasil, kamera: kamera)
                 case .heatmap:
                     HeatmapView(blobs: hasil?.blobs ?? SampleResult.blobs,
                                 grid: hasil?.grid, rasio: rasio, latar: latar,
-                                hasil: hasil)
+                                hasil: hasil, kamera: kamera)
                     HeatmapLegend(maks: hasil?.grid?.sel.max())
                 case .zona:
                     if let h = hasil {
@@ -380,6 +415,8 @@ struct ResultsView: View {
                                           set: { vm.setZona(h, $0) }),
                             menyunting: vm.menyunting,
                             rasio: rasio, latar: latar, hasil: h,
+                            kameraLain: Array(kamera.dropFirst()),
+                            zonaLain: { vm.zona($0) },
                             angka: { r in
                                 let l = h.lamaTinggal(di: r)
                                 return (l.orang, l.rataDetik, h.kepadatan(di: r).porsi)
@@ -476,6 +513,16 @@ struct ResultsView: View {
         // Titik yang jatuh di luar denah dibuang. Jumlahnya disebutkan, karena
         // yang menentukan bukan pipeline melainkan letak empat titik kalibrasi
         // — dan itu bisa diperbaiki pengguna, kalau tahu.
+        // Penggabungan dua kamera harus disebut, karena mengubah cara membaca
+        // gambarnya: tidak ada pencocokan identitas lintas kamera, jadi orang
+        // yang terlihat dua kamera menyumbang dua jejak dan dua kali kepadatan.
+        if vm.bisaDisatukan {
+            s += " Kedua kamera ditumpuk di denah yang sama karena keduanya"
+                + " dikalibrasi ke ruangan ini. Identitas TIDAK dicocokkan"
+                + " antar-kamera, jadi bagian yang terlihat dua kamera tampak"
+                + " lebih pekat — baca itu sebagai lebih sering TERLIHAT, bukan"
+                + " lebih ramai. Jumlah orang tidak diambil dari gambar ini."
+        }
         if let luar = h.porsiDiLuarDenah, luar >= 0.02 {
             s += " \(Int((luar * 100).rounded()))% titik kaki jatuh di luar denah "
                 + "dan tidak digambar — titik kalibrasinya belum mencakup seluruh "
@@ -983,6 +1030,18 @@ private struct PathContent: View {
     var jejak: [String: [CGPoint]] = [:]
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
+    /// Semua sudut kamera yang digambar di panel ini.
+    ///
+    /// Lebih dari satu hanya terjadi di mode denah, dan di situ memang sahih:
+    /// tiap kamera punya homografinya sendiri ke RUANGAN YANG SAMA, jadi
+    /// titiknya sudah berada di satu sistem koordinat meter sebelum digambar.
+    /// Tidak ada penyelarasan tambahan, dan tidak ada pencocokan identitas
+    /// lintas kamera — yang ditumpuk lintasannya, bukan orangnya.
+    var kamera: [AnalysisResult] = []
+
+    private var daftar: [AnalysisResult] {
+        kamera.count > 1 ? kamera : (hasil.map { [$0] } ?? [])
+    }
 
     var body: some View {
         Canvas { ctx, size in
@@ -1036,6 +1095,23 @@ private struct PathContent: View {
             // dalam SATU detik — menyeberangi seluruh ruangan lebih dari
             // sekali. Batas di bawah kira-kira secepat orang berjalan
             // (~1,5 m/s di ruangan 7 meter); 7% ruas melewatinya dan dibuang.
+            // Satu putaran per sudut kamera. Tiap kamera punya PETA-nya
+            // sendiri — homografinya berbeda, venue-nya sama — jadi lintasan
+            // keduanya jatuh di kotak kanvas yang sama tanpa penyelarasan
+            // tambahan apa pun.
+            //
+            // Yang ditumpuk LINTASANNYA, bukan orangnya: tidak ada pencocokan
+            // identitas lintas kamera di sini, jadi satu orang yang terlihat
+            // dua kamera menyumbang dua jejak. Untuk membaca lintasan mana yang
+            // sering dilewati itu tidak apa-apa; untuk MENGHITUNG orang, tidak
+            // boleh — dan angka orang memang tidak diambil dari gambar ini.
+            for k in (daftar.isEmpty ? [nil] : daftar.map { Optional($0) }) {
+            let peta = k.map {
+                PetaKamera(rasio: rasio, ukuran: size, perbesar: peta.perbesar, hasil: $0)
+            } ?? peta
+            let jejak = k?.jejak ?? self.jejak
+            let paths = k?.paths ?? self.paths
+
             let batasLangkah = 0.15
             for (_, titik) in jejak where titik.count >= 2 {
                 var g = Path()
@@ -1106,6 +1182,7 @@ private struct PathContent: View {
                                           y: akhir.y - panjang * sin(sudut + lebar)))
                 panah.closeSubpath()
                 ctx.fill(panah, with: .color(warna))
+            }
             }
         }
         .background(terang ? Color(hex: 0xF7F8FA) : .black)
@@ -1184,6 +1261,18 @@ private struct HeatmapView: View {
     var latar: URL?
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
+    /// Semua sudut kamera yang digambar di panel ini.
+    ///
+    /// Lebih dari satu hanya terjadi di mode denah, dan di situ memang sahih:
+    /// tiap kamera punya homografinya sendiri ke RUANGAN YANG SAMA, jadi
+    /// titiknya sudah berada di satu sistem koordinat meter sebelum digambar.
+    /// Tidak ada penyelarasan tambahan, dan tidak ada pencocokan identitas
+    /// lintas kamera — yang ditumpuk lintasannya, bukan orangnya.
+    var kamera: [AnalysisResult] = []
+
+    private var daftar: [AnalysisResult] {
+        kamera.count > 1 ? kamera : (hasil.map { [$0] } ?? [])
+    }
 
     var body: some View {
         Canvas { ctx, size in
@@ -1192,10 +1281,27 @@ private struct HeatmapView: View {
             // Latar lebih gelap di sini: warna panas harus menang atas foto.
             gambarLatar(&ctx, latar, peta, redup: 0.42)
 
-            if let g = grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
+            // Tiap kamera digambar dengan PETA-nya sendiri — homografinya
+            // berbeda, venue-nya sama — jadi keduanya jatuh di kotak kanvas
+            // yang sama tanpa perlu menggabungkan petaknya lebih dulu.
+            //
+            // Warnanya bertumpuk, jadi bagian yang terlihat DUA kamera tampak
+            // lebih panas. Itu bukan galat penggambaran, tapi harus dibaca
+            // sebagai "lebih sering TERLIHAT", bukan "lebih ramai" — dan itu
+            // disebutkan di keterangan bawah gambar.
+            if daftar.count > 1 {
+                for k in daftar {
+                    let pk = PetaKamera(rasio: rasio, ukuran: size, perbesar: nil, hasil: k)
+                    if let g = k.grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
+                        gambarPetak(&ctx, g, pk)
+                    } else {
+                        gambarBlobs(&ctx, k.blobs, pk)
+                    }
+                }
+            } else if let g = grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
                 gambarPetak(&ctx, g, peta)
             } else {
-                gambarBlobs(&ctx, peta)
+                gambarBlobs(&ctx, blobs, peta)
             }
         }
     }
@@ -1229,7 +1335,7 @@ private struct HeatmapView: View {
         }
     }
 
-    private func gambarBlobs(_ ctx: inout GraphicsContext, _ peta: PetaKamera) {
+    private func gambarBlobs(_ ctx: inout GraphicsContext, _ blobs: [HeatBlob], _ peta: PetaKamera) {
         ctx.addFilter(.blur(radius: 18))
         ctx.drawLayer { lapis in
             for blob in blobs {

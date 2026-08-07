@@ -20,6 +20,17 @@ struct ZonaEditorView: View {
     var latar: URL?
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
+    /// Sudut kamera LAIN yang zonanya ikut digambar di denah yang sama.
+    ///
+    /// Hanya terisi di mode denah gabungan. Zonanya digambar apa adanya, tidak
+    /// digabungkan jadi satu: zona kamera 1 dan kamera 2 ditemukan terpisah
+    /// dari kepadatan masing-masing, dan menyatukan dua kotak yang kebetulan
+    /// bertindihan akan mengarang satu zona yang tidak pernah dihitung
+    /// siapa pun. Yang bertindihan justru informasinya — di situ dua kamera
+    /// sepakat.
+    var kameraLain: [AnalysisResult] = []
+    /// Zona milik kamera lain, diambil lewat penyimpan yang sama.
+    var zonaLain: (AnalysisResult) -> [ZonaSunting] = { _ in [] }
     /// Angka tiap kotak, dihitung ulang oleh pemanggil tiap kotak berubah.
     var angka: (CGRect) -> (orang: Int, rata: Double, porsi: Double)
 
@@ -43,6 +54,17 @@ struct ZonaEditorView: View {
 
                 ForEach($zona) { $z in
                     kotak($z, peta: peta, ukuran: geo.size)
+                }
+
+                // Zona kamera lain: digambar, tapi TIDAK bisa disunting di
+                // sini — yang disunting selalu milik kamera yang sedang aktif,
+                // supaya tidak ada kotak yang berubah tanpa bisa dilacak
+                // pemiliknya.
+                ForEach(Array(kameraLain.enumerated()), id: \.offset) { _, k in
+                    let pk = PetaKamera(rasio: rasio, ukuran: geo.size, perbesar: nil, hasil: k)
+                    ForEach(zonaLain(k)) { z in
+                        kotak(.constant(z), peta: pk, ukuran: geo.size)
+                    }
                 }
 
                 if menyunting {
