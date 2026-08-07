@@ -20,6 +20,12 @@ struct ZonaEditorView: View {
     var latar: URL?
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
+    /// Batas waktu untuk lapisan jejak di bawah kotak zona. nil = seluruhnya.
+    ///
+    /// Kotak zonanya sendiri TIDAK berubah menurut waktu — zona adalah tempat,
+    /// bukan kejadian. Yang bergerak jejak orangnya, dan itu yang membuat
+    /// videonya berarti: terlihat zona mana yang terisi lebih dulu.
+    var hingga: Int?
     /// Sudut kamera LAIN yang zonanya ikut digambar di denah yang sama.
     ///
     /// Hanya terisi di mode denah gabungan. Zonanya digambar apa adanya, tidak
@@ -51,6 +57,12 @@ struct ZonaEditorView: View {
                 Canvas { ctx, _ in
                     gambarLatar(&ctx, latar, peta, redup: 0.5, gelap: !terang)
                 }
+
+                // Jejak orang di bawah kotak zona: ini yang bergerak waktu
+                // videonya diputar, dan yang memperlihatkan zona mana terisi
+                // lebih dulu.
+                JejakTipis(rasio: rasio, hingga: hingga, terang: terang,
+                           kamera: hasil.map { [$0] + kameraLain } ?? [])
 
                 ForEach($zona) { $z in
                     kotak($z, peta: peta, ukuran: geo.size)
@@ -104,12 +116,11 @@ struct ZonaEditorView: View {
         }
         .frame(width: r.width, height: r.height)
         .position(x: r.midX, y: r.midY)
-        // Penyuntingan hanya di tampilan kamera. Di denah lantai, satu piksel
-        // geseran di layar tidak sama dengan satu satuan di koordinat zona
-        // (yang masih ruang gambar kamera) — kotaknya akan lari ke tempat yang
-        // salah. Lebih baik tidak bisa digeser daripada digeser keliru.
-        .gesture(menyunting && !peta.denah ? geser(z, peta: peta) : nil)
-        .onTapGesture { if menyunting && !peta.denah { terpilih = z.wrappedValue.id } }
+        // Bisa disunting di kedua tampilan. Di denah, geseran DIPETAKAN
+        // BALIK lewat homografi — bukan dibagi skala — karena satu piksel
+        // kanvas tidak sama dengan satu satuan koordinat zona di sana.
+        .gesture(menyunting ? geser(z, peta: peta) : nil)
+        .onTapGesture { if menyunting { terpilih = z.wrappedValue.id } }
 
         // Label di LUAR kotak: zona terkecil yang terukur cuma 3,8% × 3,7%
         // bidang gambar, dan tulisan di dalamnya tidak terbaca sama sekali.
@@ -142,8 +153,17 @@ struct ZonaEditorView: View {
             .onChanged { g in
                 terpilih = z.wrappedValue.id
                 var v = z.wrappedValue
-                v.x += g.translation.width / (peta.skala * rasio)
-                v.y += g.translation.height / peta.skala
+                // Yang dipetakan balik SUDUT KIRI ATASNYA, bukan pergeserannya.
+                // Di denah, pergeseran yang sama menghasilkan perpindahan yang
+                // berbeda tergantung letaknya — dekat kamera satu meter kanvas
+                // jauh lebih pendek daripada di kejauhan. Memetakan titiknya,
+                // bukan selisihnya, membuat kotak mendarat tepat di bawah
+                // kursor di mana pun ia berada.
+                let asal = peta.kotak(v.rect).origin
+                guard let baru = peta.balik(CGPoint(x: asal.x + g.translation.width,
+                                                    y: asal.y + g.translation.height))
+                else { return }
+                v.x = baru.x; v.y = baru.y
                 v.rapikan()
                 z.wrappedValue = v
             }
@@ -153,8 +173,12 @@ struct ZonaEditorView: View {
         DragGesture()
             .onChanged { g in
                 var v = z.wrappedValue
-                v.w += g.translation.width / (peta.skala * rasio)
-                v.h += g.translation.height / peta.skala
+                let r = peta.kotak(v.rect)
+                guard let ujung = peta.balik(CGPoint(x: r.maxX + g.translation.width,
+                                                     y: r.maxY + g.translation.height))
+                else { return }
+                v.w = ujung.x - v.x
+                v.h = ujung.y - v.y
                 v.rapikan()
                 z.wrappedValue = v
             }

@@ -425,13 +425,34 @@ def main():
                       "hue": round((k * 0.13) % 1.0, 3)})
 
     # Jejak per ID untuk perhitungan lama-di-zona di aplikasi.
+    #
+    # DUA bentuk dikirim, dan itu disengaja:
+    #
+    #   jejak       {id: [[x, y], ...]}          — bentuk lama
+    #   jejakWaktu  {id: [[frame, x, y], ...]}   — sama, plus nomor frame
+    #
+    # Yang lama tidak memuat waktu sama sekali. Urutan di dalam daftar TIDAK
+    # bisa dipakai sebagai waktu: titik hanya ditambahkan saat orangnya
+    # terlihat, jadi indeks ke-0 milik orang yang datang di menit ke-3 berarti
+    # menit ke-3, bukan detik 0. Dan track sering bolong waktu orangnya
+    # tertutup meja, jadi jaraknya pun tidak tetap.
+    #
+    # Tanpa nomor frame, animasi lintasan mustahil dibuat benar — yang bisa
+    # digambar cuma "semua jejak sekaligus", persis yang sudah ada.
+    #
+    # Yang lama tetap dikirim supaya hasil lama dan aplikasi versi lama tidak
+    # rusak; ukurannya kecil dan tidak sepadan dengan risiko memutusnya.
     jejak_penuh = defaultdict(list)
+    jejak_waktu = defaultdict(list)
     for i, fr in enumerate(per_frame):
         if i % JEJAK_LANGKAH:
             continue
         for x1, y1, x2, y2, t in fr:
-            jejak_penuh[t].append([round((x1 + x2) / 2 / W, 4), round(y2 / H, 4)])
+            x, y = round((x1 + x2) / 2 / W, 4), round(y2 / H, 4)
+            jejak_penuh[t].append([x, y])
+            jejak_waktu[t].append([i, x, y])
     jejak_kirim = {str(t): v for t, v in jejak_penuh.items() if v}
+    jejak_waktu_kirim = {str(t): v for t, v in jejak_waktu.items() if v}
 
     n_id = len({t for fr in per_frame for *_, t in fr})
 
@@ -487,6 +508,7 @@ def main():
         # diubah.
         "jejakLangkah": JEJAK_LANGKAH,
         "jejak": jejak_kirim,
+        "jejakWaktu": jejak_waktu_kirim,
         "stops": None,          # butuh dwell time (butuh identitas)
         "diagnostik": {
             "id_unik_setelah_sambung": n_id,

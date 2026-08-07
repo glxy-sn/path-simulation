@@ -165,6 +165,12 @@ struct EngineProcessingService: ProcessingService {
         hasil.jejak = (x.jejak ?? [:]).mapValues { titik in
             titik.compactMap { $0.count >= 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
         }
+        hasil.jejakWaktu = (x.jejakWaktu ?? [:]).mapValues { titik in
+            titik.compactMap { t -> (frame: Int, titik: CGPoint)? in
+                guard t.count >= 3 else { return nil }
+                return (Int(t[0]), CGPoint(x: t[1], y: t[2]))
+            }
+        }
         hasil.jejakLangkah = x.jejakLangkah ?? 20
         hasil.occupancySatuan = x.occupancySatuan ?? "menit"
         hasil.fpsSumber = x.sumber?.fps_sumber ?? 0

@@ -44,7 +44,16 @@ struct AnalysisResult {
     /// menghitung ulang angka zona saat kotaknya digeser manual.
     var grid: (w: Int, h: Int, total: Int, sel: [Int])?
     var jejak: [String: [CGPoint]] = [:]
+    /// Jejak dengan waktunya: (frame, titik). Kosong untuk hasil lama.
+    var jejakWaktu: [String: [(frame: Int, titik: CGPoint)]] = [:]
     var jejakLangkah: Int = 20
+
+    /// Nomor frame terakhir yang punya jejak — panjang lini masa animasi.
+    var frameTerakhir: Int {
+        jejakWaktu.values.compactMap { $0.last?.frame }.max() ?? 0
+    }
+    /// Animasi hanya mungkin kalau waktunya ada.
+    var bisaDianimasi: Bool { !jejakWaktu.isEmpty && frameTerakhir > 0 }
 
     /// Sumbu grafik okupansi: "menit" untuk rekaman panjang, "detik" untuk
     /// potongan pendek. Salah label membuat 8 detik terbaca sebagai 8 menit.
@@ -142,6 +151,22 @@ struct AnalysisResult {
         let b = Self.marginDenahMeter
         guard m.x >= -b, m.x <= v.width + b, m.y >= -b, m.y <= v.height + b else { return nil }
         return CGPoint(x: m.x, y: m.y)
+    }
+
+    /// Kebalikan `keLantai`: meter di lantai -> titik hasil (0–1 di frame).
+    ///
+    /// Dipakai penyuntingan zona di mode denah. Kotak zona disimpan dalam
+    /// koordinat GAMBAR KAMERA (karena di situlah kepadatannya dihitung), jadi
+    /// menggeser kotak di atas denah berarti: baca posisi barunya dalam meter,
+    /// lalu kembalikan ke ruang gambar kamera. Tanpa jalan pulang ini,
+    /// penyuntingan di mode denah terpaksa dimatikan — dan itu memang yang
+    /// terjadi sebelumnya.
+    func dariLantai(_ m: CGPoint) -> CGPoint? {
+        guard let H = homografi, let px = ukuranFramePx, px.isValid,
+              let Hbalik = try? HomographySolver.invert(H) else { return nil }
+        guard let p = HomographySolver.transform(CalibrationPoint(x: m.x, y: m.y), with: Hbalik)
+        else { return nil }
+        return CGPoint(x: p.x / px.width, y: p.y / px.height)
     }
 
     private func penyebut(_ p: CalibrationPoint, _ H: Matrix3x3) -> Double {

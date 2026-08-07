@@ -162,6 +162,13 @@ final class ResultsViewModel {
 }
 
 struct ResultsView: View {
+    /// Posisi waktu bersama untuk Path, Heatmap, dan Zona. Satu lini masa
+    /// untuk ketiganya: kalau tiap tab punya sendiri, berpindah tab akan
+    /// melompat waktu tanpa alasan yang bisa dijelaskan.
+    @State private var lini = LiniMasa()
+    @State private var sedangMerekam = false
+    @State private var pesanEkspor: String?
+
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
     @State private var vm = ResultsViewModel()
@@ -190,10 +197,15 @@ struct ResultsView: View {
         }
         // Hasil dibaca dari sesi tiap layar ini muncul, bukan sekali saat
         // dibuat — kalau tidak, analisis kedua menampilkan angka yang pertama.
-        .onAppear { vm.semua = berkalibrasi(session.result) }
+        .onAppear {
+            vm.semua = berkalibrasi(session.result)
+            siapkanLini()
+        }
+        .onChange(of: vm.visual) { _, _ in lini.hentikan() }
         .onChange(of: session.result?.jobIdentitas) {
             vm.semua = berkalibrasi(session.result)
             vm.kameraTerpilih = 0
+            siapkanLini()
         }
     }
 
@@ -328,8 +340,12 @@ struct ResultsView: View {
             // di satu ruangan menceritakan satu kejadian yang sama dari dua
             // sisi; melihatnya bergantian memaksa orang mengingat sisi yang
             // satunya, dan perbandingan yang jadi intinya justru hilang.
+            // Bounding Box SELALU per kamera. Tab itu menampilkan video
+            // beranotasi tiap kamera apa adanya — bukan koordinat lantai —
+            // jadi tidak ada yang bisa digabungkan: menyatukannya cuma akan
+            // membuang salah satu videonya.
             HStack(spacing: Space.m) {
-                if vm.banyakKamera && vm.bisaDisatukan {
+                if vm.banyakKamera && vm.bisaDisatukan && vm.visual != .boundingBox {
                     // Semua kamera dikalibrasi ke RUANGAN YANG SAMA, jadi
                     // titiknya sudah berada di satu sistem koordinat meter.
                     // Menggambarnya di dua panel terpisah menyembunyikan
@@ -347,11 +363,173 @@ struct ResultsView: View {
                     panelVisual([], judul: nil)
                 }
             }
-            .frame(height: min(400, max(300, 360 * scale)))
+            // Panel gabungan dibiarkan lebih tinggi: sebelumnya dua panel
+            // berbagi lebar, sekarang satu panel memakainya sendiri, dan
+            // dengan tinggi lama denahnya jadi kecil di tengah lautan kosong.
+            .frame(height: satuPanel ? min(560, max(380, 480 * scale))
+                                     : min(400, max(300, 360 * scale)))
+
+            if vm.visual != .boundingBox {
+                HStack(spacing: Space.m) {
+                    if bisaDianimasi {
+                        KendaliLiniMasa(lini: lini)
+                    } else {
+                        Text("Animasi butuh hasil analisis baru — hasil lama tidak menyimpan waktu tiap titik.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    barisUnduh
+                }
+            }
 
             Text(caption).font(.caption).foregroundStyle(.secondary)
         }
         .card()
+    }
+
+    /// Batas waktu yang sedang dipakai menggambar.
+    ///
+    /// nil kalau penggeser berada di ujung kanan — dan itu disengaja: di ujung
+    /// kanan yang tampil GAMBAR RINGKASAN dari pipeline (petak penuh, jalur
+    /// tersorot), bukan hasil kumpulan animasi yang kebetulan sampai di frame
+    /// terakhir. Keduanya nyaris sama, tapi yang dari pipeline itu yang
+    /// angkanya dilaporkan di kartu-kartu di atas.
+    private var batasWaktu: Int? {
+        guard bisaDianimasi, lini.maks > 0, lini.frame < lini.maks else { return nil }
+        return lini.frame
+    }
+
+    private func siapkanLini() {
+        let k = kameraTergambar
+        let maks = k.map(\.frameTerakhir).max() ?? 0
+        let fps = k.first(where: { $0.fpsSumber > 0 })?.fpsSumber ?? 20
+        let langkah = k.first?.jejakLangkah ?? 20
+        lini.siapkan(maks: maks, fps: fps, langkah: langkah)
+    }
+
+    /// Satu panel penuh lebar (gabungan atau kamera tunggal)?
+    private var satuPanel: Bool {
+        !(vm.banyakKamera && (!vm.bisaDisatukan || vm.visual == .boundingBox))
+    }
+
+    private var kameraTergambar: [AnalysisResult] {
+        if vm.banyakKamera && vm.bisaDisatukan { return vm.kamera }
+        if let h = vm.hasil { return [h] }
+        return []
+    }
+
+    private var bisaDianimasi: Bool { kameraTergambar.contains(where: \.bisaDianimasi) }
+
+    /// Tombol unduh gambar dan video untuk tab yang sedang dibuka.
+    @ViewBuilder
+    private var barisUnduh: some View {
+        HStack(spacing: Space.s) {
+            if let pesanEkspor {
+                Text(pesanEkspor).font(.caption2).foregroundStyle(.secondary)
+            }
+            Button {
+                unduhGambar()
+            } label: {
+                Label("Gambar", systemImage: "photo").font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .disabled(sedangMerekam)
+
+            Button {
+                unduhVideo()
+            } label: {
+                Label(sedangMerekam ? "Merekam…" : "Video", systemImage: "film").font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!bisaDianimasi || sedangMerekam)
+        }
+    }
+
+    // MARK: unduh
+
+    /// View yang diekspor — SAMA dengan yang tampil di panel, cuma dengan
+    /// batas waktu yang ditentukan pemanggil.
+    ///
+    /// Satu sumber gambar untuk layar dan untuk berkas: kalau keduanya
+    /// digambar oleh kode yang berbeda, cepat atau lambat berkasnya akan
+    /// menyimpang dari yang dilihat orang waktu menekan tombolnya.
+    private func viewEkspor(_ hingga: Int?) -> AnyView {
+        let kamera = kameraTergambar
+        let hasil = kamera.first
+        let rasio = ekspRasio
+        let latar = kamera.count > 1 ? nil : hasil?.latarURL
+        switch vm.visual {
+        case .path:
+            return AnyView(PathContent(paths: hasil?.paths ?? [], rasio: rasio, latar: latar,
+                                       jejak: hasil?.jejak ?? [:],
+                                       hasil: hasil, hingga: hingga, kamera: kamera))
+        case .heatmap:
+            return AnyView(ZStack {
+                HeatmapView(blobs: hasil?.blobs ?? [], grid: hasil?.grid,
+                            rasio: rasio, latar: latar, hingga: hingga,
+                            hasil: hasil, kamera: kamera)
+                HeatmapLegend(maks: hasil?.grid?.sel.max())
+            })
+        case .zona:
+            guard let h = hasil else { return AnyView(Color.clear) }
+            return AnyView(ZonaEditorView(
+                zona: .constant(vm.zona(h)), menyunting: false,
+                rasio: rasio, latar: latar, hasil: h, hingga: hingga,
+                kameraLain: Array(kamera.dropFirst()),
+                zonaLain: { vm.zona($0) },
+                angka: { r in
+                    let l = h.lamaTinggal(di: r)
+                    return (l.orang, l.rataDetik, h.kepadatan(di: r).porsi)
+                }))
+        case .boundingBox:
+            return AnyView(Color.clear)
+        }
+    }
+
+    /// Rasio gambar keluaran. Di mode denah yang menentukan bentuk RUANGAN,
+    /// bukan bentuk frame kamera — kalau tidak, denah 10x7,5 m diekspor ke
+    /// kanvas 16:9 dan separuhnya kosong.
+    private var ekspRasio: Double {
+        // Di mode denah bentuk gambarnya ditentukan RUANGAN, bukan frame
+        // kamera: mengekspor denah 10x7,5 m ke kanvas 16:9 menyisakan
+        // seperempat gambar kosong di kiri dan kanan.
+        if let v = kameraTergambar.first?.venueMeter,
+           kameraTergambar.first?.adaDenah == true, v.height > 0 {
+            return v.width / v.height
+        }
+        return kameraTergambar.first?.rasioVideo ?? 16.0 / 9.0
+    }
+
+    private var namaBerkas: String {
+        let tab = vm.visual.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")
+        let video = (kameraTergambar.first?.namaVideo ?? "hasil")
+            .replacingOccurrences(of: ".mp4", with: "")
+        return "crowdflow-\(video)-\(tab)"
+    }
+
+    private func unduhGambar() {
+        pesanEkspor = nil
+        Ekspor.simpanPNG(viewEkspor(batasWaktu),
+                         ukuran: Ekspor.ukuran(rasio: ekspRasio),
+                         nama: namaBerkas)
+    }
+
+    private func unduhVideo() {
+        lini.hentikan()
+        sedangMerekam = true
+        pesanEkspor = nil
+        let k = kameraTergambar
+        Ekspor.simpanVideo(
+            ukuran: Ekspor.ukuran(rasio: ekspRasio),
+            maksFrame: k.map(\.frameTerakhir).max() ?? 0,
+            langkah: k.first?.jejakLangkah ?? 20,
+            fpsSumber: k.first(where: { $0.fpsSumber > 0 })?.fpsSumber ?? 20,
+            nama: namaBerkas,
+            gambar: { viewEkspor($0) },
+            selesai: { galat in
+                sedangMerekam = false
+                pesanEkspor = galat ?? "Video tersimpan."
+            })
     }
 
     private var judulGabungan: String {
@@ -402,10 +580,11 @@ struct ResultsView: View {
                     PathContent(paths: hasil?.paths ?? SampleResult.paths,
                                 rasio: rasio, latar: latar,
                                 jejak: hasil?.jejak ?? [:],
-                                hasil: hasil, kamera: kamera)
+                                hasil: hasil, hingga: batasWaktu, kamera: kamera)
                 case .heatmap:
                     HeatmapView(blobs: hasil?.blobs ?? SampleResult.blobs,
                                 grid: hasil?.grid, rasio: rasio, latar: latar,
+                                hingga: batasWaktu,
                                 hasil: hasil, kamera: kamera)
                     HeatmapLegend(maks: hasil?.grid?.sel.max())
                 case .zona:
@@ -415,6 +594,7 @@ struct ResultsView: View {
                                           set: { vm.setZona(h, $0) }),
                             menyunting: vm.menyunting,
                             rasio: rasio, latar: latar, hasil: h,
+                            hingga: batasWaktu,
                             kameraLain: Array(kamera.dropFirst()),
                             zonaLain: { vm.zona($0) },
                             angka: { r in
@@ -867,6 +1047,19 @@ struct PetaKamera {
     func dariMeter(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
         CGPoint(x: x * skala + geserX, y: y * skala + geserY)
     }
+
+    /// Titik kanvas -> titik hasil (0–1 di frame kamera). Kebalikan `titik`.
+    ///
+    /// Dipakai penyuntingan zona: yang digeser jari itu piksel kanvas, yang
+    /// disimpan koordinat gambar kamera, dan di mode denah keduanya dipisahkan
+    /// oleh homografi — bukan cuma oleh skala.
+    func balik(_ p: CGPoint) -> CGPoint? {
+        guard skala > 0 else { return nil }
+        let x = (p.x - geserX) / skala
+        let y = (p.y - geserY) / skala
+        if denah { return hasil?.dariLantai(CGPoint(x: x, y: y)) }
+        return CGPoint(x: x / rasio, y: y)
+    }
     /// Kotak hasil -> kotak di kanvas.
     ///
     /// Di mode denah, keempat sudutnya diproyeksikan satu per satu lalu diambil
@@ -1030,6 +1223,8 @@ private struct PathContent: View {
     var jejak: [String: [CGPoint]] = [:]
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
+    /// Gambar hanya sampai frame ini. nil = seluruh rekaman (gambar ringkasan).
+    var hingga: Int?
     /// Semua sudut kamera yang digambar di panel ini.
     ///
     /// Lebih dari satu hanya terjadi di mode denah, dan di situ memang sahih:
@@ -1109,11 +1304,10 @@ private struct PathContent: View {
             let peta = k.map {
                 PetaKamera(rasio: rasio, ukuran: size, perbesar: peta.perbesar, hasil: $0)
             } ?? peta
-            let jejak = k?.jejak ?? self.jejak
             let paths = k?.paths ?? self.paths
 
             let batasLangkah = 0.15
-            for (_, titik) in jejak where titik.count >= 2 {
+            for (_, titik) in jejakTerpotong(k) where titik.count >= 2 {
                 var g = Path()
                 var mulaiBaru = true
                 for (a, b) in zip(titik, titik.dropFirst()) {
@@ -1139,7 +1333,7 @@ private struct PathContent: View {
                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             }
 
-            for trace in paths {
+            for trace in (k == nil ? jalurTersorot : (hingga == nil ? paths : [])) {
                 // Potongan menerus terpanjang yang bisa diproyeksikan. Lingkaran
                 // "mulai" dan panah "berakhir" hanya boleh menandai satu
                 // perjalanan yang benar-benar utuh — kalau jejaknya terbelah
@@ -1195,6 +1389,28 @@ private struct PathContent: View {
     /// (terang), dan mode denah (terang — denah lantai terbaca seperti denah
     /// di atas kertas, dan gambarnya memang putih).
     private var terang: Bool { (hasil?.adaDenah ?? false) || latar == nil }
+
+    /// Jejak yang ditampilkan pada posisi lini masa sekarang.
+    ///
+    /// Tanpa `hingga` (gambar ringkasan) yang dipakai `jejak` biasa, supaya
+    /// hasil lama — yang tidak punya `jejakWaktu` — tetap tergambar utuh.
+    private func jejakTerpotong(_ k: AnalysisResult?) -> [String: [CGPoint]] {
+        let sumber = k ?? hasil
+        guard let hingga else { return k?.jejak ?? self.jejak }
+        guard let w = sumber?.jejakWaktu, !w.isEmpty else { return k?.jejak ?? self.jejak }
+        return w.compactMapValues { deret -> [CGPoint]? in
+            let potong = deret.prefix { $0.frame <= hingga }.map(\.titik)
+            return potong.count >= 2 ? potong : nil
+        }
+    }
+
+    /// Jalur tersorot yang sudah SELESAI pada posisi lini masa sekarang.
+    ///
+    /// Jalur tersorot tidak punya waktu sendiri — `paths` cuma daftar titik.
+    /// Jadi saat animasi berjalan, yang digambar hanya jejak; jalur berwarna
+    /// muncul kembali di gambar penuh. Menggambarnya utuh sejak detik nol akan
+    /// memperlihatkan perjalanan yang belum terjadi.
+    private var jalurTersorot: [PathTrace] { hingga == nil ? paths : [] }
 
     /// Deret titik kanvas menerus terpanjang; di luar mode denah selalu utuh.
     private func potonganTerpanjang(_ titik: [CGPoint], _ peta: PetaKamera) -> [CGPoint] {
@@ -1259,6 +1475,8 @@ private struct HeatmapView: View {
     var grid: (w: Int, h: Int, total: Int, sel: [Int])?
     var rasio: Double = 16.0 / 9.0
     var latar: URL?
+    /// Kumpulkan hanya sampai frame ini. nil = petak penuh dari pipeline.
+    var hingga: Int?
     /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
     var hasil: AnalysisResult?
     /// Semua sudut kamera yang digambar di panel ini.
@@ -1292,18 +1510,44 @@ private struct HeatmapView: View {
             if daftar.count > 1 {
                 for k in daftar {
                     let pk = PetaKamera(rasio: rasio, ukuran: size, perbesar: nil, hasil: k)
-                    if let g = k.grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
+                    if let g = petakSampai(k) ?? k.grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
                         gambarPetak(&ctx, g, pk)
                     } else {
                         gambarBlobs(&ctx, k.blobs, pk)
                     }
                 }
-            } else if let g = grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
+            } else if let g = petakSampai(hasil) ?? grid, !g.sel.isEmpty, g.w > 0, g.h > 0 {
                 gambarPetak(&ctx, g, peta)
             } else {
                 gambarBlobs(&ctx, blobs, peta)
             }
         }
+    }
+
+    /// Petak kepadatan yang dikumpulkan sendiri dari titik kaki sampai `hingga`.
+    ///
+    /// Petak dari pipeline sudah menjumlahkan SELURUH rekaman dan tidak bisa
+    /// dipotong per waktu — jadi untuk animasi, petaknya dihitung ulang di sini
+    /// dari `jejakWaktu`. Ukuran petaknya sengaja disamakan dengan milik
+    /// pipeline supaya bentuk gumpalannya tidak berubah waktu animasi berhenti
+    /// dan gambar penuh mengambil alih.
+    ///
+    /// nil = tidak ada batas waktu, atau hasil lama yang tidak punya waktu.
+    private func petakSampai(_ k: AnalysisResult?) -> (w: Int, h: Int, total: Int, sel: [Int])? {
+        guard let hingga, let k, !k.jejakWaktu.isEmpty else { return nil }
+        let w = k.grid?.w ?? 120, h = k.grid?.h ?? 68
+        guard w > 0, h > 0 else { return nil }
+        var sel = [Int](repeating: 0, count: w * h)
+        var total = 0
+        for (_, deret) in k.jejakWaktu {
+            for t in deret where t.frame <= hingga {
+                let cx = min(w - 1, max(0, Int(t.titik.x * Double(w))))
+                let cy = min(h - 1, max(0, Int(t.titik.y * Double(h))))
+                sel[cy * w + cx] += 1
+                total += 1
+            }
+        }
+        return total > 0 ? (w: w, h: h, total: total, sel: sel) : nil
     }
 
     private func gambarPetak(_ ctx: inout GraphicsContext,

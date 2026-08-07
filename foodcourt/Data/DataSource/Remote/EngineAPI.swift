@@ -139,6 +139,15 @@ struct ExtraDTO: Codable {
     let paths: [PathDTO]?
     let grid: GridDTO?
     let jejak: [String: [[Double]]]?
+    /// Sama seperti `jejak`, tapi tiap titik [nomorFrame, x, y].
+    ///
+    /// Urutan di `jejak` TIDAK bisa dipakai sebagai waktu: titik hanya
+    /// ditambahkan saat orangnya terlihat, jadi indeks ke-0 milik orang yang
+    /// datang di menit ke-3 berarti menit ke-3. Tanpa nomor frame, animasi
+    /// lintasan mustahil dibuat benar.
+    ///
+    /// nil untuk hasil lama — animasinya mati, gambar diamnya tetap jalan.
+    let jejakWaktu: [String: [[Double]]]?
     let jejakLangkah: Int?
     let totalVisitorsGalat: Double?
     let avgDwellGalat: Double?
