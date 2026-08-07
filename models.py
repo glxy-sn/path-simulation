@@ -20,6 +20,7 @@ class VenueInput(BaseModel):
     heightM: float
     name: str = ""
     type: str = ""
+    floorPlanPath: str | None = None      # path gambar denah (opsional) untuk background
 
 
 class CameraInput(BaseModel):

@@ -73,7 +73,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
 
     artifacts = Artifacts()
     heat_path = workdir / "heatmap.png"
-    render_heatmap(heat_grid, heat_path)
+    render_heatmap(heat_grid, heat_path, bg_path=venue.floorPlanPath)
     artifacts.heatmapImage = heat_path.as_uri()
 
     if req.options.renderVideos:
@@ -81,7 +81,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
             # Multi-kamera: satu video gabungan (grid semua kamera + BEV fusion).
             combined = workdir / "combined.mp4"
             render_combined_video(cams, cam_det, cam_render, cam_to_global,
-                                  global_tracks, venue, cfg, combined)
+                                  global_tracks, venue, cfg, combined, bg_path=venue.floorPlanPath)
             if combined.exists():
                 artifacts.combinedVideo = combined.as_uri()
         else:
@@ -95,7 +95,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
             artifacts.overlayVideos = overlays
 
         pv = workdir / "paths.mp4"
-        render_path_video(global_tracks, venue, cfg, pv)
+        render_path_video(global_tracks, venue, cfg, pv, bg_path=venue.floorPlanPath)
         if pv.exists():
             artifacts.pathVideo = pv.as_uri()
 

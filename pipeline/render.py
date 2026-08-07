@@ -44,7 +44,17 @@ def _transcode_h264(path):
                 pass
 
 
-def render_heatmap(heat: np.ndarray, out_path, out_w: int = 720):
+def _load_bg(path, w, h):
+    """Muat floor map sebagai background (di-resize ke kanvas). None kalau tak ada/gagal."""
+    if not path:
+        return None
+    img = cv2.imread(str(path))
+    if img is None:
+        return None
+    return cv2.resize(img, (w, h))
+
+
+def render_heatmap(heat: np.ndarray, out_path, out_w: int = 720, bg_path=None):
     gh, gw = heat.shape
     norm = heat / heat.max() if heat.max() > 0 else heat
     small = (norm * 255).astype(np.uint8)
@@ -52,8 +62,15 @@ def render_heatmap(heat: np.ndarray, out_path, out_w: int = 720):
     big = cv2.resize(small, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
     big = cv2.GaussianBlur(big, (0, 0), sigmaX=out_w / 90.0)
     color = cv2.applyColorMap(big, cv2.COLORMAP_TURBO)
-    color[big < 8] = (36, 21, 15)  # area sepi -> gelap
-    cv2.imwrite(str(out_path), color)
+
+    bg = _load_bg(bg_path, out_w, out_h)
+    if bg is not None:
+        alpha = (np.clip(big.astype(np.float32) / 255.0, 0, 1) * 0.7)[..., None]
+        out = (color.astype(np.float32) * alpha + bg.astype(np.float32) * (1 - alpha)).astype(np.uint8)
+    else:
+        color[big < 8] = (36, 21, 15)   # area sepi -> gelap
+        out = color
+    cv2.imwrite(str(out_path), out)
 
 
 def render_bbox_video(video_path, cam_info, cam_to_global, cam_idx, cfg, out_path):
@@ -90,7 +107,7 @@ def render_bbox_video(video_path, cam_info, cam_to_global, cam_idx, cfg, out_pat
     _transcode_h264(out_path)
 
 
-def render_path_video(global_tracks, venue, cfg, out_path, canvas_w: int = 900):
+def render_path_video(global_tracks, venue, cfg, out_path, canvas_w: int = 900, bg_path=None):
     W, Hm = float(venue.widthM), float(venue.heightM)
     canvas_h = max(1, int(canvas_w * Hm / max(W, 1e-6)))
 
@@ -111,7 +128,8 @@ def render_path_video(global_tracks, venue, cfg, out_path, canvas_w: int = 900):
         colors[g] = tuple(int(v) for v in rng.randint(60, 230, size=3))
 
     vw = _open_writer(out_path, cfg.PROC_FPS, (canvas_w, canvas_h))
-    trail = np.full((canvas_h, canvas_w, 3), 245, np.uint8)
+    bg = _load_bg(bg_path, canvas_w, canvas_h)
+    trail = bg.copy() if bg is not None else np.full((canvas_h, canvas_w, 3), 245, np.uint8)
     for b in range(nb):
         t = tmin + b * binsec
         frame = trail.copy()
@@ -144,8 +162,11 @@ def _draw_global_boxes(frame, boxes, cam_idx, cam_to_global):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1)
 
 
-def _bev_cell(global_tracks, venue, t, w, h):
-    canvas = np.full((h, w, 3), 12, np.uint8)      # nyaris hitam
+def _bev_cell(global_tracks, venue, t, w, h, bg=None):
+    if bg is not None:
+        canvas = (bg.astype(np.float32) * 0.45).astype(np.uint8)   # denah digelapkan
+    else:
+        canvas = np.full((h, w, 3), 12, np.uint8)                  # nyaris hitam
     W, Hm = float(venue.widthM), float(venue.heightM)
 
     def to_px(x, y):
@@ -166,7 +187,7 @@ def _bev_cell(global_tracks, venue, t, w, h):
 
 
 def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_tracks, venue, cfg,
-                          out_path, cell_w=480, cell_h=270):
+                          out_path, cell_w=480, cell_h=270, bg_path=None):
     """
     Susun semua kamera (ID global) dalam grid + satu panel BEV fusion -> 1 video.
     Frame antar kamera disinkronkan per langkah waktu (relatif ke start trim).
@@ -197,6 +218,7 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_track
     rows = int(math.ceil(n_panels / cols))
     out_w, out_h = cols * cell_w, rows * cell_h
     vw = _open_writer(out_path, cfg.PROC_FPS, (out_w, out_h))
+    bev_bg = _load_bg(bg_path, cell_w, cell_h)           # floor map untuk panel BEV (sekali)
 
     for k in range(steps):
         t = k / cfg.PROC_FPS
@@ -218,7 +240,7 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_track
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cells.append(frame)
 
-        cells.append(_bev_cell(global_tracks, venue, t, cell_w, cell_h))
+        cells.append(_bev_cell(global_tracks, venue, t, cell_w, cell_h, bg=bev_bg))
 
         canvas = np.zeros((out_h, out_w, 3), np.uint8)
         for p, cell in enumerate(cells):
