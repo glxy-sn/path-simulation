@@ -69,6 +69,8 @@ struct CalibrationView: View {
                 VStack(alignment: .leading, spacing: Space.l * scale) {
                     header
 
+                    barisPesan
+
                     canvases
                         .frame(height: 360 * scale)
 
@@ -88,6 +90,39 @@ struct CalibrationView: View {
                     router.next()
                 }
             }
+        }
+    }
+
+    /// Satu baris pesan di bawah kepala layar.
+    ///
+    /// Ada 18 tempat di berkas ini yang mengisi `message` — hasil kalibrasi,
+    /// titik ditambah, denah diganti, profil diimpor, semua kegagalan — dan
+    /// TIDAK ADA SATU PUN yang menampilkannya. Jadi selama ini layar Kalibrasi
+    /// bekerja tanpa suara: pengguna mengklik, sesuatu terjadi atau gagal, dan
+    /// tidak ada kabar apa pun. Peringatan ukuran ruangan tertukar pun ikut
+    /// tenggelam, padahal justru itu yang paling perlu terbaca.
+    ///
+    /// Bukan tampilan baru — cuma menyambungkan yang sudah ditulis.
+    @ViewBuilder
+    private var barisPesan: some View {
+        let peringatan = peringatanRasio
+        if peringatan != nil || message != nil {
+            let teks = peringatan ?? message ?? ""
+            // Peringatan menang atas pesan biasa: pesan biasa cuma memberi
+            // tahu apa yang barusan terjadi, peringatan memberi tahu hasilnya
+            // akan salah.
+            let buruk = peringatan != nil || teks.hasPrefix("Gagal")
+            HStack(spacing: Space.s) {
+                Image(systemName: buruk ? "exclamationmark.triangle.fill" : "info.circle")
+                    .foregroundStyle(buruk ? .orange : .secondary)
+                Text(teks)
+                    .font(.callout)
+                    .foregroundStyle(buruk ? .primary : .secondary)
+                Spacer()
+            }
+            .padding(.horizontal, Space.m).padding(.vertical, Space.s)
+            .background((buruk ? Color.orange : Color.primary).opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
         }
     }
 
@@ -153,8 +188,7 @@ struct CalibrationView: View {
             )
             CalibrationCanvas(
                 title: session.usesScaledCanvas ? "Canvas Berskala" : (session.floorPlanName ?? "Floor Plan"),
-                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m."
-                    + (peringatanRasio.map { " ⚠︎ " + $0 } ?? ""),
+                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m.",
                 image: session.usesScaledCanvas ? nil : floorPlanImage,
                 sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize,
                 points: camera?.planePoints ?? [],
