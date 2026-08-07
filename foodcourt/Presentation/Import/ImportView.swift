@@ -4,6 +4,7 @@
 //
 //  Created by Shafa Tiara on 03/08/26.
 //
+
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
@@ -72,7 +73,9 @@ struct ImportView: View {
             if let track = try? await asset.loadTracks(withMediaType: .video).first,
                let size = try? await track.load(.naturalSize),
                let i = session.cameras.firstIndex(where: { $0.id == id }) {
-                session.cameras[i].resolution = "\(Int(abs(size.width)))×\(Int(abs(size.height)))"
+                let pixelSize = PixelSize(width: abs(size.width), height: abs(size.height))
+                session.cameras[i].resolution = "\(Int(pixelSize.width))×\(Int(pixelSize.height))"
+                session.cameras[i].framePixelSize = pixelSize
             }
         }
     }
@@ -143,8 +146,8 @@ private struct ImportInspector: View {
                     }.labelsHidden()
                 }
                 HStack(spacing: Space.s) {
-                    field("Lebar (m)") { TextField("20", text: $session.widthM).textFieldStyle(.roundedBorder) }
-                    field("Panjang (m)") { TextField("15", text: $session.heightM).textFieldStyle(.roundedBorder) }
+                    field("Lebar (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
+                    field("Panjang (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
                 }
                 InfoNote(text: "Dimensi venue jadi referensi skala. Tanpa ini, dwell & jarak tidak bermakna.")
             }
@@ -173,7 +176,7 @@ private struct ImportInspector: View {
     }
 }
 
-// MARK: - Baris kamera
+// MARK: - Baris kamera (hapus by id, tombol andal)
 
 private struct CameraRow: View {
     let camera: SessionCamera

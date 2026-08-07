@@ -7,8 +7,6 @@
 
 import Foundation
 
-// MARK: Request DTO
-
 struct PointDTO: Codable { let x: Double; let y: Double }
 
 struct VenueDTO: Codable {
@@ -16,6 +14,7 @@ struct VenueDTO: Codable {
     let heightM: Double
     let name: String
     let type: String
+    let floorPlanPath: String?
 }
 
 struct CameraDTO: Codable {
