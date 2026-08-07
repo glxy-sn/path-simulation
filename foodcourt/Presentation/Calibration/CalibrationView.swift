@@ -184,7 +184,8 @@ struct CalibrationView: View {
                     )
                 ),
                 onAdd: { addCameraPoint($0) },
-                onDeletePair: { deletePair(at: $0) }
+                onDeletePair: { deletePair(at: $0) },
+                onMove: { geserTitikKamera($0, ke: $1) }
             )
             CalibrationCanvas(
                 title: session.usesScaledCanvas ? "Canvas Berskala" : (session.floorPlanName ?? "Floor Plan"),
@@ -193,15 +194,74 @@ struct CalibrationView: View {
                 sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize,
                 points: camera?.planePoints ?? [],
                 projectedPoints: validationPoints(calibration),
+                jangkauan: jangkauanLantai(camera),
                 accent: .orange,
                 canInteract: session.usesScaledCanvas || floorPlanImage != nil,
                 canvasAccessory: floorPlanCanvasAction,
                 footerAccessory: AnyView(floorSourcePicker),
                 emptyState: nil,
                 onAdd: { addPlanePoint($0) },
-                onDeletePair: { deletePair(at: $0) }
+                onDeletePair: { deletePair(at: $0) },
+                onMove: { geserTitikDenah($0, ke: $1) }
             )
         }
+    }
+
+    /// Bidang lantai yang terlihat kamera ini, dalam koordinat denah 0–1.
+    ///
+    /// Inilah yang membuat kalibrasi bisa DIPERIKSA, bukan cuma dinilai dari
+    /// angka. Galat reproyeksi tetap kecil walaupun seluruh korespondensinya
+    /// tercermin — titiknya konsisten satu sama lain, cuma ruangannya terbalik.
+    /// Bidang ini memperlihatkannya sekejap: kamera yang menghadap konter tapi
+    /// bidangnya menempel di sisi seberang berarti titiknya tertukar.
+    ///
+    /// Dibangun dengan menyapu tepi bawah frame — pasti lantai, pasti paling
+    /// dekat kamera — lalu naik baris demi baris sampai proyeksinya keluar
+    /// ruangan. Batas itu horizon lantainya.
+    private func jangkauanLantai(_ camera: SessionCamera?) -> [CGPoint] {
+        guard let camera, let kal = camera.calibration, kal.isValid,
+              let px = camera.framePixelSize, px.isValid,
+              session.venueWidthM > 0, session.venueHeightM > 0 else { return [] }
+        let H = kal.homographyCameraToWorld
+        let batas = AnalysisResult.marginDenahMeter
+
+        func keDenah(_ x: Double, _ y: Double) -> CGPoint? {
+            guard let m = HomographySolver.transform(
+                CalibrationPoint(x: x * px.width, y: y * px.height), with: H) else { return nil }
+            guard m.x >= -batas, m.x <= session.venueWidthM + batas,
+                  m.y >= -batas, m.y <= session.venueHeightM + batas else { return nil }
+            return CGPoint(x: m.x / session.venueWidthM, y: m.y / session.venueHeightM)
+        }
+
+        var bawah: [CGPoint] = [], atas: [CGPoint] = []
+        let kolom = 14
+        for i in 0...kolom {
+            let x = Double(i) / Double(kolom)
+            var b: CGPoint?, a: CGPoint?
+            for j in stride(from: 1.0, through: 0.25, by: -0.02) {
+                if let p = keDenah(x, j) {
+                    if b == nil { b = p }
+                    a = p
+                } else if b != nil { break }
+            }
+            if let b, let a { bawah.append(b); atas.append(a) }
+        }
+        guard bawah.count >= 3 else { return [] }
+        return bawah + atas.reversed()
+    }
+
+    private func geserTitikKamera(_ i: Int, ke titik: CGPoint) {
+        guard session.cameras.indices.contains(selectedIndex),
+              session.cameras[selectedIndex].imagePoints.indices.contains(i) else { return }
+        session.cameras[selectedIndex].imagePoints[i] = NormPoint(x: titik.x, y: titik.y)
+        recalculateSelectedCamera()
+    }
+
+    private func geserTitikDenah(_ i: Int, ke titik: CGPoint) {
+        guard session.cameras.indices.contains(selectedIndex),
+              session.cameras[selectedIndex].planePoints.indices.contains(i) else { return }
+        session.cameras[selectedIndex].planePoints[i] = NormPoint(x: titik.x, y: titik.y)
+        recalculateSelectedCamera()
     }
 
     private var inspector: some View {
@@ -821,6 +881,9 @@ private struct CalibrationCanvas: View {
     let sourceSize: CGSize?
     let points: [NormPoint]
     let projectedPoints: [ValidationPoint]
+    /// Bidang lantai yang terlihat kamera, dalam koordinat denah 0–1.
+    /// Kosong untuk panel CCTV.
+    var jangkauan: [CGPoint] = []
     let accent: Color
     let canInteract: Bool
     let canvasAccessory: AnyView?
@@ -828,12 +891,17 @@ private struct CalibrationCanvas: View {
     let emptyState: AnyView?
     let onAdd: (CGPoint) -> Void
     let onDeletePair: (Int) -> Void
+    /// Geser titik yang sudah ada. Tanpa ini satu titik yang meleset sedikit
+    /// harus dihapus lalu dipasang ulang — dan menghapus pasangan berarti
+    /// menghapus DUA titik, di dua panel.
+    var onMove: ((Int, CGPoint) -> Void)?
 
     @State private var zoom: CGFloat = 1
     @State private var baseZoom: CGFloat = 1
     @State private var pan: CGSize = .zero
     @State private var basePan: CGSize = .zero
     @State private var hoveredIndex: Int?
+    @State private var seretIndex: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.s) {
@@ -888,6 +956,25 @@ private struct CalibrationCanvas: View {
                     GridBackground()
                 }
             }
+            // Bidang lantai yang terlihat kamera. Digambar SEBELUM titiknya,
+            // jadi tidak menutupi apa pun yang perlu diklik.
+            if jangkauan.count >= 3 {
+                Path { path in
+                    path.addLines(jangkauan.map {
+                        CGPoint(x: $0.x * size.width, y: $0.y * size.height)
+                    })
+                    path.closeSubpath()
+                }
+                .fill(Color.cyan.opacity(0.10))
+                Path { path in
+                    path.addLines(jangkauan.map {
+                        CGPoint(x: $0.x * size.width, y: $0.y * size.height)
+                    })
+                    path.closeSubpath()
+                }
+                .stroke(Color.cyan.opacity(0.65),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+            }
             if points.count >= 2 {
                 Path { path in
                     let values = points.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
@@ -913,12 +1000,26 @@ private struct CalibrationCanvas: View {
             .onChanged { value in
                 guard canInteract else { return }
                 let distance = hypot(value.translation.width, value.translation.height)
+                // Seret yang DIMULAI di atas titik memindahkan titik itu.
+                // Diputuskan sekali di awal, lalu dipegang sampai lepas —
+                // kalau diperiksa terus, titik yang diseret melewati titik
+                // lain bisa berpindah tangan di tengah jalan.
+                if seretIndex == nil, distance > 3, onMove != nil,
+                   let awal = normalizedPoint(value.startLocation, in: rect),
+                   let i = nearestPoint(to: awal, in: rect) {
+                    seretIndex = i
+                }
+                if let i = seretIndex, let n = normalizedPoint(value.location, in: rect) {
+                    onMove?(i, n)
+                    return
+                }
                 if distance > 6, zoom > 1 {
                     pan = clampedPan(CGSize(width: basePan.width + value.translation.width, height: basePan.height + value.translation.height), rect: rect)
                 }
             }
             .onEnded { value in
                 guard canInteract else { return }
+                if seretIndex != nil { seretIndex = nil; return }
                 let distance = hypot(value.translation.width, value.translation.height)
                 if distance > 6, zoom > 1 { basePan = pan; return }
                 guard let normalized = normalizedPoint(value.location, in: rect) else { return }
