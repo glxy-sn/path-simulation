@@ -482,19 +482,51 @@ struct CalibrationView: View {
     /// ruangannya. Yang mau ditangkap cuma yang tertukar — dan itu selalu
     /// melenceng jauh.
     private var peringatanRasio: String? {
+        switch cekRasio() {
+        case .tertukar:
+            return "Ukuran ruangan sepertinya TERTUKAR — coba \(session.heightM) × \(session.widthM) m."
+        case .tidakSebangun:
+            return "Bentuk gambar tidak sebangun dengan ukuran ruangan; denahnya akan tergambar pipih."
+        case .cocok:
+            return nil
+        }
+    }
+
+    private enum HasilCekRasio { case cocok, tertukar, tidakSebangun }
+
+    private func cekRasio() -> HasilCekRasio {
         guard !session.usesScaledCanvas,
               let px = session.floorPlanPixelSize, px.isValid,
-              session.venueWidthM > 0, session.venueHeightM > 0 else { return nil }
+              session.venueWidthM > 0, session.venueHeightM > 0 else { return .cocok }
         let rasioGambar = px.width / px.height
         let rasioVenue = session.venueWidthM / session.venueHeightM
         let selisih = max(rasioGambar / rasioVenue, rasioVenue / rasioGambar)
-        guard selisih > 1.3 else { return nil }
+        guard selisih > 1.3 else { return .cocok }
 
-        let tertukar = max(rasioGambar / (session.venueHeightM / session.venueWidthM),
-                           (session.venueHeightM / session.venueWidthM) / rasioGambar) < selisih
-        return tertukar
-            ? "Ukuran ruangan sepertinya TERTUKAR — coba \(session.heightM) × \(session.widthM) m."
-            : "Bentuk gambar tidak sebangun dengan ukuran ruangan; denahnya akan tergambar pipih."
+        let rasioTukar = session.venueHeightM / session.venueWidthM
+        let selisihTukar = max(rasioGambar / rasioTukar, rasioTukar / rasioGambar)
+        return selisihTukar < selisih ? .tertukar : .tidakSebangun
+    }
+
+    /// Betulkan ukuran ruangan yang tertukar, dan laporkan kalau membetulkannya.
+    ///
+    /// Dipanggil setelah Impor Profil. Profil menyimpan ukuran venue, jadi
+    /// mengimpornya MENIMPA angka yang barusan dibetulkan pengguna di layar
+    /// Import — dan angka penggantinya adalah angka salah yang sama yang
+    /// tersimpan waktu profil itu dibuat. Hasilnya lingkaran tanpa ujung:
+    /// betulkan di Import, impor profil, salah lagi, tanpa satu pun petunjuk
+    /// bahwa profilnya yang menimpa.
+    ///
+    /// Kalau profilnya bertentangan dengan gambar denahnya sendiri, yang
+    /// dipercaya GAMBARNYA: bentuk gambar itu fakta, angka venue itu ketikan.
+    @discardableResult
+    private func perbaikiRasioTertukar() -> Bool {
+        guard cekRasio() == .tertukar else { return false }
+        let w = session.widthM
+        session.widthM = session.heightM
+        session.heightM = w
+        recalculateAllCameras(diam: true)
+        return true
     }
 
     private func recalculateSelectedCamera() { recalculate(at: selectedIndex) }
@@ -657,8 +689,13 @@ struct CalibrationView: View {
         do {
             let profile = try CalibrationProfileStore.decode(Data(contentsOf: url))
             try CalibrationProfileStore.apply(profile, to: session)
+            let dibetulkan = perbaikiRasioTertukar()
             reloadToken = UUID()
-            message = "Profil kalibrasi diimpor. Cocokkan kembali frame referensi bila video berubah."
+            message = dibetulkan
+                ? "Profil diimpor. Ukuran ruangannya tertukar dan sudah dibetulkan jadi "
+                    + "\(session.widthM) × \(session.heightM) m — ekspor ulang profilnya "
+                    + "supaya tidak terulang."
+                : "Profil kalibrasi diimpor. Cocokkan kembali frame referensi bila video berubah."
         } catch {
             message = "Gagal: \(error.localizedDescription)"
         }
