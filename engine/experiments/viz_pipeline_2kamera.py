@@ -118,7 +118,7 @@ def baca_frame(lokasi, n):
     cap.release()
 
 
-def lacak_satu_kamera(cam, det, ext, BotSort):
+def lacak_satu_kamera(cam, det, ext, BotSort, dev=None):
     """Jalankan detektor + tracker di satu kamera.
 
     Kembalikan (per_frame, galeri):
@@ -129,8 +129,11 @@ def lacak_satu_kamera(cam, det, ext, BotSort):
     per_frame, kumpul = [], {}
     t0 = time.time()
     for i, img in enumerate(baca_frame(KAMERA[cam], JUMLAH)):
+        # `device=dev` disebut dengan sengaja — lihat catatan panjang di
+        # ke_json_aplikasi.py. Tanpa itu, 103 ms/frame; dengan itu, 29 ms,
+        # deteksinya sama persis.
         r = det.predict(img, classes=[0], conf=CONF, iou=IOU_NMS, imgsz=IMGSZ,
-                        verbose=False)[0]
+                        verbose=False, device=dev)[0]
         if r.boxes is None or not len(r.boxes):
             d = np.empty((0, 6))
         else:
@@ -361,8 +364,8 @@ def main():
         ext = ReID(str(APP / "reid/weights/osnet_ain_x1_0_msmt17.pt"),
                    device=dev, half=False).model
 
-        pf1, _ = lacak_satu_kamera(1, det, ext, BotSort)
-        pf2, _ = lacak_satu_kamera(2, det, ext, BotSort)
+        pf1, _ = lacak_satu_kamera(1, det, ext, BotSort, dev)
+        pf2, _ = lacak_satu_kamera(2, det, ext, BotSort, dev)
         json.dump({"c1": pf1, "c2": pf2}, open(CACHE, "w"))
 
     # Penyambungan dijalankan SETELAH seluruh rekaman dilacak: butuh melihat

@@ -54,12 +54,23 @@ struct EngineProcessingService: ProcessingService {
         let cams = try s.cameras.map { cam -> CameraDTO in
             guard let url = cam.url else { throw EngineError.job("Kamera \"\(cam.label)\" tidak punya file video.") }
             // Kalibrasi hanya diwajibkan di Mode Lengkap. Di Mode Cepat layar
-            // kalibrasi memang dilewati, jadi syarat 4 titik di sini membuat
-            // Mode Cepat mustahil dijalankan sama sekali. Titiknya tetap
-            // dikirim kalau ada — pipeline belum membacanya.
+            // kalibrasi memang dilewati, jadi syarat titik di sini membuat
+            // Mode Cepat mustahil dijalankan sama sekali.
+            //
+            // Syaratnya `isCalibrated` — SAMA dengan yang dipakai layar
+            // Kalibrasi untuk menampilkan centang hijau. Sebelumnya di sini
+            // ditulis `imagePoints.count == 4`, persis empat, padahal layar
+            // Kalibrasi menyilakan 4–8 pasangan dan solvernya juga menerima
+            // sampai 8. Akibatnya kalibrasi dengan 7 pasangan — sudah
+            // tervalidasi, galat median 0,108 m, dua kamera bercentang hijau —
+            // ditolak di langkah Proses dengan alasan "belum lengkap". Dua
+            // layar yang menilai hal yang sama dengan syarat berbeda selalu
+            // berakhir begini, jadi sekarang keduanya membaca satu syarat.
             if s.mode == .lengkap {
-                guard cam.imagePoints.count == 4, cam.planePoints.count == 4 else {
-                    throw EngineError.job("Kalibrasi kamera \"\(cam.label)\" belum lengkap (butuh 4 titik).")
+                guard cam.isCalibrated else {
+                    throw EngineError.job(
+                        "Kalibrasi kamera \"\(cam.label)\" belum sahih — butuh minimal "
+                        + "4 pasangan titik yang cocok. Kembali ke langkah Kalibrasi.")
                 }
             }
             return CameraDTO(
