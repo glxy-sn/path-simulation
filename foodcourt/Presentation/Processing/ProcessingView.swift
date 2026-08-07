@@ -44,6 +44,10 @@ final class ProcessingViewModel {
                         tandai(progress)
                     case let .finished(hasil):
                         session.result = hasil
+                        // Kalibrasi disimpan BERSAMA hasilnya, supaya membuka
+                        // lari ini dari Riwayat nanti tetap dapat denah
+                        // lantainya tanpa harus memproses ulang.
+                        CalibrationProfileStore.simpanKeLari(session, folder: hasil.folder)
                         progress = 1.0
                         tandai(1.0)
                         isDone = true

@@ -77,6 +77,34 @@ enum CalibrationProfileStore {
         }
     }
 
+    /// Nama berkas profil di dalam folder lari.
+    static let namaBerkasLari = "kalibrasi.json"
+
+    /// Simpan kalibrasi sesi ini KE DALAM folder hasilnya.
+    ///
+    /// Kalibrasi selama ini cuma hidup di sesi, jadi membuka hasil lama dari
+    /// Riwayat selalu kehilangan denah lantainya — padahal hasilnya sendiri
+    /// utuh. Satu-satunya jalan melihat denahnya lagi adalah Import + Kalibrasi
+    /// + Proses ulang, lima menit untuk sesuatu yang sudah dihitung.
+    ///
+    /// Disimpan bersama hasilnya, bukan di tempat lain, supaya keduanya tidak
+    /// bisa terpisah: hapus larinya, kalibrasinya ikut hilang; salin foldernya,
+    /// kalibrasinya ikut.
+    static func simpanKeLari(_ session: AnalysisSession, folder: URL?) {
+        guard let folder,
+              let profile = try? exportProfile(from: session),
+              let data = try? encode(profile) else { return }
+        try? data.write(to: folder.appendingPathComponent(namaBerkasLari))
+    }
+
+    /// Baca profil yang tersimpan bersama sebuah lari.
+    static func bacaDariLari(_ folder: URL?) -> CalibrationProfile? {
+        guard let folder else { return nil }
+        let berkas = folder.appendingPathComponent(namaBerkasLari)
+        guard let data = try? Data(contentsOf: berkas) else { return nil }
+        return try? decode(data)
+    }
+
     static func encode(_ profile: CalibrationProfile) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

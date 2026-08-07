@@ -216,30 +216,81 @@ struct ResultsView: View {
     /// hasilnya lewat tanpa diubah dan tampilannya tetap seperti biasa.
     private func berkalibrasi(_ h: AnalysisResult?) -> AnalysisResult? {
         guard var hasil = h else { return nil }
-        let venue = CGSize(width: session.venueWidthM, height: session.venueHeightM)
+
+        // Dua sumber kalibrasi, diperiksa berurutan:
+        //
+        //   1. sesi ini — analisis yang baru saja dijalankan
+        //   2. berkas kalibrasi.json di dalam folder larinya — hasil lama yang
+        //      dibuka dari Riwayat
+        //
+        // Yang kedua ada karena kalibrasi dulu cuma hidup di sesi: membuka
+        // hasil lama SELALU kehilangan denah lantainya, padahal hasilnya
+        // sendiri utuh. Satu-satunya jalan melihat denahnya lagi adalah
+        // Import + Kalibrasi + Proses ulang — lima menit untuk sesuatu yang
+        // sudah dihitung.
+        let dariSesi = session.cameras.contains(where: \.isCalibrated)
+        let profil = dariSesi ? nil : CalibrationProfileStore.bacaDariLari(hasil.folder)
+
+        let venue: CGSize
+        let denah: URL?
+        if let profil {
+            venue = CGSize(width: profil.worldBoundsM.width, height: profil.worldBoundsM.height)
+            denah = profil.floorplan.usesCanvas ? nil : denahTersimpan(profil)
+        } else {
+            venue = CGSize(width: session.venueWidthM, height: session.venueHeightM)
+            // Hanya dipakai kalau denahnya gambar sungguhan. Dalam mode
+            // "Canvas berskala" tidak ada gambar apa pun untuk dipasang, dan
+            // kisi meter memang sudah jadi satu-satunya acuan yang tersedia.
+            denah = session.usesScaledCanvas ? nil : session.floorPlanURL
+        }
         guard venue.width > 0, venue.height > 0 else { return hasil }
 
-        // Hanya dipakai kalau denahnya gambar sungguhan. Dalam mode "Canvas
-        // berskala" tidak ada gambar apa pun untuk dipasang, dan kisi meter
-        // memang sudah jadi satu-satunya acuan yang tersedia.
-        let denah = session.usesScaledCanvas ? nil : session.floorPlanURL
-
-        func pasang(_ r: inout AnalysisResult, _ cam: SessionCamera?) {
-            guard let cam, let kal = cam.calibration, kal.isValid,
-                  let px = cam.framePixelSize else { return }
-            r.homografi = kal.homographyCameraToWorld
+        func pasang(_ r: inout AnalysisResult, kalibrasi: CameraCalibration?, px: PixelSize?) {
+            guard let kalibrasi, kalibrasi.isValid, let px, px.isValid else { return }
+            r.homografi = kalibrasi.homographyCameraToWorld
             r.ukuranFramePx = px
             r.venueMeter = venue
             r.denahURL = denah
         }
 
+        func kamera(_ i: Int) -> (CameraCalibration?, PixelSize?) {
+            if let profil {
+                guard i < profil.cameras.count else { return (nil, nil) }
+                return (profil.cameras[i].calibration, profil.cameras[i].imageSize)
+            }
+            guard i < session.cameras.count else { return (nil, nil) }
+            return (session.cameras[i].calibration, session.cameras[i].framePixelSize)
+        }
+
         if hasil.perKamera.count > 1 {
-            for i in hasil.perKamera.indices where i < session.cameras.count {
-                pasang(&hasil.perKamera[i], session.cameras[i])
+            for i in hasil.perKamera.indices {
+                let (kal, px) = kamera(i)
+                pasang(&hasil.perKamera[i], kalibrasi: kal, px: px)
             }
         }
-        pasang(&hasil, session.cameras.first)
+        let (kal0, px0) = kamera(0)
+        pasang(&hasil, kalibrasi: kal0, px: px0)
         return hasil
+    }
+
+    /// Gambar denah dari profil tersimpan: berkas aslinya kalau masih ada,
+    /// kalau tidak yang tersemat di profil ditulis ke folder aplikasi.
+    private func denahTersimpan(_ profil: CalibrationProfile) -> URL? {
+        if let p = profil.floorplan.imagePath, FileManager.default.fileExists(atPath: p) {
+            return URL(fileURLWithPath: p)
+        }
+        guard let data = profil.floorplan.imageData, !data.isEmpty else { return nil }
+        let folder = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("CrowdFlow/denah", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let akhiran = (profil.floorplan.sourceName as NSString).pathExtension.lowercased()
+        let nama = String(format: "%08x", UInt32(truncatingIfNeeded: data.hashValue))
+        let tujuan = folder.appendingPathComponent(akhiran.isEmpty ? nama : "\(nama).\(akhiran)")
+        if !FileManager.default.fileExists(atPath: tujuan.path) {
+            guard (try? data.write(to: tujuan)) != nil else { return nil }
+        }
+        return tujuan
     }
 
     // MARK: Header + tombol atas
