@@ -167,6 +167,9 @@ struct ResultsView: View {
     /// melompat waktu tanpa alasan yang bisa dijelaskan.
     @State private var lini = LiniMasa()
     @State private var pemutarGabungan: PemutarGabungan?
+    /// Penomoran bersama lintas kamera. Dihitung sekali tiap hasil berubah —
+    /// perbandingan tiap pasang track terlalu mahal untuk diulang tiap gambar.
+    @State private var fusi: FusiKamera.Hasil?
     @State private var sedangMerekam = false
     @State private var pesanEkspor: String?
 
@@ -201,6 +204,7 @@ struct ResultsView: View {
         .onAppear {
             vm.semua = berkalibrasi(session.result)
             siapkanLini()
+            siapkanFusi()
             if vm.visual == .boundingBox { siapkanPemutar() }
         }
         .onChange(of: vm.visual) { _, lama in
@@ -215,6 +219,7 @@ struct ResultsView: View {
             vm.semua = berkalibrasi(session.result)
             vm.kameraTerpilih = 0
             siapkanLini()
+            siapkanFusi()
             if vm.visual == .boundingBox { siapkanPemutar() }
         }
     }
@@ -414,7 +419,7 @@ struct ResultsView: View {
                 PratinjauGabungan(kamera: kameraTergambar,
                                   gabungkanDenah: vm.bisaDisatukan,
                                   pemutar: pg,
-                                  hingga: batasWaktu)
+                                  hingga: batasWaktu, fusi: fusi)
                     .frame(height: min(620, max(420, 540 * scale)))
             } else {
             HStack(spacing: Space.m) {
@@ -488,6 +493,11 @@ struct ResultsView: View {
         pemutarGabungan?.siapkan(sumber, fps: fps)
     }
 
+    private func siapkanFusi() {
+        let k = kameraTergambar
+        fusi = (k.count > 1 && vm.bisaDisatukan) ? FusiKamera.gabungkan(k) : nil
+    }
+
     private func siapkanLini() {
         let k = kameraTergambar
         let maks = k.map(\.frameTerakhir).max() ?? 0
@@ -551,7 +561,7 @@ struct ResultsView: View {
         case .path:
             return AnyView(PathContent(paths: hasil?.paths ?? [], rasio: rasio, latar: latar,
                                        jejak: hasil?.jejak ?? [:],
-                                       hasil: hasil, hingga: hingga, kamera: kamera))
+                                       hasil: hasil, hingga: hingga, kamera: kamera, fusi: fusi))
         case .heatmap:
             return AnyView(ZStack {
                 HeatmapView(blobs: hasil?.blobs ?? [], grid: hasil?.grid,
@@ -669,7 +679,7 @@ struct ResultsView: View {
                     PathContent(paths: hasil?.paths ?? SampleResult.paths,
                                 rasio: rasio, latar: latar,
                                 jejak: hasil?.jejak ?? [:],
-                                hasil: hasil, hingga: batasWaktu, kamera: kamera)
+                                hasil: hasil, hingga: batasWaktu, kamera: kamera, fusi: fusi)
                 case .heatmap:
                     HeatmapView(blobs: hasil?.blobs ?? SampleResult.blobs,
                                 grid: hasil?.grid, rasio: rasio, latar: latar,
@@ -1322,6 +1332,8 @@ struct PathContent: View {
     /// Tidak ada penyelarasan tambahan, dan tidak ada pencocokan identitas
     /// lintas kamera — yang ditumpuk lintasannya, bukan orangnya.
     var kamera: [AnalysisResult] = []
+    /// Penomoran bersama lintas kamera: satu orang, satu nomor.
+    var fusi: FusiKamera.Hasil?
 
     private var daftar: [AnalysisResult] {
         kamera.count > 1 ? kamera : (hasil.map { [$0] } ?? [])
@@ -1568,8 +1580,12 @@ struct PathContent: View {
 
             // Warna tetap per ID, jadi orang yang sama berwarna sama sepanjang
             // video — dan pergantian warna di satu titik berarti ID-nya putus.
-            let rona = Double(abs(tid.hashValue) % 360) / 360.0
-            let warna = Color(hue: rona, saturation: 0.75, brightness: 0.85)
+            // Nomor bersama kalau fusinya berhasil; kalau tidak, nomor
+            // kamera ini sendiri.
+            let kunci = FusiKamera.Kunci(kamera: max(0, (nomorKamera ?? 1) - 1), tid: tid)
+            let nomorOrang = fusi?.nomor[kunci] ?? (Int(tid) ?? abs(tid.hashValue))
+            let w = FusiKamera.warna(nomor: nomorOrang)
+            let warna = Color(hue: w.rona, saturation: w.jenuh, brightness: w.terang)
 
             /// Ruas yang boleh disambung: bukan lompatan ID, dan dua ujungnya
             /// bisa diproyeksikan.
@@ -1613,15 +1629,14 @@ struct PathContent: View {
                                               width: r * 2, height: r * 2)),
                        with: .color(terang ? .white : .black), lineWidth: 1.5)
 
-            // Nomor kamera ikut ditulis kalau dua kamera ditumpuk. ID dihitung
-            // TERPISAH tiap kamera — "4" di kamera 1 dan "4" di kamera 2 orang
-            // yang berbeda. Tanpa awalannya, denah gabungan terbaca seolah
-            // nomor yang sama berarti orang yang sama, dan itu tidak benar.
-            let label = nomorKamera.map { "C\($0)·\(tid)" } ?? tid
-            ctx.draw(Text(label).font(.system(size: 9, weight: .bold).monospacedDigit())
-                        .foregroundStyle(terang ? Color.black.opacity(0.75)
-                                                : Color.white.opacity(0.85)),
-                     at: CGPoint(x: pKini.x + 8, y: pKini.y - 8), anchor: .bottomLeading)
+            // Nomornya saja, sekecil mungkin tapi masih terbaca. Awalan
+            // "C1·"/"C2·" dibuang begitu fusi bekerja: nomornya sudah bersama,
+            // jadi awalannya cuma memanjangkan tulisan tanpa menambah apa pun.
+            ctx.draw(Text("\(nomorOrang)")
+                        .font(.system(size: 8, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(terang ? Color.black.opacity(0.7)
+                                                : Color.white.opacity(0.8)),
+                     at: CGPoint(x: pKini.x + 6, y: pKini.y - 6), anchor: .bottomLeading)
         }
     }
 

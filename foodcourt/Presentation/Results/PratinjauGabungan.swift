@@ -102,6 +102,7 @@ struct PratinjauGabungan: View {
     let gabungkanDenah: Bool
     @Bindable var pemutar: PemutarGabungan
     var hingga: Int?
+    var fusi: FusiKamera.Hasil?
 
     var body: some View {
         VStack(spacing: Space.s) {
@@ -127,7 +128,7 @@ struct PratinjauGabungan: View {
                 panel(judul: "Path Simulation") {
                     PathContent(paths: utama?.paths ?? [], rasio: rasio,
                                 latar: latarPanel, jejak: utama?.jejak ?? [:],
-                                hasil: utama, hingga: hingga, kamera: daftar)
+                                hasil: utama, hingga: hingga, kamera: daftar, fusi: fusi)
                 }
                 panel(judul: "Heatmap") {
                     ZStack {
