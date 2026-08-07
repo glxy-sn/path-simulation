@@ -145,7 +145,8 @@ struct CalibrationView: View {
             )
             CalibrationCanvas(
                 title: session.usesScaledCanvas ? "Canvas Berskala" : (session.floorPlanName ?? "Floor Plan"),
-                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m.",
+                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m."
+                    + (peringatanRasio.map { " ⚠︎ " + $0 } ?? ""),
                 image: session.usesScaledCanvas ? nil : floorPlanImage,
                 sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize,
                 points: camera?.planePoints ?? [],
@@ -421,6 +422,37 @@ struct CalibrationView: View {
                 to: referenceRange(for: session.cameras[index])
             )
         }
+    }
+
+    /// Peringatan kalau ukuran ruangan yang diketik tidak sebangun dengan
+    /// gambar denahnya — hampir selalu berarti lebar dan tinggi tertukar.
+    ///
+    /// Seluruh gambar denah dipetakan ke persegi venue, jadi kalau angkanya
+    /// tertukar, gambarnya dipipihkan DAN homografinya memetakan ke ruangan
+    /// yang bentuknya salah. Yang terlihat pengguna cuma "hasilnya jelek" —
+    /// tidak ada satu pun angka yang menyebut sebabnya, karena kalibrasinya
+    /// sendiri tetap sahih: galat median tetap kecil, inlier tetap lolos.
+    /// Titik-titiknya memang konsisten satu sama lain, cuma ruangannya yang
+    /// salah bentuk.
+    ///
+    /// Ambangnya longgar (30%) karena gambar denah biasanya punya marjin dan
+    /// garis ukuran, jadi rasio pikselnya tidak sama persis dengan rasio
+    /// ruangannya. Yang mau ditangkap cuma yang tertukar — dan itu selalu
+    /// melenceng jauh.
+    private var peringatanRasio: String? {
+        guard !session.usesScaledCanvas,
+              let px = session.floorPlanPixelSize, px.isValid,
+              session.venueWidthM > 0, session.venueHeightM > 0 else { return nil }
+        let rasioGambar = px.width / px.height
+        let rasioVenue = session.venueWidthM / session.venueHeightM
+        let selisih = max(rasioGambar / rasioVenue, rasioVenue / rasioGambar)
+        guard selisih > 1.3 else { return nil }
+
+        let tertukar = max(rasioGambar / (session.venueHeightM / session.venueWidthM),
+                           (session.venueHeightM / session.venueWidthM) / rasioGambar) < selisih
+        return tertukar
+            ? "Ukuran ruangan sepertinya TERTUKAR — coba \(session.heightM) × \(session.widthM) m."
+            : "Bentuk gambar tidak sebangun dengan ukuran ruangan; denahnya akan tergambar pipih."
     }
 
     private func recalculateSelectedCamera() { recalculate(at: selectedIndex) }
