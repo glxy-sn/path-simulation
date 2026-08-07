@@ -1353,6 +1353,20 @@ struct PathContent: View {
 
             gambarLatar(&ctx, latar, peta, gelap: !peta.denah)
 
+            // Jangkauan tiap kamera di lantai, digambar sebelum apa pun yang
+            // lain. Ini alat periksa, bukan hiasan: kalau bidang kamera 1
+            // menempel ke sisi ruangan yang salah, kalibrasinya terbalik — dan
+            // itu terlihat sekejap, sedangkan dari titik-titik orang harus
+            // ditebak satu per satu.
+            if peta.denah && hingga != nil {
+                for (i, k) in daftar.enumerated() {
+                    gambarJangkauan(&ctx, k,
+                                    PetaKamera(rasio: rasio, ukuran: size,
+                                               perbesar: nil, hasil: k),
+                                    nomor: daftar.count > 1 ? i + 1 : nil)
+                }
+            }
+
             // Grid hanya saat tidak ada foto — di atas foto, garis bantu
             // menambah kekacauan tanpa menambah keterangan apa pun. Di mode
             // denah, kisi meternya sudah digambar `gambarDenah` dan kisi 0,1
@@ -1553,6 +1567,55 @@ struct PathContent: View {
     /// muncul kembali di gambar penuh. Menggambarnya utuh sejak detik nol akan
     /// memperlihatkan perjalanan yang belum terjadi.
     private var jalurTersorot: [PathTrace] { hingga == nil ? paths : [] }
+
+    /// Bidang lantai yang benar-benar terlihat kamera ini, digambar di denah.
+    ///
+    /// Dibangun dengan menyapu tepi bawah frame (pasti lantai, pasti paling
+    /// dekat kamera) lalu naik baris demi baris sampai proyeksinya berhenti
+    /// masuk akal — batas itulah horizon lantainya. Hasilnya poligon yang
+    /// menunjukkan bagian ruangan mana yang bisa dilihat kamera ini.
+    ///
+    /// Kegunaannya memeriksa arah: kalau kamera menghadap konter tapi bidangnya
+    /// menempel di sisi seberang, korespondensi titik kalibrasinya terbalik.
+    /// Angka galat tidak bisa memberi tahu itu — galat tetap kecil selama titik
+    /// yang diklik konsisten satu sama lain, walaupun seluruhnya tercermin.
+    private func gambarJangkauan(_ ctx: inout GraphicsContext, _ k: AnalysisResult,
+                                 _ peta: PetaKamera, nomor: Int?) {
+        guard peta.denah else { return }
+        var bawah: [CGPoint] = [], atas: [CGPoint] = []
+        let kolom = 16
+        for i in 0...kolom {
+            let x = Double(i) / Double(kolom)
+            var terbawah: CGPoint?, teratas: CGPoint?
+            // dari tepi bawah frame naik ke atas
+            for j in stride(from: 1.0, through: 0.3, by: -0.02) {
+                if let p = peta.titikSah(CGPoint(x: x, y: j)) {
+                    if terbawah == nil { terbawah = p }
+                    teratas = p
+                } else if terbawah != nil {
+                    break                       // sudah lewat batas lantainya
+                }
+            }
+            if let b = terbawah, let a = teratas { bawah.append(b); atas.append(a) }
+        }
+        guard bawah.count >= 3 else { return }
+
+        var bidang = Path()
+        bidang.addLines(bawah + atas.reversed())
+        bidang.closeSubpath()
+        let w = FusiKamera.warna(nomor: (nomor ?? 1) * 7)
+        let warna = Color(hue: w.rona, saturation: 0.7, brightness: 0.55)
+        ctx.fill(bidang, with: .color(warna.opacity(0.07)))
+        ctx.stroke(bidang, with: .color(warna.opacity(0.5)),
+                   style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+
+        if let nomor, let tengah = bawah.first {
+            ctx.draw(Text("jangkauan C\(nomor)")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(warna),
+                     at: CGPoint(x: tengah.x + 4, y: tengah.y - 4), anchor: .bottomLeading)
+        }
+    }
 
     /// Titik tiap orang pada detik `hingga`, dengan ekor pendek di belakangnya.
     ///
