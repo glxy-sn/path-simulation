@@ -1389,7 +1389,7 @@ struct PathContent: View {
             // dua kamera menyumbang dua jejak. Untuk membaca lintasan mana yang
             // sering dilewati itu tidak apa-apa; untuk MENGHITUNG orang, tidak
             // boleh — dan angka orang memang tidak diambil dari gambar ini.
-            for k in (daftar.isEmpty ? [nil] : daftar.map { Optional($0) }) {
+            for (nomorKamera, k) in (daftar.isEmpty ? [nil] : daftar.map { Optional($0) }).enumerated() {
             let peta = k.map {
                 PetaKamera(rasio: rasio, ukuran: size, perbesar: peta.perbesar, hasil: $0)
             } ?? peta
@@ -1458,7 +1458,10 @@ struct PathContent: View {
             //
             // Jalur berwarna panjang justru menghalangi di sini: ia sudah
             // memperlihatkan SELURUH perjalanan sebelum perjalanannya terjadi.
-            if let hingga { gambarOrang(&ctx, hasilIni, peta, hingga) }
+            if let hingga {
+                gambarOrang(&ctx, hasilIni, peta, hingga,
+                            nomorKamera: daftar.count > 1 ? nomorKamera + 1 : nil)
+            }
 
             for trace in (k == nil ? jalurTersorot : (hingga == nil ? paths : [])) {
                 // Potongan menerus terpanjang yang bisa diproyeksikan. Lingkaran
@@ -1545,40 +1548,62 @@ struct PathContent: View {
     /// Menggambar posisi terakhir yang diketahui untuk orang yang sudah lama
     /// hilang akan menaruh orang di ruangan yang sebenarnya sudah kosong.
     private func gambarOrang(_ ctx: inout GraphicsContext, _ k: AnalysisResult?,
-                             _ peta: PetaKamera, _ hingga: Int) {
+                             _ peta: PetaKamera, _ hingga: Int, nomorKamera: Int?) {
         guard let k, !k.jejakWaktu.isEmpty else { return }
         let fps = k.fpsSumber > 0 ? k.fpsSumber : 20
         let langkah = max(1, k.jejakLangkah)
-        // Ekor 4 detik: cukup untuk memperlihatkan arah gerak, cukup pendek
-        // supaya orang yang duduk tidak menumbuhkan garis di tempatnya.
+        // Ekor 4 detik: bagian yang paling terang, memperlihatkan ke mana
+        // orangnya bergerak BARUSAN.
         let ekorFrame = Int(4 * fps)
         // Orang dianggap masih ada kalau cuplikan terakhirnya tidak lebih tua
         // dari dua kali jarak cuplikan — satu cuplikan bolong itu hal biasa
         // waktu orangnya tertutup meja, dua berarti dia memang pergi.
         let batasHilang = langkah * 2
+        let detikPerTitik = fps > 0 ? Double(langkah) / fps : 1
 
         for (tid, deret) in k.jejakWaktu {
             let sampai = deret.filter { $0.frame <= hingga }
-            guard let kini = sampai.last, hingga - kini.frame <= batasHilang else { continue }
-            guard let pKini = peta.titikSah(kini.titik) else { continue }
+            guard let kini = sampai.last else { continue }
+            let masihAda = hingga - kini.frame <= batasHilang
 
             // Warna tetap per ID, jadi orang yang sama berwarna sama sepanjang
             // video — dan pergantian warna di satu titik berarti ID-nya putus.
             let rona = Double(abs(tid.hashValue) % 360) / 360.0
             let warna = Color(hue: rona, saturation: 0.75, brightness: 0.85)
 
-            var ekor = Path()
-            var mulai = true
-            for (a, b) in zip(sampai, sampai.dropFirst())
-            where b.frame >= hingga - ekorFrame {
-                guard let pa = peta.titikSah(a.titik), let pb = peta.titikSah(b.titik) else {
-                    mulai = true; continue
+            /// Ruas yang boleh disambung: bukan lompatan ID, dan dua ujungnya
+            /// bisa diproyeksikan.
+            func garis(_ mulaiDari: Int) -> Path {
+                var g = Path()
+                var baru = true
+                for (a, b) in zip(sampai, sampai.dropFirst()) where b.frame >= mulaiDari {
+                    guard let pa = peta.titikSah(a.titik), let pb = peta.titikSah(b.titik) else {
+                        baru = true; continue
+                    }
+                    if peta.denah, let ma = k.keLantai(a.titik), let mb = k.keLantai(b.titik),
+                       hypot(mb.x - ma.x, mb.y - ma.y) / max(detikPerTitik, 0.01) > 2.0 {
+                        baru = true; continue
+                    }
+                    if baru { g.move(to: pa); baru = false }
+                    g.addLine(to: pb)
                 }
-                if mulai { ekor.move(to: pa); mulai = false }
-                ekor.addLine(to: pb)
+                return g
             }
-            ctx.stroke(ekor, with: .color(warna.opacity(0.75)),
-                       style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+
+            // LINTASAN YANG SUDAH DILEWATI — tidak dihapus. Inilah yang
+            // menjawab "orang ini lewat mana saja": tanpa jejak yang menetap,
+            // tiap detik hanya memperlihatkan potongan 4 detik terakhir dan
+            // seluruh perjalanannya hilang begitu lewat.
+            ctx.stroke(garis(0), with: .color(warna.opacity(masihAda ? 0.45 : 0.28)),
+                       style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+            // Orang yang sudah pergi berhenti di situ: jejaknya tetap, tapi
+            // titik dan nomornya tidak, supaya tidak terbaca sebagai orang
+            // yang masih berdiri di sana.
+            guard masihAda, let pKini = peta.titikSah(kini.titik) else { continue }
+
+            ctx.stroke(garis(hingga - ekorFrame), with: .color(warna.opacity(0.9)),
+                       style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
             let r: CGFloat = 5
             ctx.fill(Path(ellipseIn: CGRect(x: pKini.x - r, y: pKini.y - r,
@@ -1588,7 +1613,12 @@ struct PathContent: View {
                                               width: r * 2, height: r * 2)),
                        with: .color(terang ? .white : .black), lineWidth: 1.5)
 
-            ctx.draw(Text(tid).font(.system(size: 9, weight: .bold).monospacedDigit())
+            // Nomor kamera ikut ditulis kalau dua kamera ditumpuk. ID dihitung
+            // TERPISAH tiap kamera — "4" di kamera 1 dan "4" di kamera 2 orang
+            // yang berbeda. Tanpa awalannya, denah gabungan terbaca seolah
+            // nomor yang sama berarti orang yang sama, dan itu tidak benar.
+            let label = nomorKamera.map { "C\($0)·\(tid)" } ?? tid
+            ctx.draw(Text(label).font(.system(size: 9, weight: .bold).monospacedDigit())
                         .foregroundStyle(terang ? Color.black.opacity(0.75)
                                                 : Color.white.opacity(0.85)),
                      at: CGPoint(x: pKini.x + 8, y: pKini.y - 8), anchor: .bottomLeading)
