@@ -1583,7 +1583,10 @@ struct PathContent: View {
             // Nomor bersama kalau fusinya berhasil; kalau tidak, nomor
             // kamera ini sendiri.
             let kunci = FusiKamera.Kunci(kamera: max(0, (nomorKamera ?? 1) - 1), tid: tid)
+            // Nomor kelompok untuk WARNA; tulisannya tetap ID tracker supaya
+            // cocok dengan nomor di video beranotasi.
             let nomorOrang = fusi?.nomor[kunci] ?? (Int(tid) ?? abs(tid.hashValue))
+            let tulisan = fusi?.label[kunci] ?? tid
             let w = FusiKamera.warna(nomor: nomorOrang)
             let warna = Color(hue: w.rona, saturation: w.jenuh, brightness: w.terang)
 
@@ -1621,18 +1624,21 @@ struct PathContent: View {
             ctx.stroke(garis(hingga - ekorFrame), with: .color(warna.opacity(0.9)),
                        style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-            let r: CGFloat = 5
+            // Bulatan kecil saja: ia menandai SATU titik kaki, dan bulatan
+            // besar menutupi meja di denah sekaligus melebih-lebihkan
+            // ketelitian posisinya.
+            let r: CGFloat = 3
             ctx.fill(Path(ellipseIn: CGRect(x: pKini.x - r, y: pKini.y - r,
                                             width: r * 2, height: r * 2)),
                      with: .color(warna))
             ctx.stroke(Path(ellipseIn: CGRect(x: pKini.x - r, y: pKini.y - r,
                                               width: r * 2, height: r * 2)),
-                       with: .color(terang ? .white : .black), lineWidth: 1.5)
+                       with: .color(terang ? .white : .black), lineWidth: 1)
 
             // Nomornya saja, sekecil mungkin tapi masih terbaca. Awalan
             // "C1·"/"C2·" dibuang begitu fusi bekerja: nomornya sudah bersama,
             // jadi awalannya cuma memanjangkan tulisan tanpa menambah apa pun.
-            ctx.draw(Text("\(nomorOrang)")
+            ctx.draw(Text(tulisan)
                         .font(.system(size: 8, weight: .semibold).monospacedDigit())
                         .foregroundStyle(terang ? Color.black.opacity(0.7)
                                                 : Color.white.opacity(0.8)),

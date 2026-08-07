@@ -28,9 +28,18 @@ enum FusiKamera {
     }
 
     struct Hasil {
-        /// Nomor bersama untuk tiap track. Track yang tidak berpasangan tetap
-        /// dapat nomornya sendiri — hanya saja tidak dibagi dengan siapa pun.
+        /// Nomor kelompok, HANYA untuk memilih warna. Bukan untuk ditampilkan.
         let nomor: [Kunci: Int]
+        /// Tulisan yang tampil di sebelah titik.
+        ///
+        /// Bawaannya ID TRACKER APA ADANYA, bukan nomor urut baru. Panel denah
+        /// disandingkan dengan video beranotasi, dan nomor di video adalah ID
+        /// tracker — menomori ulang di denah membuat keduanya tidak bisa
+        /// dicocokkan lagi, padahal itu seluruh gunanya disandingkan.
+        ///
+        /// Yang berpasangan memakai ID kamera pertama di kelompoknya, jadi
+        /// nomor yang sama muncul di kedua sisi.
+        let label: [Kunci: String]
         /// Berapa pasang yang benar-benar digabungkan.
         let digabung: Int
         /// Berapa orang setelah digabung.
@@ -100,14 +109,23 @@ enum FusiKamera {
         // Penomoran: pasangan dapat satu nomor, sisanya nomor sendiri-sendiri.
         // Diurutkan supaya nomornya tidak berubah tiap layar digambar ulang.
         var nomor: [Kunci: Int] = [:]
+        var label: [Kunci: String] = [:]
         var n = 1
         for k in kunci.sorted(by: { ($0.kamera, $0.tid) < ($1.kamera, $1.tid) }) {
             if nomor[k] != nil { continue }
             nomor[k] = n
-            if let lain = pasangan[k] { nomor[lain] = n }
+            label[k] = k.tid
+            if let lain = pasangan[k] {
+                nomor[lain] = n
+                // Kamera dengan nomor lebih kecil yang menyumbang ID-nya,
+                // supaya pilihannya tidak bergantung urutan penelusuran.
+                label[lain] = k.kamera <= lain.kamera ? k.tid : lain.tid
+                if k.kamera > lain.kamera { label[k] = lain.tid }
+            }
             n += 1
         }
-        return Hasil(nomor: nomor, digabung: pasangan.count, jumlahOrang: n - 1)
+        return Hasil(nomor: nomor, label: label,
+                     digabung: pasangan.count, jumlahOrang: n - 1)
     }
 
     /// Warna untuk nomor orang ke-`i` dari `total`.
