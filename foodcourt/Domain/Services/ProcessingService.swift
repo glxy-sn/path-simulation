@@ -13,5 +13,5 @@ enum ProcessingUpdate {
 }
 
 protocol ProcessingService {
-    @MainActor func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error>
+    func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error>
 }

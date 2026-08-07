@@ -14,15 +14,22 @@ struct EngineProcessingService: ProcessingService {
 
     private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
 
-    @MainActor
     func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task { @MainActor in
+        // Rakit request sinkron di sini (di pemanggil), lalu Task cuma pegang DTO Sendable.
+        let built: JobRequestDTO
+        do { built = try buildRequest(session) }
+        catch { return AsyncThrowingStream { $0.finish(throwing: error) } }
+
+        let api = self.api
+        let sidecar = self.sidecar
+        let baseURL = sidecar.baseURL
+        let palette = self.palette
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
                 do {
                     guard await sidecar.waitUntilReady() else { throw EngineError.notReady }
-
-                    let req = try buildRequest(session)
-                    let jobId = try await api.createJob(req)
+                    let jobId = try await api.createJob(built)
 
                     while true {
                         try Task.checkCancellation()
@@ -34,7 +41,7 @@ struct EngineProcessingService: ProcessingService {
                     }
 
                     let dto = try await api.result(jobId)
-                    continuation.yield(.finished(map(dto)))
+                    continuation.yield(.finished(Self.map(dto, palette: palette, baseURL: baseURL)))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -43,15 +50,17 @@ struct EngineProcessingService: ProcessingService {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
-    @MainActor
+
+    // MARK: build request
+
     private func buildRequest(_ s: AnalysisSession) throws -> JobRequestDTO {
         guard !s.cameras.isEmpty else { throw EngineError.job("Belum ada kamera.") }
         let duration = max(0, s.trimEndSec - s.trimStartSec)
 
         let cams = try s.cameras.map { cam -> CameraDTO in
             guard let url = cam.url else { throw EngineError.job("Kamera \"\(cam.label)\" tidak punya file video.") }
-            guard cam.imagePoints.count == 4, cam.planePoints.count == 4 else {
-                throw EngineError.job("Kalibrasi kamera \"\(cam.label)\" belum lengkap (butuh 4 titik).")
+            guard cam.imagePoints.count >= 4, cam.imagePoints.count == cam.planePoints.count else {
+                throw EngineError.job("Kalibrasi kamera \"\(cam.label)\" belum lengkap (butuh ≥4 pasang titik).")
             }
             return CameraDTO(
                 label: cam.label,
@@ -64,7 +73,8 @@ struct EngineProcessingService: ProcessingService {
         }
 
         let venue = VenueDTO(widthM: s.venueWidthM, heightM: s.venueHeightM,
-                             name: s.venueName, type: s.venueType.rawValue)
+                             name: s.venueName, type: s.venueType.rawValue,
+                             floorPlanPath: s.usesScaledCanvas ? nil : s.floorPlanURL?.path)
         return JobRequestDTO(
             venue: venue,
             mode: s.mode == .lengkap ? "lengkap" : "cepat",
@@ -73,8 +83,20 @@ struct EngineProcessingService: ProcessingService {
         )
     }
 
-    @MainActor
-    private func map(_ dto: JobResultDTO) -> AnalysisResult {
+    // MARK: map hasil -> model UI (static: hanya nilai Sendable)
+
+    private static func map(_ dto: JobResultDTO, palette: [UInt], baseURL: URL) -> AnalysisResult {
+        func artifactURL(_ uri: String?) -> URL? {
+            guard let uri else { return nil }
+            guard uri.hasPrefix("file://") else { return URL(string: uri) }
+            let raw = String(uri.dropFirst("file://".count))
+            let path = raw.removingPercentEncoding ?? raw
+            var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+            comps?.path = "/artifacts"
+            comps?.queryItems = [URLQueryItem(name: "path", value: path)]
+            return comps?.url
+        }
+
         let zones = dto.zones.enumerated().map { i, z in
             ZoneRank(rank: i + 1, code: z.code, visits: z.visits, share: z.share,
                      rect: CGRect(x: z.rect.x, y: z.rect.y, width: z.rect.w, height: z.rect.h),
@@ -99,18 +121,5 @@ struct EngineProcessingService: ProcessingService {
             combinedVideoURL: artifactURL(dto.artifacts.combinedVideo),
             overlayVideos: overlays
         )
-    }
-
-    /// `file:///.../heatmap.png`  ->  `http://127.0.0.1:8765/artifacts?path=/.../heatmap.png`
-    @MainActor
-    private func artifactURL(_ uri: String?) -> URL? {
-        guard let uri else { return nil }
-        guard uri.hasPrefix("file://") else { return URL(string: uri) }
-        let raw = String(uri.dropFirst("file://".count))
-        let path = raw.removingPercentEncoding ?? raw
-        var comps = URLComponents(url: sidecar.baseURL, resolvingAgainstBaseURL: false)
-        comps?.path = "/artifacts"
-        comps?.queryItems = [URLQueryItem(name: "path", value: path)]
-        return comps?.url
     }
 }

@@ -17,7 +17,10 @@ struct SessionCamera: Identifiable, Hashable {
     var durationSec: Double = 0
     var imagePoints: [NormPoint] = []
     var planePoints: [NormPoint] = []
-    var isCalibrated: Bool { imagePoints.count == 4 && planePoints.count == 4 }
+    var referenceFrameSeconds: Double = 0
+    var framePixelSize: PixelSize?
+    var calibration: CameraCalibration?
+    var isCalibrated: Bool { calibration?.isValid == true }
 }
 
 /// Hasil yang sudah dipetakan ke model UI (siap dipakai layar Hasil).
@@ -32,18 +35,22 @@ struct AnalysisResult {
     var overlayVideos: [(cam: String, url: URL)]
 }
 
-@MainActor
 @Observable
 final class AnalysisSession {
     // Venue
     var venueName = ""
     var venueType: VenueType = .pujasera
-    var widthM = "20"
-    var heightM = "15"
+    var widthM = "10"
+    var heightM = "7.5"
     var mode: AnalysisMode = .lengkap
 
     // Kamera + kalibrasi
     var cameras: [SessionCamera] = []
+    var floorPlanURL: URL?
+    var floorPlanName: String?
+    var floorPlanPixelSize: PixelSize?
+    /// Pilihan sumber yang aktif. Berkas denah tetap disimpan saat pengguna beralih ke canvas.
+    var usesScaledCanvas = true
 
     // Trim global
     var trimStartSec: Double = 0
@@ -62,11 +69,15 @@ final class AnalysisSession {
     var venueHeightM: Double { Double(heightM) ?? 0 }
     var timelineMax: Double { cameras.compactMap { $0.durationSec > 0 ? $0.durationSec : nil }.min() ?? 0 }
     var previewURL: URL? { cameras.first { $0.url != nil }?.url }
-    /// Semua kamera yang punya file (untuk preview per-video di trim card).
+    /// Semua kamera yang punya file (untuk preview per-video di trim card, bila dipakai).
     var previews: [(label: String, url: URL)] {
         cameras.compactMap { c in c.url.map { (label: c.label, url: $0) } }
     }
     var allCalibrated: Bool { !cameras.isEmpty && cameras.allSatisfy { $0.isCalibrated } }
+    var calibrationFloorSize: PixelSize {
+        if !usesScaledCanvas, let floorPlanPixelSize, floorPlanPixelSize.isValid { return floorPlanPixelSize }
+        return PixelSize(width: 1000, height: 1000)
+    }
 
     func normalizeTrim() {
         let m = timelineMax
@@ -79,6 +90,7 @@ final class AnalysisSession {
 
     func reset() {
         cameras = []
+        floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
     }

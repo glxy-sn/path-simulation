@@ -11,8 +11,8 @@ import Observation
 @MainActor
 @Observable
 final class Sidecar {
-    let baseURL: URL
-    let http: HTTPClient
+    nonisolated let baseURL: URL
+    nonisolated let http: HTTPClient
     var device: String = ""
     var isReady = false
 

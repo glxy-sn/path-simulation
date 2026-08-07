@@ -35,6 +35,12 @@ struct ResultsView: View {
     }
     private var hasResult: Bool { session.result != nil }
 
+    /// Floor map untuk background Zona (kalau user pakai floor plan, bukan canvas).
+    private var floorMapImage: NSImage? {
+        guard !session.usesScaledCanvas, let url = session.floorPlanURL else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.l * scale) {
@@ -99,7 +105,7 @@ struct ResultsView: View {
                     if let url = heatmapURL { FileImage(url: url) }
                     else { HeatmapView(blobs: SampleResult.blobs); HeatmapLegend() }
                 case .zona:
-                    ZoneMapView(zones: zones)
+                    ZoneMapView(zones: zones, background: floorMapImage)
                 }
             }
             .frame(height: min(400, max(300, 360 * scale)))
@@ -249,21 +255,28 @@ private struct ZoneRow: View {
 
 private struct ZoneMapView: View {
     let zones: [ZoneRank]
+    var background: NSImage? = nil
     var body: some View {
         GeometryReader { geo in
             let W = geo.size.width, H = geo.size.height
             ZStack {
-                Color(hex: 0xF7F8FA)
+                if let background {
+                    Image(nsImage: background).resizable().scaledToFill()
+                        .frame(width: W, height: H).clipped()
+                    Color.white.opacity(0.08)
+                } else {
+                    Color(hex: 0xF7F8FA)
 
-                // grid halus sebagai konteks lantai
-                Canvas { ctx, size in
-                    var grid = Path()
-                    let cols = 10, rows = 6
-                    for c in 0...cols { let x = size.width * CGFloat(c)/CGFloat(cols)
-                        grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
-                    for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
-                        grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
-                    ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.07)), lineWidth: 1)
+                    // grid halus sebagai konteks lantai
+                    Canvas { ctx, size in
+                        var grid = Path()
+                        let cols = 10, rows = 6
+                        for c in 0...cols { let x = size.width * CGFloat(c)/CGFloat(cols)
+                            grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
+                        for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
+                            grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
+                        ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.07)), lineWidth: 1)
+                    }
                 }
 
                 ForEach(zones) { zone in
