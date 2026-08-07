@@ -482,6 +482,13 @@ struct CalibrationView: View {
     /// ruangannya. Yang mau ditangkap cuma yang tertukar — dan itu selalu
     /// melenceng jauh.
     private var peringatanRasio: String? {
+        // Rasio tertukar diperiksa lebih dulu: ia membuat SEMUA angka lain
+        // menyesatkan, jadi memperbaikinya harus jadi langkah pertama.
+        if let p = peringatanRasioSaja { return p }
+        return peringatanCakupan
+    }
+
+    private var peringatanRasioSaja: String? {
         switch cekRasio() {
         case .tertukar:
             return "Ukuran ruangan sepertinya TERTUKAR — coba \(session.heightM) × \(session.widthM) m."
@@ -490,6 +497,52 @@ struct CalibrationView: View {
         case .cocok:
             return nil
         }
+    }
+
+    /// Berapa bagian lantai yang terlihat kamera mendarat DI DALAM ruangan.
+    ///
+    /// Ini menangkap kegagalan yang tidak bisa dilihat dari galat reproyeksi:
+    /// kalau titik kalibrasi hampir SEGARIS di gambar kamera, homografinya
+    /// tetap melewati titik-titik itu dengan sempurna — galat median bisa 5 cm
+    /// — tapi memetakan sisanya ke tempat yang ngawur.
+    ///
+    /// Terukur pada kalibrasi pantry yang galatnya "bagus" (median 0,049 m,
+    /// inlier 6/8): seluruh jejak orangnya mendarat di pita setebal 0,6 m di
+    /// LUAR ruangan, dan 0% petak ruangan tersentuh. Galatnya tidak bisa
+    /// memberi tahu, karena galat hanya mengukur titik yang kita berikan
+    /// sendiri.
+    ///
+    /// Yang diperiksa: titik-titik contoh di separuh bawah frame — bagian yang
+    /// hampir pasti lantai — diproyeksikan, lalu dihitung berapa yang jatuh di
+    /// dalam ruangan.
+    private func cakupanLantai(_ camera: SessionCamera?) -> Double? {
+        guard let camera, let kal = camera.calibration, kal.isValid,
+              let px = camera.framePixelSize, px.isValid,
+              session.venueWidthM > 0, session.venueHeightM > 0 else { return nil }
+        let H = kal.homographyCameraToWorld
+        var di = 0, semua = 0
+        for i in 0..<12 {
+            for j in 0..<8 {
+                let x = (Double(i) + 0.5) / 12 * px.width
+                // separuh bawah frame saja: di atasnya dinding dan langit-langit
+                let y = (0.5 + (Double(j) + 0.5) / 16) * px.height
+                semua += 1
+                guard let m = HomographySolver.transform(CalibrationPoint(x: x, y: y), with: H)
+                else { continue }
+                if m.x >= 0, m.x <= session.venueWidthM,
+                   m.y >= 0, m.y <= session.venueHeightM { di += 1 }
+            }
+        }
+        return semua > 0 ? Double(di) / Double(semua) : nil
+    }
+
+    /// Peringatan kalau kalibrasi tampak sahih tapi memetakan ke luar ruangan.
+    private var peringatanCakupan: String? {
+        guard let c = cakupanLantai(selectedCamera), c < 0.15 else { return nil }
+        return "Kalibrasi ini lolos angka galat, tapi hanya \(Int((c * 100).rounded()))% "
+            + "lantai yang terlihat kamera mendarat DI DALAM ruangan — titiknya terlalu "
+            + "segaris. Sebar titiknya ke DEPAN-BELAKANG juga: beberapa dekat kamera "
+            + "(bawah frame), beberapa jauh (batas lantai paling atas yang terlihat)."
     }
 
     private enum HasilCekRasio { case cocok, tertukar, tidakSebangun }
