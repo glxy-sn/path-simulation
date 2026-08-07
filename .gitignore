@@ -1,0 +1,24 @@
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+*.xcuserstate
+build/
+DerivedData/
+
+# Rekaman CCTV — memuat wajah karyawan, tidak boleh masuk repo.
+*.mp4
+*.mov
+*.avi
+
+# Bobot model: besar, dan diedarkan di luar git.
+*.pt
+*.onnx
+*.npy
+
+# Lingkungan Python
+venv*/
+__pycache__/
+*.pyc
+
+# Keluaran engine
+runs/

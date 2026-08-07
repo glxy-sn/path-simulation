@@ -1,0 +1,27 @@
+{
+ "_catatan": [
+  "Galat terukur PER VENUE. Bukan milik pipeline — milik tempat dan kameranya.",
+  "Pipeline hanya boleh menyebut galat untuk venue yang ada di sini; untuk",
+  "video lain, galat dikirim null dan aplikasi menampilkan 'belum diukur'.",
+  "",
+  "Menambah venue baru: anotasi rekamannya (reid/siapkan_anotasi.py ->",
+  "anotasi.html -> reid/nilai_anotasi.py --simpan-profil <kunci>), lalu",
+  "entri baru muncul di sini dengan sendirinya.",
+  "",
+  "'kunci' dicocokkan dengan nama berkas video, tidak peka huruf besar-kecil."
+ ],
+ "venue": {
+  "day1cam1": {
+   "nama": "day1cam1",
+   "totalVisitorsGalat": 0.1277,
+   "avgDwellGalat": -0.0672,
+   "idf1": 96.6,
+   "idPerOrang": 1.128,
+   "diukur_dari": "47 orang teranotasi manusia, 26 di antaranya kunjungannya utuh",
+   "tanggal": "2026-08-05",
+   "batas": "Satu kamera, satu segmen.",
+   "captureRate": 0.821,
+   "captureRate_dari": "106 anotasi kotak manusia di pantry (uji terpisah dari anotasi identitas)"
+  }
+ }
+}
