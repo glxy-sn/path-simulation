@@ -174,11 +174,38 @@ struct ResultsView: View {
         }
         // Hasil dibaca dari sesi tiap layar ini muncul, bukan sekali saat
         // dibuat — kalau tidak, analisis kedua menampilkan angka yang pertama.
-        .onAppear { vm.semua = session.result }
+        .onAppear { vm.semua = berkalibrasi(session.result) }
         .onChange(of: session.result?.jobIdentitas) {
-            vm.semua = session.result
+            vm.semua = berkalibrasi(session.result)
             vm.kameraTerpilih = 0
         }
+    }
+
+    /// Sisipkan homografi dari layar Kalibrasi ke hasil, per kamera.
+    ///
+    /// Kalibrasi hidup di sesi (layar Kalibrasi), hasil datang dari engine —
+    /// keduanya baru bertemu di sini. Kalau kameranya belum dikalibrasi,
+    /// hasilnya lewat tanpa diubah dan tampilannya tetap seperti biasa.
+    private func berkalibrasi(_ h: AnalysisResult?) -> AnalysisResult? {
+        guard var hasil = h else { return nil }
+        let venue = CGSize(width: session.venueWidthM, height: session.venueHeightM)
+        guard venue.width > 0, venue.height > 0 else { return hasil }
+
+        func pasang(_ r: inout AnalysisResult, _ cam: SessionCamera?) {
+            guard let cam, let kal = cam.calibration, kal.isValid,
+                  let px = cam.framePixelSize else { return }
+            r.homografi = kal.homographyCameraToWorld
+            r.ukuranFramePx = px
+            r.venueMeter = venue
+        }
+
+        if hasil.perKamera.count > 1 {
+            for i in hasil.perKamera.indices where i < session.cameras.count {
+                pasang(&hasil.perKamera[i], session.cameras[i])
+            }
+        }
+        pasang(&hasil, session.cameras.first)
+        return hasil
     }
 
     // MARK: Header + tombol atas
@@ -333,10 +360,12 @@ struct ResultsView: View {
                 case .path:
                     PathContent(paths: hasil?.paths ?? SampleResult.paths,
                                 rasio: rasio, latar: latar,
-                                jejak: hasil?.jejak ?? [:])
+                                jejak: hasil?.jejak ?? [:],
+                                hasil: hasil)
                 case .heatmap:
                     HeatmapView(blobs: hasil?.blobs ?? SampleResult.blobs,
-                                grid: hasil?.grid, rasio: rasio, latar: latar)
+                                grid: hasil?.grid, rasio: rasio, latar: latar,
+                                hasil: hasil)
                     HeatmapLegend(maks: hasil?.grid?.sel.max())
                 case .zona:
                     if let h = hasil {
@@ -344,7 +373,7 @@ struct ResultsView: View {
                             zona: Binding(get: { vm.zona(h) },
                                           set: { vm.setZona(h, $0) }),
                             menyunting: vm.menyunting,
-                            rasio: rasio, latar: latar,
+                            rasio: rasio, latar: latar, hasil: h,
                             angka: { r in
                                 let l = h.lamaTinggal(di: r)
                                 return (l.orang, l.rataDetik, h.kepadatan(di: r).porsi)
@@ -700,10 +729,23 @@ struct PetaKamera {
     let ukuran: CGSize
     /// nil kalau seluruh frame ditampilkan; berisi kotak data kalau tidak ada
     /// frame CCTV dan gambar perlu diperbesar supaya tidak melompong.
-    let perbesar: CGRect?
+    var perbesar: CGRect?
+
+    /// Kalau hasilnya punya kalibrasi, titik diproyeksikan ke DENAH LANTAI
+    /// lebih dulu: perspektif hilang dan satuannya meter.
+    ///
+    /// Tidak ada tombol untuk menyalakannya, dan memang tidak perlu — kalau
+    /// denahnya sudah bisa dihitung, tidak ada alasan memilih tampilan
+    /// berperspektif yang jaraknya tidak sebanding.
+    var hasil: AnalysisResult?
+
+    var denah: Bool { hasil?.adaDenah == true }
 
     private var bidang: CGRect {
-        perbesar ?? CGRect(x: 0, y: 0, width: rasio, height: 1)
+        if denah, let v = hasil?.venueMeter {
+            return CGRect(x: 0, y: 0, width: v.width, height: v.height)
+        }
+        return perbesar ?? CGRect(x: 0, y: 0, width: rasio, height: 1)
     }
     /// Satu skala untuk kedua sumbu. Skala berbeda memenuhi kanvas lebih
     /// rapat tapi memelintir bentuk — gambar jadi berbohong demi enak dilihat.
@@ -715,10 +757,27 @@ struct PetaKamera {
 
     /// Titik hasil (0–1 terhadap lebar & tinggi frame) -> titik di kanvas.
     func titik(_ p: CGPoint) -> CGPoint {
-        CGPoint(x: p.x * rasio * skala + geserX, y: p.y * skala + geserY)
+        if denah, let m = hasil?.keLantai(p) {
+            return CGPoint(x: m.x * skala + geserX, y: m.y * skala + geserY)
+        }
+        return CGPoint(x: p.x * rasio * skala + geserX, y: p.y * skala + geserY)
     }
     /// Kotak hasil -> kotak di kanvas.
+    ///
+    /// Di mode denah, keempat sudutnya diproyeksikan satu per satu lalu diambil
+    /// kotak pembungkusnya: persegi di gambar kamera menjadi trapesium di
+    /// lantai, jadi memproyeksikan satu sudut lalu memakai lebar aslinya akan
+    /// menaruh kotaknya di tempat yang salah.
     func kotak(_ r: CGRect) -> CGRect {
+        if denah {
+            let sudut = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
+                         CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.maxX, y: r.maxY)]
+                .map(titik)
+            let xs = sudut.map(\.x), ys = sudut.map(\.y)
+            guard let x0 = xs.min(), let x1 = xs.max(),
+                  let y0 = ys.min(), let y1 = ys.max() else { return .zero }
+            return CGRect(x: x0, y: y0, width: max(x1 - x0, 1), height: max(y1 - y0, 1))
+        }
         let a = titik(CGPoint(x: r.minX, y: r.minY))
         return CGRect(x: a.x, y: a.y,
                       width: r.width * rasio * skala, height: r.height * skala)
@@ -743,6 +802,11 @@ struct PetaKamera {
 /// Foto CCTV sebagai latar, diredupkan supaya tanda di atasnya tetap terbaca.
 func gambarLatar(_ ctx: inout GraphicsContext, _ url: URL?, _ peta: PetaKamera,
                          redup: Double = 0.55) {
+    // Di mode denah, frame CCTV tidak digambar: fotonya berperspektif,
+    // sedangkan titik-titiknya sudah diratakan ke lantai. Menumpuk keduanya
+    // akan menaruh orang di tempat yang tidak sesuai dengan gambar di
+    // belakangnya — lebih menyesatkan daripada tidak ada latar sama sekali.
+    guard !peta.denah else { return }
     guard let url, let img = NSImage(contentsOf: url) else { return }
     ctx.opacity = redup
     ctx.draw(Image(nsImage: img), in: peta.bidangFrame)
@@ -784,6 +848,8 @@ private struct PathContent: View {
     /// Pipeline membatasi `paths` di 12 supaya gambarnya tidak penuh — tapi
     /// `jejak` memuat semua orang, dan selama ini menganggur di berkas hasil.
     var jejak: [String: [CGPoint]] = [:]
+    /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
+    var hasil: AnalysisResult?
 
     var body: some View {
         Canvas { ctx, size in
@@ -794,7 +860,8 @@ private struct PathContent: View {
                 rasio: rasio, ukuran: size,
                 perbesar: latar == nil
                     ? PetaKamera.batasData(paths.flatMap(\.points), rasio: rasio)
-                    : nil)
+                    : nil,
+                hasil: hasil)
 
             gambarLatar(&ctx, latar, peta)
 
@@ -944,10 +1011,12 @@ private struct HeatmapView: View {
     var grid: (w: Int, h: Int, total: Int, sel: [Int])?
     var rasio: Double = 16.0 / 9.0
     var latar: URL?
+    /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
+    var hasil: AnalysisResult?
 
     var body: some View {
         Canvas { ctx, size in
-            let peta = PetaKamera(rasio: rasio, ukuran: size, perbesar: nil)
+            let peta = PetaKamera(rasio: rasio, ukuran: size, perbesar: nil, hasil: hasil)
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0x0F1524)))
             // Latar lebih gelap di sini: warna panas harus menang atas foto.
             gambarLatar(&ctx, latar, peta, redup: 0.42)

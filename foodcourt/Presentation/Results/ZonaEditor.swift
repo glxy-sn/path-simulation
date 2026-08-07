@@ -18,6 +18,8 @@ struct ZonaEditorView: View {
     var menyunting: Bool
     var rasio: Double
     var latar: URL?
+    /// Dipakai untuk proyeksi ke denah lantai kalau kameranya sudah dikalibrasi.
+    var hasil: AnalysisResult?
     /// Angka tiap kotak, dihitung ulang oleh pemanggil tiap kotak berubah.
     var angka: (CGRect) -> (orang: Int, rata: Double, porsi: Double)
 
@@ -25,7 +27,7 @@ struct ZonaEditorView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let peta = PetaKamera(rasio: rasio, ukuran: geo.size, perbesar: nil)
+            let peta = PetaKamera(rasio: rasio, ukuran: geo.size, perbesar: nil, hasil: hasil)
 
             ZStack(alignment: .topLeading) {
                 (latar == nil ? Color(hex: 0xF7F8FA) : Color.black)
@@ -66,8 +68,12 @@ struct ZonaEditorView: View {
         }
         .frame(width: r.width, height: r.height)
         .position(x: r.midX, y: r.midY)
-        .gesture(menyunting ? geser(z, peta: peta) : nil)
-        .onTapGesture { if menyunting { terpilih = z.wrappedValue.id } }
+        // Penyuntingan hanya di tampilan kamera. Di denah lantai, satu piksel
+        // geseran di layar tidak sama dengan satu satuan di koordinat zona
+        // (yang masih ruang gambar kamera) — kotaknya akan lari ke tempat yang
+        // salah. Lebih baik tidak bisa digeser daripada digeser keliru.
+        .gesture(menyunting && !peta.denah ? geser(z, peta: peta) : nil)
+        .onTapGesture { if menyunting && !peta.denah { terpilih = z.wrappedValue.id } }
 
         // Label di LUAR kotak: zona terkecil yang terukur cuma 3,8% × 3,7%
         // bidang gambar, dan tulisan di dalamnya tidak terbaca sama sekali.

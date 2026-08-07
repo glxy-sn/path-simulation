@@ -68,6 +68,34 @@ struct AnalysisResult {
     var folder: URL?
     var catatan: [String] = []
 
+    // MARK: proyeksi ke denah lantai
+
+    /// Homografi piksel kamera -> meter di lantai, dari layar Kalibrasi.
+    ///
+    /// Kalau ada, keempat visualisasi berpindah sendiri ke tampilan denah:
+    /// perspektif hilang, dan dua orang yang berjalan di lorong yang sama tapi
+    /// beda jarak dari kamera akhirnya tergambar berimpit. Itu yang selama ini
+    /// menghalangi pola muncul.
+    ///
+    /// Hanya sahih untuk titik DI LANTAI — dan itu sebabnya sejak awal yang
+    /// dipakai titik kaki, bukan tengah badan.
+    var homografi: Matrix3x3?
+    /// Ukuran frame asli dalam piksel. Koordinat hasil ternormalkan 0–1, jadi
+    /// harus dikembalikan ke piksel dulu sebelum dilewatkan homografi.
+    var ukuranFramePx: PixelSize?
+    /// Ukuran venue dalam meter — batas bidang gambar denah.
+    var venueMeter: CGSize?
+
+    var adaDenah: Bool { homografi != nil && ukuranFramePx != nil && venueMeter != nil }
+
+    /// Titik hasil (0–1 terhadap frame) -> meter di lantai.
+    func keLantai(_ p: CGPoint) -> CGPoint? {
+        guard let H = homografi, let px = ukuranFramePx else { return nil }
+        let titik = CalibrationPoint(x: p.x * px.width, y: p.y * px.height)
+        guard let m = HomographySolver.transform(titik, with: H) else { return nil }
+        return CGPoint(x: m.x, y: m.y)
+    }
+
     // MARK: multi-kamera
 
     /// Nama sudut ini ("Kamera 1"). Kosong untuk analisis satu kamera.
