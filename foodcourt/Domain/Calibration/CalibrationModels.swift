@@ -117,9 +117,13 @@ struct CameraCalibration: Codable, Hashable {
 }
 
 struct CalibrationProfile: Codable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     var schemaVersion: Int
+    var profileID: UUID?
+    var displayName: String?
+    var savedAt: Date?
+    var venueName: String?
     var worldBoundsM: PixelSize
     var floorplan: FloorplanProfile
     var homographyFloorToWorld: Matrix3x3
@@ -128,6 +132,10 @@ struct CalibrationProfile: Codable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
+        case profileID = "profile_id"
+        case displayName = "display_name"
+        case savedAt = "saved_at"
+        case venueName = "venue_name"
         case worldBoundsM = "world_bounds_m"
         case floorplan
         case homographyFloorToWorld = "H_floor_to_world"
@@ -140,11 +148,13 @@ struct FloorplanProfile: Codable {
     var sourceName: String
     var pixelSize: PixelSize
     var usesCanvas: Bool
+    var assetFileName: String?
 
     enum CodingKeys: String, CodingKey {
         case sourceName = "source_name"
         case pixelSize = "pixel_size"
         case usesCanvas = "uses_canvas"
+        case assetFileName = "asset_file_name"
     }
 }
 
@@ -153,6 +163,7 @@ struct CameraCalibrationProfile: Codable {
     var label: String
     var referenceFrameSeconds: Double
     var imageSize: PixelSize
+    var sourceFileName: String?
     var calibration: CameraCalibration
 
     enum CodingKeys: String, CodingKey {
@@ -160,6 +171,7 @@ struct CameraCalibrationProfile: Codable {
         case label
         case referenceFrameSeconds = "reference_frame_seconds"
         case imageSize = "image_size"
+        case sourceFileName = "source_file_name"
         case calibration
     }
 }
@@ -174,6 +186,8 @@ enum CalibrationError: LocalizedError, Equatable {
     case degeneratePoints
     case noValidModel
     case invalidProfile
+    case missingFloorPlan
+    case cameraMismatch(String)
 
     var errorDescription: String? {
         switch self {
@@ -186,6 +200,8 @@ enum CalibrationError: LocalizedError, Equatable {
         case .degeneratePoints: return "Susunan titik tidak dapat membentuk homografi. Sebarkan titik pada area lantai."
         case .noValidModel: return "Homografi gagal ditemukan. Periksa pasangan titik dan coba lagi."
         case .invalidProfile: return "Profil kalibrasi tidak cocok dengan sesi saat ini."
+        case .missingFloorPlan: return "Profil membutuhkan file floor plan yang tersimpan."
+        case .cameraMismatch(let detail): return "Kamera pada profil tidak cocok: \(detail)"
         }
     }
 }
