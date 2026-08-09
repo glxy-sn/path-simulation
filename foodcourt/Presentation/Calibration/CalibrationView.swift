@@ -22,6 +22,9 @@ struct CalibrationView: View {
     @State private var isLoadingFrame = false
     @State private var message: String?
     @State private var reloadToken = UUID()
+    @State private var savedProfiles: [SavedCalibrationProfile] = []
+    @State private var activeProfileID: UUID?
+    @State private var showsProfileHistory = false
 
     private var selectedIndex: Int {
         min(max(0, selectedCameraIndex), max(0, session.cameras.count - 1))
@@ -40,7 +43,17 @@ struct CalibrationView: View {
         .task(id: reloadToken) {
             await refreshImages()
         }
+        .task { reloadProfileHistory() }
         .onChange(of: selectedCameraIndex) { _, _ in reloadToken = UUID() }
+        .sheet(isPresented: $showsProfileHistory) {
+            CalibrationProfileHistorySheet(
+                profiles: savedProfiles,
+                activeProfileID: activeProfileID,
+                onLoad: { loadSavedProfile($0) },
+                onExport: { exportProfile($0) },
+                onDelete: { deleteProfile($0) }
+            )
+        }
     }
 
     private var emptyState: some View {
@@ -111,13 +124,55 @@ struct CalibrationView: View {
                     .accessibilityLabel("Pilih \(camera.label)")
                 }
                 Spacer()
-                Button("Impor Profil", systemImage: "square.and.arrow.down") { importProfile() }
+                profileMenu
                     .buttonStyle(.bordered)
-                Button("Ekspor Profil", systemImage: "square.and.arrow.up") { exportProfile() }
+                Button("Simpan Profil", systemImage: "tray.and.arrow.down") { saveProfile() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!session.allCalibrated)
+                    .disabled(!canSaveProfile)
             }
         }
+    }
+
+    private var profileMenu: some View {
+        Menu {
+            if savedProfiles.isEmpty {
+                Text("Belum ada profil tersimpan")
+            } else {
+                ForEach(savedProfiles) { profile in
+                    Button {
+                        loadSavedProfile(profile)
+                    } label: {
+                        if activeProfileID == profile.id {
+                            Label(profile.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(profile.displayName)
+                        }
+                    }
+                }
+                Divider()
+            }
+            Button("Impor dari File…", systemImage: "square.and.arrow.down") { importProfile() }
+            Button("Ekspor Profil Terpilih…", systemImage: "square.and.arrow.up") {
+                if let profile = activeProfile { exportProfile(profile) }
+            }
+            .disabled(activeProfile == nil)
+            Button("Kelola Riwayat…", systemImage: "clock.arrow.circlepath") {
+                showsProfileHistory = true
+            }
+            .disabled(savedProfiles.isEmpty)
+        } label: {
+            Text(activeProfile?.displayName ?? "Profil Kalibrasi")
+                .lineLimit(1)
+        }
+        .help("Pilih profil tersimpan atau impor profil dari file")
+    }
+
+    private var activeProfile: SavedCalibrationProfile? {
+        savedProfiles.first { $0.id == activeProfileID }
+    }
+
+    private var canSaveProfile: Bool {
+        session.allCalibrated && (session.usesScaledCanvas || session.floorPlanURL != nil)
     }
 
     private var canvases: some View {
@@ -156,7 +211,13 @@ struct CalibrationView: View {
                 canInteract: session.usesScaledCanvas || floorPlanImage != nil,
                 canvasAccessory: floorPlanCanvasAction,
                 footerAccessory: AnyView(floorSourcePicker),
-                emptyState: nil,
+                emptyState: AnyView(
+                    ContentUnavailableView(
+                        "Floor plan belum tersedia",
+                        systemImage: "photo.badge.plus",
+                        description: Text("Klik Upload untuk memilih gambar atau PDF floor plan.")
+                    )
+                ),
                 onAdd: { addPlanePoint($0) },
                 onDeletePair: { deletePair(at: $0) }
             )
@@ -402,6 +463,7 @@ struct CalibrationView: View {
     private func invalidateCalibration(for index: Int) {
         guard session.cameras.indices.contains(index) else { return }
         session.cameras[index].calibration = nil
+        activeProfileID = nil
     }
 
     private func referenceRange(for camera: SessionCamera) -> ClosedRange<Double> {
@@ -536,15 +598,12 @@ struct CalibrationView: View {
         )
     }
 
-    private func exportProfile() {
+    private func saveProfile() {
         do {
-            let profile = try CalibrationProfileStore.exportProfile(from: session)
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.json]
-            panel.nameFieldStringValue = "camera_floorplan_calibration.json"
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            try CalibrationProfileStore.encode(profile).write(to: url, options: .atomic)
-            message = "Profil kalibrasi diekspor ke \(url.lastPathComponent)."
+            let saved = try CalibrationProfileLibrary.save(session: session)
+            reloadProfileHistory()
+            activeProfileID = saved.id
+            message = "Profil \(saved.displayName) disimpan ke riwayat."
         } catch {
             message = "Gagal: \(error.localizedDescription)"
         }
@@ -553,21 +612,138 @@ struct CalibrationView: View {
     private func importProfile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.treatsFilePackagesAsDirectories = false
+        panel.allowedContentTypes = [.json, .foodcourtCalibrationProfile]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let profile = try CalibrationProfileStore.decode(Data(contentsOf: url))
-            try CalibrationProfileStore.apply(profile, to: session)
-            reloadToken = UUID()
-            message = "Profil kalibrasi diimpor. Cocokkan kembali frame referensi bila video berubah."
+            let imported = try CalibrationProfileLibrary.inspectImport(at: url)
+            var attachedFloorPlanURL: URL?
+            if !imported.profile.floorplan.usesCanvas, imported.floorPlanURL == nil {
+                attachedFloorPlanURL = try chooseLegacyFloorPlan(for: imported.profile)
+            }
+            guard confirmProfileReplacement() else { return }
+            let saved = try CalibrationProfileLibrary.importProfile(
+                imported,
+                attachedFloorPlanURL: attachedFloorPlanURL
+            )
+            reloadProfileHistory()
+            applySavedProfile(saved)
         } catch {
             message = "Gagal: \(error.localizedDescription)"
         }
     }
 
+    private func loadSavedProfile(_ profile: SavedCalibrationProfile) {
+        guard activeProfileID != profile.id else { return }
+        guard confirmProfileReplacement() else { return }
+        applySavedProfile(profile)
+    }
+
+    private func applySavedProfile(_ profile: SavedCalibrationProfile) {
+        do {
+            let loaded = try CalibrationProfileLibrary.load(profile)
+            let validCount = try CalibrationProfileStore.apply(
+                loaded.profile,
+                floorPlanURL: loaded.floorPlanURL,
+                to: session
+            )
+            activeProfileID = profile.id
+            reloadToken = UUID()
+            message = validCount == session.cameras.count
+                ? "Semua kamera valid (\(validCount)/\(session.cameras.count)). Periksa kembali titik bila video berubah."
+                : "\(validCount)/\(session.cameras.count) kamera valid."
+        } catch {
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func exportProfile(_ profile: SavedCalibrationProfile) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.foodcourtCalibrationProfile]
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = safeFileName(profile.displayName) + ".\(CalibrationProfileLibrary.packageExtension)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try CalibrationProfileLibrary.export(profile, to: url)
+            message = "Profil diekspor ke \(url.lastPathComponent)."
+        } catch {
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteProfile(_ profile: SavedCalibrationProfile) {
+        do {
+            let wasActive = activeProfileID == profile.id
+            let detachedFloorPlanURL = wasActive
+                ? try CalibrationProfileLibrary.detachedFloorPlanCopy(for: profile)
+                : nil
+            try CalibrationProfileLibrary.delete(profile)
+            if wasActive {
+                if detachedFloorPlanURL != nil { session.floorPlanURL = detachedFloorPlanURL }
+                activeProfileID = nil
+            }
+            reloadProfileHistory()
+            message = "Profil \(profile.displayName) dihapus dari riwayat."
+        } catch {
+            message = "Gagal: \(error.localizedDescription)"
+        }
+    }
+
+    private func reloadProfileHistory() {
+        do {
+            savedProfiles = try CalibrationProfileLibrary.list()
+            if let activeProfileID, !savedProfiles.contains(where: { $0.id == activeProfileID }) {
+                self.activeProfileID = nil
+            }
+        } catch {
+            savedProfiles = []
+            message = "Gagal memuat riwayat: \(error.localizedDescription)"
+        }
+    }
+
+    private func chooseLegacyFloorPlan(for profile: CalibrationProfile) throws -> URL {
+        let panel = NSOpenPanel()
+        panel.message = "Pilih floor plan yang digunakan saat profil ini dibuat."
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
+        guard panel.runModal() == .OK, let url = panel.url else {
+            throw CalibrationProfileLibraryError.missingFloorPlan
+        }
+        guard let image = loadFloorPlanImage(url) else { throw CalibrationError.invalidImageSize }
+        let selectedSize = pixelSize(of: image)
+        let expected = profile.floorplan.pixelSize
+        guard abs(selectedSize.width - expected.width) <= 1,
+              abs(selectedSize.height - expected.height) <= 1 else {
+            throw CalibrationError.cameraMismatch("ukuran floor plan berbeda dari profil")
+        }
+        return url
+    }
+
+    private func confirmProfileReplacement() -> Bool {
+        let hasCalibrationWork = session.cameras.contains {
+            !$0.imagePoints.isEmpty || !$0.planePoints.isEmpty || $0.calibration != nil
+        }
+        guard hasCalibrationWork else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Ganti kalibrasi saat ini?"
+        alert.informativeText = "Titik dan hasil kalibrasi yang sedang tampil akan diganti oleh profil yang dipilih."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Ganti Profil")
+        alert.addButton(withTitle: "Batal")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func safeFileName(_ value: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/:")
+        return value.components(separatedBy: invalid).joined(separator: "-")
+    }
+
     private func invalidateAllCalibrations() {
         for index in session.cameras.indices { session.cameras[index].calibration = nil }
+        activeProfileID = nil
     }
 
     @MainActor
@@ -603,6 +779,110 @@ struct CalibrationView: View {
         }
         return PixelSize(image.size)
     }
+}
+
+private struct CalibrationProfileHistorySheet: View {
+    let profiles: [SavedCalibrationProfile]
+    let activeProfileID: UUID?
+    let onLoad: (SavedCalibrationProfile) -> Void
+    let onExport: (SavedCalibrationProfile) -> Void
+    let onDelete: (SavedCalibrationProfile) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var deletionCandidate: SavedCalibrationProfile?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text("Riwayat Kalibrasi").font(.title2.bold())
+                    Text("Semua snapshot disimpan lokal bersama floor plan-nya.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Selesai") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+
+            if profiles.isEmpty {
+                ContentUnavailableView(
+                    "Belum Ada Profil",
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text("Profil yang disimpan akan muncul di sini.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(profiles) { profile in
+                    HStack(spacing: Space.m) {
+                        Image(systemName: profile.usesCanvas ? "square.grid.3x3" : "photo")
+                            .frame(width: 24)
+                            .foregroundStyle(activeProfileID == profile.id ? Theme.accent : .secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: Space.xs) {
+                                Text(profile.displayName).font(.headline).lineLimit(1)
+                                if activeProfileID == profile.id {
+                                    Text("Aktif")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(Theme.accent)
+                                }
+                            }
+                            Text("\(profile.cameraCount) kamera • \(profile.sourceName) • \(profile.savedAt.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Button("Muat") {
+                            dismiss()
+                            DispatchQueue.main.async { onLoad(profile) }
+                        }
+                        .buttonStyle(.bordered)
+                        Button {
+                            onExport(profile)
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Ekspor profil")
+                        Button(role: .destructive) {
+                            deletionCandidate = profile
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Hapus profil")
+                    }
+                    .padding(.vertical, Space.xs)
+                }
+            }
+        }
+        .padding(Space.l)
+        .frame(minWidth: 720, minHeight: 430)
+        .alert(
+            "Hapus profil kalibrasi?",
+            isPresented: Binding(
+                get: { deletionCandidate != nil },
+                set: { if !$0 { deletionCandidate = nil } }
+            ),
+            presenting: deletionCandidate
+        ) { profile in
+            Button("Hapus", role: .destructive) {
+                onDelete(profile)
+                deletionCandidate = nil
+            }
+            Button("Batal", role: .cancel) { deletionCandidate = nil }
+        } message: { profile in
+            Text("\(profile.displayName) dan salinan floor plan-nya akan dihapus dari riwayat.")
+        }
+    }
+}
+
+private extension UTType {
+    static let foodcourtCalibrationProfile = UTType(
+        exportedAs: "com.tiara.foodcourt.calibration-profile",
+        conformingTo: .package
+    )
 }
 
 private enum VideoFrameLoader {
