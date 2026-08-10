@@ -115,13 +115,28 @@ enum CalibrationProfileStore {
         try JSONDecoder().decode(CalibrationProfile.self, from: data)
     }
 
+    /// Benar-benar membuka berkasnya. Sandbox baru menolak pada saat membaca,
+    /// jadi hanya percobaan baca yang jujur menjawab "boleh atau tidak".
+    static func bisaDibaca(_ path: String) -> Bool {
+        guard let f = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? f.close() }
+        return true
+    }
+
     /// Kembalikan lokasi berkas denah yang bisa dibaca.
     ///
-    /// Berkas aslinya dipakai lebih dulu kalau masih ada — kalau pengguna
-    /// mengganti gambarnya, yang terbaca versi terbarunya. Kalau tidak ada
-    /// (profil dari laptop lain), yang tersemat ditulis ke folder aplikasi.
+    /// Berkas aslinya dipakai lebih dulu kalau masih TERBACA — kalau pengguna
+    /// mengganti gambarnya, yang terbaca versi terbarunya. Kalau tidak
+    /// (profil dari laptop lain, atau berkasnya di luar jangkauan sandbox),
+    /// yang tersemat ditulis ke folder aplikasi.
+    ///
+    /// Syaratnya "terbaca", bukan "ada": `fileExists` cuma memanggil stat, dan
+    /// sandbox MELOLOSKAN stat untuk berkas yang pembacaannya nanti ditolak.
+    /// Memakai `fileExists` membuat denah di luar container tampak sehat,
+    /// mengembalikan URL yang gagal dimuat, dan cadangan tersemat yang sudah
+    /// ada di profil tidak pernah terpakai — layar denah kosong tanpa galat.
     private static func pulihkanDenah(_ f: FloorplanProfile) -> URL? {
-        if let p = f.imagePath, FileManager.default.fileExists(atPath: p) {
+        if let p = f.imagePath, bisaDibaca(p) {
             return URL(fileURLWithPath: p)
         }
         guard let data = f.imageData, !data.isEmpty else { return nil }
