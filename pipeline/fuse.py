@@ -1,82 +1,3 @@
-
-# import numpy as np
-
-
-# class _UnionFind:
-#     def __init__(self, n):
-#         self.p = list(range(n))
-
-#     def find(self, x):
-#         while self.p[x] != x:
-#             self.p[x] = self.p[self.p[x]]
-#             x = self.p[x]
-#         return x
-
-#     def union(self, a, b):
-#         self.p[self.find(a)] = self.find(b)
-
-
-# def fuse_tracks(cam_floor, cfg):
-#     """
-#     cam_floor: list per kamera berisi dict track_id -> list[(t, x_m, y_m)]
-#     Return:
-#       global_tracks: dict gid(int) -> list[(t, x_m, y_m)]  (posisi dirata-rata di zona overlap)
-#       cam_to_global: dict (cam_idx, track_id) -> gid   (untuk render overlay)
-#     """
-#     fps = cfg.PROC_FPS
-#     tracks = []  # (cam_idx, track_id, {bin: (x, y)})
-#     for ci, floor in enumerate(cam_floor):
-#         for tid, obs in floor.items():
-#             d = {}
-#             for (t, x, y) in obs:
-#                 d[round(t * fps)] = (x, y)
-#             if d:
-#                 tracks.append((ci, tid, d))
-
-#     n = len(tracks)
-#     uf = _UnionFind(n)
-#     min_ov = max(1, int(cfg.MERGE_MIN_OVERLAP_SEC * fps))
-#     R = cfg.R_MERGE_M
-
-#     for i in range(n):
-#         ci, _, di = tracks[i]
-#         for j in range(i + 1, n):
-#             cj, _, dj = tracks[j]
-#             if ci == cj:
-#                 continue  # track dari kamera yang sama = orang berbeda
-#             common = di.keys() & dj.keys()
-#             if len(common) < min_ov:
-#                 continue
-#             dsum = 0.0
-#             for b in common:
-#                 (x1, y1), (x2, y2) = di[b], dj[b]
-#                 dsum += float(np.hypot(x1 - x2, y1 - y2))
-#             if dsum / len(common) < R:
-#                 uf.union(i, j)
-
-#     groups = {}
-#     for i in range(n):
-#         groups.setdefault(uf.find(i), []).append(i)
-
-#     global_tracks = {}
-#     cam_to_global = {}
-#     gid = 0
-#     for _, members in groups.items():
-#         gid += 1
-#         binmap = {}
-#         for m in members:
-#             ci, tid, d = tracks[m]
-#             cam_to_global[(ci, tid)] = gid
-#             for b, (x, y) in d.items():
-#                 binmap.setdefault(b, []).append((x, y))
-#         obs = []
-#         for b in sorted(binmap):
-#             arr = np.asarray(binmap[b])
-#             obs.append((b / fps, float(arr[:, 0].mean()), float(arr[:, 1].mean())))
-#         global_tracks[gid] = obs
-
-#     return global_tracks, cam_to_global
-
 """
 Tahap FUSION multi-kamera — versi LEVEL-TRACK (untuk overlap kamera yang jarang).
 
@@ -107,47 +28,90 @@ class _UnionFind:
         self.p[self.find(a)] = self.find(b)
 
 
-def fuse_tracks(cam_floor, cfg):
+def _norm(v):
+    if v is None:
+        return None
+    v = np.asarray(v, dtype=np.float32).reshape(-1)
+    nrm = float(np.linalg.norm(v))
+    return v / nrm if nrm > 1e-6 else None
+
+
+def fuse_tracks(cam_floor, cfg, cam_feats=None):
     """
     cam_floor: list per kamera berisi dict track_id -> list[(t, x_m, y_m)]
+    cam_feats: list per kamera berisi dict track_id -> embedding penampilan (opsional)
     Return:
-      global_tracks: dict gid(int) -> list[(t, x_m, y_m)]  (posisi dirata-rata di zona overlap)
-      cam_to_global: dict (cam_idx, track_id) -> gid   (untuk render overlay)
+      global_tracks: dict gid(int) -> list[(t, x_m, y_m)]
+      cam_to_global: dict (cam_idx, track_id) -> gid
+    Gabung dua track antar-kamera bila: penampilan mirip (cosine>=APP) DAN geometri
+    masuk radius longgar; ATAU (fallback) geometri masuk radius ketat.
     """
     fps = cfg.PROC_FPS
-    tracks = []  # (cam_idx, track_id, {bin: (x, y)})
+    tracks = []  # (cam_idx, track_id, {bin:(x,y)}, feat|None)
     for ci, floor in enumerate(cam_floor):
+        feats = (cam_feats[ci] if (cam_feats and ci < len(cam_feats)) else {}) or {}
         for tid, obs in floor.items():
             d = {}
             for (t, x, y) in obs:
                 d[round(t * fps)] = (x, y)
             if d:
-                tracks.append((ci, tid, d))
+                tracks.append((ci, tid, d, _norm(feats.get(tid))))
 
     n = len(tracks)
     uf = _UnionFind(n)
     min_ov = max(1, int(cfg.MERGE_MIN_OVERLAP_SEC * fps))
     R = cfg.R_MERGE_M
+    R_LOOSE = getattr(cfg, "R_MERGE_APP_M", 3.5)
+    APP = getattr(cfg, "APP_THRESH", 0.5)
+    use_app = getattr(cfg, "WITH_APP_FUSION", True)
+    n_feat = sum(1 for t in tracks if t[3] is not None)
 
+    # Kumpulkan kandidat pasangan lintas-kamera + skor, lalu match SATU-LAWAN-SATU
+    # (satu grup global = maksimal 1 track per kamera). Cegah cascade over-merge.
+    edges = []
     for i in range(n):
-        ci, _, di = tracks[i]
+        ci, _, di, fi = tracks[i]
         for j in range(i + 1, n):
-            cj, _, dj = tracks[j]
+            cj, _, dj, fj = tracks[j]
             if ci == cj:
                 continue  # track dari kamera yang sama = orang berbeda
             common = di.keys() & dj.keys()
             if len(common) < min_ov:
                 continue
-            dsum = 0.0
-            for b in common:
-                (x1, y1), (x2, y2) = di[b], dj[b]
-                dsum += float(np.hypot(x1 - x2, y1 - y2))
-            if dsum / len(common) < R:
-                uf.union(i, j)
+            dmean = sum(float(np.hypot(di[b][0] - dj[b][0], di[b][1] - dj[b][1]))
+                        for b in common) / len(common)
+
+            score = None
+            if use_app and fi is not None and fj is not None:
+                sim = float(np.dot(fi, fj))           # cosine (ternormalisasi)
+                if sim >= APP and dmean < R_LOOSE:
+                    score = 1.0 + sim                 # appearance diprioritaskan
+            if score is None and dmean < R:
+                score = 1.0 - dmean / max(R, 1e-6)    # fallback geometri (skor lebih rendah)
+            if score is not None:
+                edges.append((score, i, j))
+
+    edges.sort(key=lambda e: e[0], reverse=True)      # pasangan terbaik dulu
+    root_cams = [{tracks[i][0]} for i in range(n)]    # kamera yang ada di tiap grup
+    for score, i, j in edges:
+        ri, rj = uf.find(i), uf.find(j)
+        if ri == rj:
+            continue
+        if root_cams[ri] & root_cams[rj]:
+            continue                                  # grup sudah punya track dari kamera itu -> tolak
+        uf.union(i, j)
+        nr = uf.find(i)
+        root_cams[nr] = root_cams[ri] | root_cams[rj]
 
     groups = {}
     for i in range(n):
         groups.setdefault(uf.find(i), []).append(i)
+
+    multicam = sum(1 for members in groups.values()
+                   if len({tracks[m][0] for m in members}) > 1)
+    print(f"[engine] fuse: {n} track-kamera -> {len(groups)} global "
+          f"({multicam} gabungan multi-kamera | R={R}m, app<{R_LOOSE}m sim>={APP}, "
+          f"embedding={n_feat}/{n})", flush=True)
 
     global_tracks = {}
     cam_to_global = {}
@@ -156,7 +120,7 @@ def fuse_tracks(cam_floor, cfg):
         gid += 1
         binmap = {}
         for m in members:
-            ci, tid, d = tracks[m]
+            ci, tid, d, _f = tracks[m]
             cam_to_global[(ci, tid)] = gid
             for b, (x, y) in d.items():
                 binmap.setdefault(b, []).append((x, y))

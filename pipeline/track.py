@@ -46,12 +46,13 @@ def track_from_dets(video_path: str, dets, cfg, on_frame=None):
 
     tracks = defaultdict(list)
     per_frame = {}
+    track_feats = {}          # track_id -> embedding penampilan (EMA)
     n = len(dets)
     done = 0
 
     if not frames_needed:
         cap.release()
-        return dict(tracks), per_frame
+        return dict(tracks), per_frame, track_feats
 
     min_needed = min(frames_needed)
     max_needed = max(frames_needed)
@@ -76,6 +77,19 @@ def track_from_dets(video_path: str, dets, cfg, on_frame=None):
                 out = tracker.update(dets_in, frame)
             except Exception:
                 out = np.empty((0, 8), dtype=np.float32)   # frame bermasalah -> lewati
+
+            # Simpan embedding penampilan (EMA) per track dari state boxmot -> untuk fusion antar-kamera.
+            try:
+                for st in (getattr(tracker, "active_tracks", None) or []):
+                    fid = getattr(st, "id", None)
+                    fv = getattr(st, "smooth_feat", None)
+                    if fv is None:
+                        fv = getattr(st, "curr_feat", None)
+                    if fid is not None and fv is not None:
+                        track_feats[int(fid)] = np.asarray(fv, dtype=np.float32).reshape(-1)
+            except Exception:
+                pass
+
             t = tmap[idx]
             for row in out:
                 x1, y1, x2, y2 = float(row[0]), float(row[1]), float(row[2]), float(row[3])
@@ -89,7 +103,7 @@ def track_from_dets(video_path: str, dets, cfg, on_frame=None):
         idx += 1
 
     cap.release()
-    return dict(tracks), per_frame
+    return dict(tracks), per_frame, track_feats
 
 
 def tracks_to_floor(tracks, H):
