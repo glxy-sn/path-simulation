@@ -288,10 +288,11 @@ struct ResultsView: View {
         return hasil
     }
 
-    /// Gambar denah dari profil tersimpan: berkas aslinya kalau masih ada,
+    /// Gambar denah dari profil tersimpan: berkas aslinya kalau masih TERBACA,
     /// kalau tidak yang tersemat di profil ditulis ke folder aplikasi.
+    /// "Terbaca", bukan "ada" — alasannya di `CalibrationProfileStore.bisaDibaca`.
     private func denahTersimpan(_ profil: CalibrationProfile) -> URL? {
-        if let p = profil.floorplan.imagePath, FileManager.default.fileExists(atPath: p) {
+        if let p = profil.floorplan.imagePath, CalibrationProfileStore.bisaDibaca(p) {
             return URL(fileURLWithPath: p)
         }
         guard let data = profil.floorplan.imageData, !data.isEmpty else { return nil }
@@ -1500,7 +1501,7 @@ struct PathContent: View {
                 let warna = Color(hue: trace.hue, saturation: 0.72, brightness: 0.82)
 
                 var garis = Path()
-                garis.addLines(pts)
+                garis.tambahKurvaHalus(pts)
                 // Garis putih di bawahnya memisahkan jalur yang bersilangan —
                 // tanpa itu, jalur yang menumpuk terbaca sebagai satu.
                 // Garis kontras di bawahnya memisahkan jalur yang bersilangan,

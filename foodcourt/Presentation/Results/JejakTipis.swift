@@ -24,19 +24,27 @@ struct JejakTipis: View {
                 let peta = PetaKamera(rasio: rasio, ukuran: size, perbesar: nil, hasil: k)
                 for (_, titik) in deret(k) where titik.count >= 2 {
                     var g = Path()
-                    var mulaiBaru = true
+                    // Titik dikumpulkan per potongan menerus dulu, baru
+                    // dilengkungkan. Melengkungkan ruas satu per satu mustahil:
+                    // kurva butuh tetangga di kiri-kanannya untuk tahu arah.
+                    var potongan: [CGPoint] = []
+                    func tutup() {
+                        if potongan.count >= 2 { g.tambahKurvaHalus(potongan) }
+                        potongan.removeAll(keepingCapacity: true)
+                    }
                     for (a, b) in zip(titik, titik.dropFirst()) {
                         // Ambang yang sama dengan tab Path: ruas yang terlalu
                         // panjang itu lompatan ID, bukan orang berjalan cepat.
                         if hypot((b.x - a.x) * rasio, b.y - a.y) > 0.15 {
-                            mulaiBaru = true; continue
+                            tutup(); continue
                         }
                         guard let pa = peta.titikSah(a), let pb = peta.titikSah(b) else {
-                            mulaiBaru = true; continue
+                            tutup(); continue
                         }
-                        if mulaiBaru { g.move(to: pa); mulaiBaru = false }
-                        g.addLine(to: pb)
+                        if potongan.isEmpty { potongan.append(pa) }
+                        potongan.append(pb)
                     }
+                    tutup()
                     ctx.stroke(g, with: .color(terang
                                                ? Color(hex: 0x1D4ED8, alpha: 0.16)
                                                : .cyan.opacity(0.14)),

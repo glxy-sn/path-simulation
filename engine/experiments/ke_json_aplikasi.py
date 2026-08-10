@@ -64,9 +64,24 @@ BLOB_MAKS = 28
 BLOB_RADIUS = 0.055
 ZONA_MAKS = 5            # jumlah zona padat yang dilaporkan
 JEJAK_MAKS = 12          # jumlah lintasan yang dilaporkan
-# Jejak titik kaki dicuplik tiap N frame. 20 frame = 1 detik pada 20 fps, cukup
-# untuk menghitung lama di zona; lebih rapat hanya membesarkan berkas.
-JEJAK_LANGKAH = 20
+# Jejak titik kaki dicuplik tiap N frame. 5 frame = 4 titik/detik pada 20 fps.
+#
+# Dulu 20 (1 titik/detik), beralasan "cukup untuk menghitung lama di zona".
+# Benar untuk zona, tapi jejak yang sama dipakai MENGANIMASIKAN orang di denah,
+# dan 1 titik/detik membuat orangnya melompat sedetik sekali — terbaca sebagai
+# tracker yang kedap-kedip, padahal trackernya baik-baik saja.
+#
+# Ongkosnya kecil: hasil.json 182 KB -> sekitar 700 KB.
+JEJAK_LANGKAH = 5
+
+# Jejak yang hidupnya lebih pendek dari ini dibuang dari animasi: track sekejap
+# muncul sebagai nomor asing yang berkelip lalu lenyap.
+#
+# Satuannya DETIK, bukan jumlah titik, supaya ambangnya tidak ikut bergeser
+# setiap JEJAK_LANGKAH disetel. Sengaja TIDAK menyaring yang diam di tempat —
+# orang duduk perpindahannya nyaris nol tapi dia pengunjung sungguhan, dan
+# jejaknya justru yang dipakai menghitung lama di zona.
+JEJAK_MIN_DETIK = 1.0
 # Recall detektor di pantry, dari 106 anotasi kotak. HANYA berlaku di pantry —
 # dipakai sebagai cadangan kalau venue tidak punya angkanya sendiri, dan saat itu
 # dilaporkan sebagai "bukan dari venue ini" supaya tidak disangka hasil ukur.
@@ -451,8 +466,19 @@ def main():
             x, y = round((x1 + x2) / 2 / W, 4), round(y2 / H, 4)
             jejak_penuh[t].append([x, y])
             jejak_waktu[t].append([i, x, y])
-    jejak_kirim = {str(t): v for t, v in jejak_penuh.items() if v}
-    jejak_waktu_kirim = {str(t): v for t, v in jejak_waktu.items() if v}
+    # Buang jejak yang terlalu sekejap. Hidupnya diukur dari nomor frame
+    # pertama sampai terakhir, BUKAN dari jumlah titik: track yang sempat putus
+    # di tengah tetap dihitung sepanjang rentang sesungguhnya.
+    min_frame = JEJAK_MIN_DETIK * fps
+    remah = {t for t, v in jejak_waktu.items()
+             if len(v) < 2 or (v[-1][0] - v[0][0]) < min_frame}
+    jejak_kirim = {str(t): v for t, v in jejak_penuh.items()
+                   if v and t not in remah}
+    jejak_waktu_kirim = {str(t): v for t, v in jejak_waktu.items()
+                         if v and t not in remah}
+    if remah:
+        print(f"  jejak remah dibuang: {len(remah)} dari {len(jejak_waktu)} "
+              f"(< {JEJAK_MIN_DETIK}s)")
 
     n_id = len({t for fr in per_frame for *_, t in fr})
 
