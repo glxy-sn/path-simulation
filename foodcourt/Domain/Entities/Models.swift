@@ -83,10 +83,10 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Deteksi orang (YOLO11x)",         systemImage: "person.crop.rectangle"),
-        .init(name: "Tracking (BoT-SORT)",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
+        .init(name: "Detection",         systemImage: "person.crop.rectangle"),
+        .init(name: "Tracking",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
         .init(name: "Fusion multi-kamera",             systemImage: "camera.metering.multispot"),
-        .init(name: "Analitik (heatmap, dwell, path)", systemImage: "chart.dots.scatter")
+        .init(name: "Analisis", systemImage: "chart.dots.scatter")
     ]
 }
 
@@ -145,6 +145,7 @@ struct PathTrace: Identifiable {
     let id = UUID()
     let points: [CGPoint]
     let hue: Double
+    var times: [Double] = []
 }
 
 enum SampleResult {

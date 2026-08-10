@@ -4,6 +4,7 @@
 //
 //  Created by Shafa Tiara on 03/08/26.
 //
+
 import SwiftUI
 import Charts
 import AVKit
@@ -39,6 +40,22 @@ struct ResultsView: View {
     private var floorMapImage: NSImage? {
         guard !session.usesScaledCanvas, let url = session.floorPlanURL else { return nil }
         return NSImage(contentsOf: url)
+    }
+
+    private var blobs: [HeatBlob] {
+        let b = session.result?.blobs ?? []
+        return b.isEmpty ? (hasResult ? [] : SampleResult.blobs) : b
+    }
+    private var paths: [PathTrace] {
+        let p = session.result?.paths ?? []
+        return p.isEmpty ? (hasResult ? [] : SampleResult.paths) : p
+    }
+
+    /// Rasio venue (lebar : panjang) untuk membentuk area visual lantai.
+    private var venueAspect: CGFloat {
+        let w = session.venueWidthM, h = session.venueHeightM
+        guard w > 0, h > 0 else { return 16.0 / 9.0 }
+        return CGFloat(w / h)
     }
 
     var body: some View {
@@ -93,23 +110,30 @@ struct ResultsView: View {
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
 
-            ZStack {
+            Group {
                 switch visual {
                 case .boundingBox:
-                    if let url = boundingVideoURL { FileVideoPlayer(url: url) }
-                    else { BoundingBoxContent(); VideoChrome() }
+                    ZStack {
+                        if let url = boundingVideoURL { FileVideoPlayer(url: url) }
+                        else { BoundingBoxContent(); VideoChrome() }
+                    }
+                    .frame(height: min(400, max(300, 360 * scale)))
+                    .frame(maxWidth: .infinity)
                 case .path:
-                    if let url = pathVideoURL { FileVideoPlayer(url: url) }
-                    else { PathContent(paths: SampleResult.paths); VideoChrome() }
+                    PathContent(paths: paths, background: floorMapImage)
+                        .aspectRatio(venueAspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
                 case .heatmap:
-                    if let url = heatmapURL { FileImage(url: url) }
-                    else { HeatmapView(blobs: SampleResult.blobs); HeatmapLegend() }
+                    HeatmapView(blobs: blobs, background: floorMapImage)
+                        .aspectRatio(venueAspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
                 case .zona:
                     ZoneMapView(zones: zones, background: floorMapImage)
+                        .aspectRatio(venueAspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: min(400, max(300, 360 * scale)))
-            .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
@@ -261,9 +285,8 @@ private struct ZoneMapView: View {
             let W = geo.size.width, H = geo.size.height
             ZStack {
                 if let background {
-                    Image(nsImage: background).resizable().scaledToFill()
-                        .frame(width: W, height: H).clipped()
-                    Color.white.opacity(0.08)
+                    Image(nsImage: background).resizable().allowsHitTesting(false)
+                    Color.white.opacity(0.08).allowsHitTesting(false)
                 } else {
                     Color(hex: 0xF7F8FA)
 
@@ -288,12 +311,14 @@ private struct ZoneMapView: View {
                             .fill(color.opacity(0.20))
                         RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
                             .strokeBorder(color, lineWidth: 1.5)
-                        VStack(spacing: 2) {
+                        VStack(spacing: 1) {
                             Text(zone.code)
                                 .font(.system(.title2, design: .rounded, weight: .bold))
                                 .foregroundStyle(color)
+                            Text("\(Int((zone.share * 100).rounded()))%")
+                                .font(.caption.weight(.semibold)).foregroundStyle(color)
                             Text("\(zone.visits)")
-                                .font(.caption.monospacedDigit())
+                                .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -347,35 +372,80 @@ private struct BoundingBoxContent: View {
 
 private struct PathContent: View {
     let paths: [PathTrace]
+    var background: NSImage? = nil
+
+    private var span: (lo: Double, hi: Double) {
+        let all = paths.flatMap { $0.times }
+        guard let lo = all.min(), let hi = all.max(), hi > lo else { return (0, 1) }
+        return (lo, hi)
+    }
+
     var body: some View {
+        let (lo, hi) = span
         GeometryReader { geo in
             ZStack {
-                Color(hex: 0xF7F8FA)
-                Canvas { ctx, size in
-                    var grid = Path()
-                    let cols = 10, rows = 6
-                    for c in 0...cols { let x = size.width * CGFloat(c)/CGFloat(cols)
-                        grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
-                    for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
-                        grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
-                    ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.08)), lineWidth: 1)
-                }
-                ForEach(paths) { trace in
-                    let color = Color(hue: trace.hue, saturation: 0.75, brightness: 0.9)
-                    Path { p in
-                        let pts = trace.points.map { CGPoint(x: $0.x * geo.size.width, y: $0.y * geo.size.height) }
-                        p.addLines(pts)
-                    }
-                    .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    if let s = trace.points.first {
-                        Circle().fill(.green).frame(width: 9, height: 9)
-                            .position(x: s.x * geo.size.width, y: s.y * geo.size.height)
-                    }
-                    if let e = trace.points.last {
-                        Circle().fill(.red).frame(width: 9, height: 9)
-                            .position(x: e.x * geo.size.width, y: e.y * geo.size.height)
+                if let background {
+                    Image(nsImage: background).resizable().allowsHitTesting(false)
+                } else {
+                    Color(hex: 0xF7F8FA)
+                    Canvas { ctx, size in
+                        var grid = Path()
+                        let cols = 10, rows = 6
+                        for c in 0...cols { let x = size.width * CGFloat(c)/CGFloat(cols)
+                            grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
+                        for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
+                            grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
+                        ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.08)), lineWidth: 1)
                     }
                 }
+
+                TimelineView(.animation) { tl in
+                    Canvas { ctx, size in
+                        let loop = 10.0   // detik nyata untuk satu putaran
+                        let phase = tl.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: loop) / loop
+                        let cursor = lo + phase * (hi - lo)
+                        draw(ctx, size, cursor: cursor, phase: phase)
+                    }
+                }
+            }
+        }
+    }
+
+    private func draw(_ ctx: GraphicsContext, _ size: CGSize, cursor: Double, phase: Double) {
+        for trace in paths {
+            let n = trace.points.count
+            guard n >= 2 else { continue }
+            // berapa titik yang sudah "terlihat" sampai cursor
+            let upto: Int
+            if trace.times.count == n {
+                upto = max(1, trace.times.filter { $0 <= cursor }.count)
+            } else {
+                upto = max(1, Int(phase * Double(n)))
+            }
+            let vis = Array(trace.points.prefix(upto))
+            let color = Color(hue: trace.hue, saturation: 0.85, brightness: 0.95)
+
+            // jejak (diputus di lompatan besar)
+            var g = Path()
+            var started = false
+            for (a, b) in zip(vis, vis.dropFirst()) {
+                if hypot(b.x - a.x, b.y - a.y) > 0.15 { started = false; continue }
+                let pa = CGPoint(x: a.x * size.width, y: a.y * size.height)
+                let pb = CGPoint(x: b.x * size.width, y: b.y * size.height)
+                if !started { g.move(to: pa); started = true }
+                g.addLine(to: pb)
+            }
+            ctx.stroke(g, with: .color(color.opacity(0.85)),
+                       style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+
+            // kepala (titik bergerak)
+            if let head = vis.last {
+                let p = CGPoint(x: head.x * size.width, y: head.y * size.height)
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)),
+                         with: .color(color))
+                ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)),
+                           with: .color(.white), lineWidth: 1.5)
             }
         }
     }
@@ -405,22 +475,32 @@ private struct HeatmapLegend: View {
 
 private struct HeatmapView: View {
     let blobs: [HeatBlob]
+    var background: NSImage? = nil
     var body: some View {
-        Canvas { ctx, size in
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: 0x0F1524)))
-            ctx.addFilter(.blur(radius: 18))
-            ctx.drawLayer { layer in
-                for blob in blobs {
-                    let r = blob.radius * size.width
-                    let center = CGPoint(x: blob.x * size.width, y: blob.y * size.height)
-                    let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-                    let shading = GraphicsContext.Shading.radialGradient(
-                        Gradient(stops: [
-                            .init(color: heatColor(blob.intensity).opacity(0.9), location: 0),
-                            .init(color: heatColor(blob.intensity).opacity(0.0), location: 1)
-                        ]),
-                        center: center, startRadius: 0, endRadius: r)
-                    layer.fill(Path(ellipseIn: rect), with: shading)
+        GeometryReader { geo in
+            ZStack {
+                if let background {
+                    Image(nsImage: background).resizable().allowsHitTesting(false)
+                    Color.black.opacity(0.25).allowsHitTesting(false)
+                } else {
+                    Color(hex: 0x0F1524)
+                }
+                Canvas { ctx, size in
+                    ctx.addFilter(.blur(radius: 18))
+                    ctx.drawLayer { layer in
+                        for blob in blobs {
+                            let r = blob.radius * size.width
+                            let center = CGPoint(x: blob.x * size.width, y: blob.y * size.height)
+                            let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+                            let shading = GraphicsContext.Shading.radialGradient(
+                                Gradient(stops: [
+                                    .init(color: heatColor(blob.intensity).opacity(0.9), location: 0),
+                                    .init(color: heatColor(blob.intensity).opacity(0.0), location: 1)
+                                ]),
+                                center: center, startRadius: 0, endRadius: r)
+                            layer.fill(Path(ellipseIn: rect), with: shading)
+                        }
+                    }
                 }
             }
         }

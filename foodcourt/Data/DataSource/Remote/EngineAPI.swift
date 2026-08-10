@@ -7,6 +7,13 @@
 
 import Foundation
 
+// ============================================================
+//  EngineAPI — DTO (cocok dengan models.py Python) + panggilan endpoint.
+//  Taruh di: Foodcourt/Sources/Data/DataSource/Remote/EngineAPI.swift
+// ============================================================
+
+// MARK: Request DTO
+
 struct PointDTO: Codable { let x: Double; let y: Double }
 
 struct VenueDTO: Codable {
@@ -60,6 +67,10 @@ struct StopDTO: Codable { let label: String; let x: Double; let y: Double; let d
 struct OccDTO: Codable { let minute: Int; let count: Int }
 struct OverlayDTO: Codable { let cam: String; let uri: String }
 
+struct BlobDTO: Codable { let x: Double; let y: Double; let intensity: Double; let radius: Double }
+struct PathPointDTO: Codable { let x: Double; let y: Double; let t: Double }
+struct PathTraceDTO: Codable { let points: [PathPointDTO]; let hue: Double }
+
 struct ArtifactsDTO: Codable {
     let heatmapImage: String?
     let pathVideo: String?
@@ -74,6 +85,8 @@ struct JobResultDTO: Codable {
     let zones: [ZoneDTO]
     let stopPoints: [StopDTO]
     let occupancy: [OccDTO]
+    let blobs: [BlobDTO]
+    let paths: [PathTraceDTO]
     let artifacts: ArtifactsDTO
     let trajectories: String?
 }

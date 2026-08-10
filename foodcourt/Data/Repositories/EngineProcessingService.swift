@@ -114,12 +114,19 @@ struct EngineProcessingService: ProcessingService {
             guard let u = artifactURL($0.uri) else { return nil }
             return (cam: $0.cam, url: u)
         }
+        let blobs = dto.blobs.map { HeatBlob(x: $0.x, y: $0.y, intensity: $0.intensity, radius: $0.radius) }
+        let paths = dto.paths.map { p in
+            PathTrace(points: p.points.map { CGPoint(x: $0.x, y: $0.y) },
+                      hue: p.hue,
+                      times: p.points.map { $0.t })
+        }
         return AnalysisResult(
             summary: summary, zones: zones, stops: stops, occupancy: occ,
             heatmapURL: artifactURL(dto.artifacts.heatmapImage),
             pathVideoURL: artifactURL(dto.artifacts.pathVideo),
             combinedVideoURL: artifactURL(dto.artifacts.combinedVideo),
-            overlayVideos: overlays
+            overlayVideos: overlays,
+            blobs: blobs, paths: paths
         )
     }
 }

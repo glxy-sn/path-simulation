@@ -33,6 +33,8 @@ struct AnalysisResult {
     var pathVideoURL: URL?
     var combinedVideoURL: URL?
     var overlayVideos: [(cam: String, url: URL)]
+    var blobs: [HeatBlob]
+    var paths: [PathTrace]
 }
 
 @Observable
@@ -50,7 +52,7 @@ final class AnalysisSession {
     var floorPlanName: String?
     var floorPlanPixelSize: PixelSize?
     /// Pilihan sumber yang aktif. Berkas denah tetap disimpan saat pengguna beralih ke canvas.
-    var usesScaledCanvas = false
+    var usesScaledCanvas = true
 
     // Trim global
     var trimStartSec: Double = 0
@@ -90,7 +92,7 @@ final class AnalysisSession {
 
     func reset() {
         cameras = []
-        floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = false
+        floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
     }
