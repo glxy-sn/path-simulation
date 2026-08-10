@@ -47,8 +47,15 @@ _s = importlib.util.spec_from_file_location("_vp", APP / "experiments/viz_pipeli
 _vp = importlib.util.module_from_spec(_s)
 _s.loader.exec_module(_vp)
 
-DETECTOR = APP / "weights_ft/yolo11s_crowd.pt"
-REID = "osnet_ain_x1_0_msmt17.pt"
+# Detektor dan Re-ID bisa ditukar lewat env, untuk MEMBANDINGKAN model tanpa
+# menyentuh setelan bawaan. Contoh — memakai model pipeline sebelah:
+#
+#   CROWDFLOW_DETEKTOR=yolo11x.pt CROWDFLOW_REID=osnet_x0_25_msmt17.pt
+#
+# Yang lain (pagar tracker, penyambungan ID, seluruh visualisasi) tetap sama,
+# jadi kalau hasilnya berbeda, penyebabnya memang modelnya.
+DETECTOR = os.environ.get("CROWDFLOW_DETEKTOR") or APP / "weights_ft/yolo11s_crowd.pt"
+REID = os.environ.get("CROWDFLOW_REID", "osnet_ain_x1_0_msmt17.pt")
 CONF, IMGSZ, IOU_NMS = 0.25, 1280, 0.7
 BOTSORT = _vp.BOTSORT
 
