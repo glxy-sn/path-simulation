@@ -6,7 +6,7 @@ dinormalisasi 0–1 relatif dimensi venue supaya gampang digambar di UI.
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from models import Summary, Zone, Rect, StopPointOut, OccupancyBin
+from models import Summary, Zone, Rect, StopPointOut, OccupancyBin, HeatBlobOut, PathPoint, PathTraceOut
 
 
 def compute_analytics(global_tracks, venue, cfg):
@@ -47,20 +47,17 @@ def compute_analytics(global_tracks, venue, cfg):
             cy = int(np.clip(y / Hm * gh, 0, gh - 1))
             heat[cy, cx] += 1
 
-    # ---- zona (grid) ----
+    # ---- zona (grid) — "visits" = jumlah PENGAMATAN titik-kaki (bebas identitas) ----
     zc, zr = cfg.ZONE_GRID
-    cell_ids = [[set() for _ in range(zc)] for _ in range(zr)]
+    cell_count = np.zeros((zr, zc), dtype=float)
     for gid, obs in global_tracks.items():
-        cells = set()
         for (_, x, y) in obs:
             cxi = int(np.clip(x / W * zc, 0, zc - 1))
             cyi = int(np.clip(y / Hm * zr, 0, zr - 1))
-            cells.add((cyi, cxi))
-        for (cyi, cxi) in cells:
-            cell_ids[cyi][cxi].add(gid)
+            cell_count[cyi, cxi] += 1
 
     ranked = sorted(
-        ((len(cell_ids[r][c]), r, c) for r in range(zr) for c in range(zc) if cell_ids[r][c]),
+        ((cell_count[r][c], r, c) for r in range(zr) for c in range(zc) if cell_count[r][c] > 0),
         reverse=True,
     )
     maxv = ranked[0][0] if ranked else 1
@@ -68,8 +65,8 @@ def compute_analytics(global_tracks, venue, cfg):
     for i, (v, r, c) in enumerate(ranked[:cfg.ZONE_MAX]):
         zones.append(Zone(
             code=chr(ord('A') + i),
-            visits=v,
-            share=v / maxv,
+            visits=int(v),
+            share=float(v / maxv),
             rect=Rect(x=c / zc, y=r / zr, w=1.0 / zc, h=1.0 / zr),
         ))
 
@@ -112,10 +109,47 @@ def compute_analytics(global_tracks, venue, cfg):
     ]
 
     # ---- capture rate ----
-    # CATATAN: capture rate butuh definisi domain (mis. garis pintu masuk vs. masuk toko).
-    # Sementara dipakai proxy: fraksi pengunjung yang masuk zona tersibuk.
-    # Ganti dengan definisi zona-pintu yang benar saat sudah ada zona buatan user.
-    capture = float(min(zones[0].visits / total, 1.0)) if (total and zones) else 0.0
+    # Tanpa ground-truth, recall sebenarnya tak bisa dihitung. Dipakai PROXY:
+    # kontinuitas deteksi — rata-rata seberapa penuh sebuah track teramati
+    # sepanjang hidupnya (points aktual / frame yang seharusnya). Tinggi = deteksi
+    # jarang bolong. Ini indikator kualitas, bukan recall pasti.
+    proc_fps = getattr(cfg, "PROC_FPS", 5.0)
+    conts = []
+    for obs in global_tracks.values():
+        ts = [o[0] for o in obs]
+        span = max(ts) - min(ts) if len(ts) > 1 else 0.0
+        expected = span * proc_fps + 1.0
+        conts.append(min(1.0, len(obs) / expected))
+    capture = float(np.mean(conts)) if conts else 0.0
+
+    # ---- blobs: puncak kepadatan lantai (heatmap data-driven, bebas identitas) ----
+    gw, gh = cfg.HEAT_GRID
+    blobs = []
+    work = heat.copy()
+    hmax = float(heat.max()) if heat.max() > 0 else 1.0
+    for _ in range(getattr(cfg, "BLOB_MAX", 28)):
+        if work.max() <= 0:
+            break
+        fy, fx = np.unravel_index(int(work.argmax()), work.shape)
+        blobs.append(HeatBlobOut(
+            x=round(float((fx + 0.5) / gw), 4),
+            y=round(float((fy + 0.5) / gh), 4),
+            intensity=round(float(work[fy, fx] / hmax), 3),
+            radius=float(getattr(cfg, "BLOB_RADIUS", 0.06)),
+        ))
+        y0, y1 = max(0, fy - 1), min(gh, fy + 2)
+        x0, x1 = max(0, fx - 1), min(gw, fx + 2)
+        work[y0:y1, x0:x1] = 0
+
+    # ---- paths: lintasan lantai ternormalisasi (path simulation data-driven) ----
+    paths = []
+    by_len = sorted(global_tracks.items(), key=lambda kv: -len(kv[1]))
+    for i, (gid, obs) in enumerate(by_len[:getattr(cfg, "PATH_MAX", 12)]):
+        pts = [PathPoint(x=round(float(np.clip(x / W, 0, 1)), 4),
+                         y=round(float(np.clip(y / Hm, 0, 1)), 4),
+                         t=round(float(tt), 2)) for (tt, x, y) in obs]
+        if len(pts) >= 2:
+            paths.append(PathTraceOut(points=pts, hue=round((i * 0.618) % 1.0, 3)))
 
     summary = Summary(
         totalVisitors=total,
@@ -123,4 +157,5 @@ def compute_analytics(global_tracks, venue, cfg):
         peakOccupancy=peak,
         captureRate=capture,
     )
-    return {"summary": summary, "zones": zones, "stopPoints": stop_out, "occupancy": occ}, heat
+    return {"summary": summary, "zones": zones, "stopPoints": stop_out,
+            "occupancy": occ, "blobs": blobs, "paths": paths}, heat

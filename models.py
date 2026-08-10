@@ -90,6 +90,24 @@ class Artifacts(BaseModel):
     overlayVideos: list[OverlayVideo] = []
 
 
+class HeatBlobOut(BaseModel):
+    x: float
+    y: float
+    intensity: float
+    radius: float
+
+
+class PathPoint(BaseModel):
+    x: float
+    y: float
+    t: float = 0.0
+
+
+class PathTraceOut(BaseModel):
+    points: list[PathPoint]
+    hue: float
+
+
 class JobResult(BaseModel):
     jobId: str
     venue: VenueInput
@@ -97,6 +115,8 @@ class JobResult(BaseModel):
     zones: list[Zone]
     stopPoints: list[StopPointOut]
     occupancy: list[OccupancyBin]
+    blobs: list[HeatBlobOut] = []
+    paths: list[PathTraceOut] = []
     artifacts: Artifacts
     trajectories: Optional[str] = None
 
