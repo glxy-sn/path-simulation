@@ -35,6 +35,7 @@ struct ResultsView: View {
         session.result?.combinedVideoURL ?? session.result?.overlayVideos.first?.url
     }
     private var hasResult: Bool { session.result != nil }
+    private var identityQuality: IdentityQualitySummary? { session.result?.identityQuality }
 
     /// Floor map untuk background Zona (kalau user pakai floor plan, bukan canvas).
     private var floorMapImage: NSImage? {
@@ -63,6 +64,7 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 header
                 metrics
+                if identityQuality != nil { identityQualityCard }
                 mediaCard
                 HStack(alignment: .top, spacing: Space.l * scale) {
                     rankingCard.relativeWidth(0.40)
@@ -97,6 +99,55 @@ struct ResultsView: View {
             MetricTile(title: "Puncak Okupansi", value: "\(summary.peakOccupancy)", systemImage: "chart.line.uptrend.xyaxis", tint: .pink)
             MetricTile(title: "Capture Rate", value: summary.captureRateText, systemImage: "arrow.down.right.circle.fill", tint: .green)
         }
+    }
+
+    private var identityQualityCard: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Kualitas Identitas").font(.headline)
+                    Text("Confidence asosiasi global yang sama dipakai pada video dan trajectory.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let url = session.result?.fusionDiagnosticsURL {
+                    Button("Buka Diagnostics", systemImage: "doc.text.magnifyingglass") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            if let quality = identityQuality {
+                HStack(spacing: Space.s) {
+                    identityQualityTile("High", quality.highConfidence, .green, "≥ 0,80")
+                    identityQualityTile("Medium", quality.mediumConfidence, .orange, "0,70–0,79")
+                    identityQualityTile("Low", quality.lowConfidence, .red, "< 0,70")
+                    identityQualityTile("Single Camera", quality.singleCamera, .secondary, "Belum lintas kamera")
+                }
+                Divider()
+                Text("\(quality.globalIDs) global ID · \(quality.localStitches) local stitch · \(quality.overlapMerges) overlap merge · \(quality.handoverMerges) handover merge · \(quality.unmatchedTracklets) unmatched · \(quality.filteredTracklets) filtered")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                if !quality.calibrationWarnings.isEmpty {
+                    Label("\(quality.calibrationWarnings.count) warning kalibrasi tercatat", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .card()
+    }
+
+    private func identityQualityTile(_ title: String, _ count: Int, _ color: Color, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(count)").font(.title3.monospacedDigit().bold()).foregroundStyle(color)
+            Text(title).font(.caption.weight(.semibold))
+            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .padding(Space.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
     }
 
     private var mediaCard: some View {

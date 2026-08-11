@@ -67,6 +67,16 @@ struct Matrix3x3: Codable, Hashable {
         set { values[row][column] = newValue }
     }
 
+    var isFiniteAndInvertible: Bool {
+        guard values.count == 3, values.allSatisfy({ $0.count == 3 }),
+              values.flatMap({ $0 }).allSatisfy(\.isFinite) else { return false }
+        let determinant =
+            self[0, 0] * (self[1, 1] * self[2, 2] - self[1, 2] * self[2, 1])
+            - self[0, 1] * (self[1, 0] * self[2, 2] - self[1, 2] * self[2, 0])
+            + self[0, 2] * (self[1, 0] * self[2, 1] - self[1, 1] * self[2, 0])
+        return determinant.isFinite && abs(determinant) > 1e-12
+    }
+
     init(from decoder: Decoder) throws {
         values = try decoder.singleValueContainer().decode([[Double]].self)
     }
@@ -82,14 +92,24 @@ struct CalibrationMetrics: Codable, Hashable {
     var p95ErrorM: Double
     var inliers: Int
     var points: Int
+    var cameraCoverage: Double? = nil
+    var floorCoverage: Double? = nil
 
     static let empty = CalibrationMetrics(medianErrorM: 0, p95ErrorM: 0, inliers: 0, points: 0)
 
     enum CodingKeys: String, CodingKey {
         case medianErrorM = "median_error_m"
         case p95ErrorM = "p95_error_m"
+        case cameraCoverage = "camera_coverage"
+        case floorCoverage = "floor_coverage"
         case inliers, points
     }
+}
+
+enum CalibrationQuality: String {
+    case good = "Baik"
+    case warning = "Warning"
+    case invalid = "Invalid"
 }
 
 struct CameraCalibration: Codable, Hashable {
@@ -102,7 +122,30 @@ struct CameraCalibration: Codable, Hashable {
     var reprojectionErrorsM: [Double]
     var metrics: CalibrationMetrics
 
-    var isValid: Bool { metrics.points >= 4 && metrics.inliers >= 4 }
+    var isValid: Bool {
+        metrics.points >= 4 && metrics.inliers >= 4 && homographyCameraToWorld.isFiniteAndInvertible
+    }
+
+    var qualityWarnings: [String] {
+        guard isValid else { return ["Matriks atau jumlah inlier tidak valid."] }
+        var warnings: [String] = []
+        let ratio = metrics.points > 0 ? Double(metrics.inliers) / Double(metrics.points) : 0
+        if ratio < 0.75 { warnings.append("Rasio inlier di bawah 75%.") }
+        if metrics.medianErrorM > 0.15 { warnings.append("Median error di atas 0,15 m.") }
+        if metrics.p95ErrorM > 0.40 { warnings.append("P95 error di atas 0,40 m.") }
+        if let coverage = metrics.cameraCoverage, coverage < 0.10 {
+            warnings.append("Sebaran titik CCTV di bawah 10% frame.")
+        }
+        if let coverage = metrics.floorCoverage, coverage < 0.15 {
+            warnings.append("Sebaran titik denah di bawah 15% area.")
+        }
+        return warnings
+    }
+
+    var quality: CalibrationQuality {
+        guard isValid else { return .invalid }
+        return qualityWarnings.isEmpty ? .good : .warning
+    }
 
     enum CodingKeys: String, CodingKey {
         case homographyCameraToWorld = "H_cam_to_world"
@@ -162,6 +205,7 @@ struct CameraCalibrationProfile: Codable {
     var cameraID: UUID
     var label: String
     var referenceFrameSeconds: Double
+    var timeOffsetSec: Double? = nil
     var imageSize: PixelSize
     var sourceFileName: String?
     var calibration: CameraCalibration
@@ -170,6 +214,7 @@ struct CameraCalibrationProfile: Codable {
         case cameraID = "camera_id"
         case label
         case referenceFrameSeconds = "reference_frame_seconds"
+        case timeOffsetSec = "time_offset_sec"
         case imageSize = "image_size"
         case sourceFileName = "source_file_name"
         case calibration
