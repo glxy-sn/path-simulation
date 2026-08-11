@@ -9,6 +9,7 @@ import SwiftUI
 import Charts
 import AVKit
 import AppKit
+import UniformTypeIdentifiers
 
 enum ResultVisual: String, CaseIterable, Identifiable {
     case boundingBox = "Deteksi"
@@ -22,6 +23,7 @@ struct ResultsView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
     @State private var visual: ResultVisual = .boundingBox
+    @State private var showExport = false
 
     // Data: hasil engine bila ada, kalau tidak pakai contoh.
     private var summary: VenueSummary { session.result?.summary ?? SampleResult.summary }
@@ -50,6 +52,17 @@ struct ResultsView: View {
         let p = session.result?.paths ?? []
         return p.isEmpty ? (hasResult ? [] : SampleResult.paths) : p
     }
+    private var observations: [CGPoint] { session.result?.observations ?? [] }
+
+    private func obsCount(_ rect: CGRect) -> Int {
+        observations.reduce(0) { $0 + (rect.contains($1) ? 1 : 0) }
+    }
+
+    private var rankedCustomZones: [(zone: CustomZone, count: Int)] {
+        session.customZones
+            .map { (zone: $0, count: obsCount($0.rect)) }
+            .sorted { $0.count > $1.count }
+    }
 
     /// Rasio venue (lebar : panjang) untuk membentuk area visual lantai.
     private var venueAspect: CGFloat {
@@ -77,8 +90,86 @@ struct ResultsView: View {
     private var header: some View {
         HStack(alignment: .center) {
             SectionHeader(title: "Hasil Analisis", subtitle: subtitle)
-            PrimaryButton(title: "Export Laporan", systemImage: "square.and.arrow.up") {}
+            PrimaryButton(title: "Export Laporan", systemImage: "square.and.arrow.up") {
+                showExport = true
+            }
+            .disabled(session.result == nil)
         }
+        .confirmationDialog("Export Laporan", isPresented: $showExport, titleVisibility: .visible) {
+            Button("JSON — lengkap (untuk analisis / LLM)") { exportJSON() }
+            Button("CSV — ringkasan (untuk Excel)") { exportCSV() }
+            Button("Batal", role: .cancel) {}
+        }
+    }
+
+    // MARK: - Export
+
+    private func defaultName() -> String {
+        let base = session.venueName.isEmpty ? "foodcourt" : session.venueName
+        let safe = base.replacingOccurrences(of: " ", with: "_")
+        let df = DateFormatter(); df.dateFormat = "yyyyMMdd_HHmm"
+        return "\(safe)_\(df.string(from: Date()))"
+    }
+
+    private func save(name: String, type: UTType, data: Data) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = name
+        panel.allowedContentTypes = [type]
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func exportJSON() {
+        guard let r = session.result else { return }
+        var dict: [String: Any] = [
+            "generatedAt": ISO8601DateFormatter().string(from: Date()),
+            "venue": ["name": session.venueName, "type": session.venueType.rawValue,
+                      "widthM": session.venueWidthM, "heightM": session.venueHeightM],
+            "window": ["startSec": session.trimStartSec,
+                       "durationSec": max(0, session.trimEndSec - session.trimStartSec)],
+            "summary": ["totalVisitors": r.summary.totalVisitors,
+                        "avgDwellSeconds": r.summary.avgDwellSeconds,
+                        "peakOccupancy": r.summary.peakOccupancy,
+                        "captureRate": r.summary.captureRate],
+            "zones": r.zones.map { ["code": $0.code, "visits": $0.visits, "share": $0.share,
+                                    "rect": ["x": $0.rect.minX, "y": $0.rect.minY,
+                                             "w": $0.rect.width, "h": $0.rect.height]] },
+            "stopPoints": r.stops.map { ["name": $0.name, "dwellSeconds": $0.dwellSeconds] },
+            "occupancy": r.occupancy.map { ["minute": $0.minute, "count": $0.count] },
+        ]
+        dict["paths"] = r.paths.enumerated().map { (i, p) -> [String: Any] in
+            var pts: [[String: Any]] = []
+            for (idx, pt) in p.points.enumerated() {
+                let t = idx < p.times.count ? p.times[idx] : 0
+                pts.append(["x": Double(pt.x), "y": Double(pt.y), "t": t])
+            }
+            return ["id": i, "hue": p.hue, "points": pts]
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict,
+                                                     options: [.prettyPrinted, .sortedKeys]) else { return }
+        save(name: defaultName() + ".json", type: .json, data: data)
+    }
+
+    private func exportCSV() {
+        guard let r = session.result else { return }
+        var s = "Laporan Analisis Food Court\n"
+        s += "Venue,\(session.venueName)\n"
+        s += "Dimensi (m),\(session.venueWidthM) x \(session.venueHeightM)\n\n"
+        s += "Metrik,Nilai\n"
+        s += "Total Pengunjung,\(r.summary.totalVisitors)\n"
+        s += "Rata-rata Dwell (detik),\(r.summary.avgDwellSeconds)\n"
+        s += "Puncak Okupansi,\(r.summary.peakOccupancy)\n"
+        s += "Capture Rate,\(r.summary.captureRate)\n\n"
+        s += "Zona,Visits,Share\n"
+        for z in r.zones { s += "\(z.code),\(z.visits),\(z.share)\n" }
+        s += "\nStop Point,Dwell (detik)\n"
+        for st in r.stops { s += "\(st.name),\(st.dwellSeconds)\n" }
+        s += "\nMenit,Okupansi\n"
+        for o in r.occupancy { s += "\(o.minute),\(o.count)\n" }
+        guard let data = s.data(using: .utf8) else { return }
+        save(name: defaultName() + ".csv", type: .commaSeparatedText, data: data)
     }
 
     private var subtitle: String {
@@ -129,7 +220,9 @@ struct ResultsView: View {
                         .frame(maxWidth: .infinity)
                         .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
                 case .zona:
-                    ZoneMapView(zones: zones, background: floorMapImage)
+                    ZonaEditor(session: session,
+                               observations: observations,
+                               background: floorMapImage)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                 }
@@ -161,7 +254,22 @@ struct ResultsView: View {
         VStack(alignment: .leading, spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.s) {
                 Text("Zona Paling Sering Dilewati").font(.headline)
-                ForEach(zones) { zone in ZoneRow(zone: zone) }
+                if session.customZones.isEmpty {
+                    Text("Buka tab Zona untuk menggambar zona sendiri (mis. area kasir, tempat duduk).")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(zones) { zone in ZoneRow(zone: zone) }
+                } else {
+                    ForEach(rankedCustomZones, id: \.zone.id) { item in
+                        HStack(spacing: Space.s) {
+                            RoundedRectangle(cornerRadius: 3).fill(Color(hex: item.zone.colorHex))
+                                .frame(width: 12, height: 12)
+                            Text(item.zone.name).font(.callout).lineLimit(1)
+                            Spacer()
+                            Text("\(item.count)").font(.callout.monospacedDigit().weight(.semibold))
+                        }
+                    }
+                }
             }
             Divider()
             VStack(alignment: .leading, spacing: Space.s) {
@@ -244,6 +352,155 @@ private struct FileImage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Editor Zona (user gambar/geser/resize/rename)
+
+private struct ZonaEditor: View {
+    let session: AnalysisSession
+    let observations: [CGPoint]
+    var background: NSImage? = nil
+
+    @State private var selected: UUID? = nil
+    @State private var dragStart: [UUID: CGRect] = [:]
+
+    private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
+
+    var body: some View {
+        GeometryReader { geo in
+            let W = geo.size.width, H = geo.size.height
+            ZStack(alignment: .topLeading) {
+                // background
+                if let background {
+                    Image(nsImage: background).resizable().allowsHitTesting(false)
+                    Color.white.opacity(0.06).allowsHitTesting(false)
+                } else {
+                    Color(hex: 0xF7F8FA)
+                }
+                // titik observasi (samar)
+                Canvas { ctx, size in
+                    for p in observations {
+                        ctx.fill(Path(ellipseIn: CGRect(x: p.x * size.width - 1.2, y: p.y * size.height - 1.2,
+                                                        width: 2.4, height: 2.4)),
+                                 with: .color(.orange.opacity(0.30)))
+                    }
+                }
+                .allowsHitTesting(false)
+
+                // area kosong -> deselect
+                Color.clear.contentShape(Rectangle()).onTapGesture { selected = nil }
+
+                ForEach(session.customZones) { zone in
+                    zoneView(zone, W: W, H: H)
+                }
+
+                controls
+            }
+            .coordinateSpace(name: "floor")
+        }
+    }
+
+    private func idx(_ id: UUID) -> Int? { session.customZones.firstIndex { $0.id == id } }
+
+    private func zoneView(_ zone: CustomZone, W: CGFloat, H: CGFloat) -> some View {
+        let color = Color(hex: zone.colorHex)
+        let sr = CGRect(x: zone.rect.minX * W, y: zone.rect.minY * H,
+                        width: zone.rect.width * W, height: zone.rect.height * H)
+        let count = observations.reduce(0) { $0 + (zone.rect.contains($1) ? 1 : 0) }
+        let isSel = selected == zone.id
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 6).fill(color.opacity(0.20))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(color, lineWidth: isSel ? 3 : 1.5))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(zone.name).font(.caption.bold()).foregroundStyle(color).lineLimit(1)
+                Text("\(count)").font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.primary)
+            }
+            .padding(5)
+
+            if isSel {
+                Circle().fill(color).frame(width: 16, height: 16)
+                    .overlay(Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                    .position(x: sr.width, y: sr.height)
+                    .highPriorityGesture(resizeDrag(zone, W: W, H: H))
+            }
+        }
+        .frame(width: max(12, sr.width), height: max(12, sr.height))
+        .position(x: sr.midX, y: sr.midY)
+        .onTapGesture { selected = zone.id }
+        .gesture(moveDrag(zone, W: W, H: H))
+    }
+
+    private func moveDrag(_ zone: CustomZone, W: CGFloat, H: CGFloat) -> some Gesture {
+        DragGesture(coordinateSpace: .named("floor"))
+            .onChanged { v in
+                guard let i = idx(zone.id) else { return }
+                let start = dragStart[zone.id] ?? session.customZones[i].rect
+                if dragStart[zone.id] == nil { dragStart[zone.id] = start; selected = zone.id }
+                let dx = v.translation.width / W, dy = v.translation.height / H
+                var r = start
+                r.origin.x = min(max(0, start.minX + dx), 1 - start.width)
+                r.origin.y = min(max(0, start.minY + dy), 1 - start.height)
+                session.customZones[i].rect = r
+            }
+            .onEnded { _ in dragStart[zone.id] = nil }
+    }
+
+    private func resizeDrag(_ zone: CustomZone, W: CGFloat, H: CGFloat) -> some Gesture {
+        DragGesture(coordinateSpace: .named("floor"))
+            .onChanged { v in
+                guard let i = idx(zone.id) else { return }
+                let start = dragStart[zone.id] ?? session.customZones[i].rect
+                if dragStart[zone.id] == nil { dragStart[zone.id] = start }
+                let dw = v.translation.width / W, dh = v.translation.height / H
+                var r = start
+                r.size.width = min(max(0.04, start.width + dw), 1 - start.minX)
+                r.size.height = min(max(0.04, start.height + dh), 1 - start.minY)
+                session.customZones[i].rect = r
+            }
+            .onEnded { _ in dragStart[zone.id] = nil }
+    }
+
+    private var controls: some View {
+        HStack(alignment: .top, spacing: Space.s) {
+            Button { addZone() } label: {
+                Label("Zona", systemImage: "plus")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Theme.accent, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+
+            if let sid = selected, let i = idx(sid) {
+                HStack(spacing: 6) {
+                    TextField("Nama zona", text: Binding(
+                        get: { session.customZones[i].name },
+                        set: { session.customZones[i].name = $0 }))
+                        .textFieldStyle(.roundedBorder).frame(width: 130)
+                    Button(role: .destructive) {
+                        session.customZones.removeAll { $0.id == sid }
+                        selected = nil
+                    } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                    .buttonStyle(.borderless)
+                }
+                .padding(6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+            Spacer()
+        }
+        .padding(Space.s)
+    }
+
+    private func addZone() {
+        let n = session.customZones.count
+        let letter = Character(UnicodeScalar(65 + (n % 26))!)
+        let z = CustomZone(name: "Zona \(letter)",
+                           rect: CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2),
+                           colorHex: palette[n % palette.count])
+        session.customZones.append(z)
+        selected = z.id
     }
 }
 

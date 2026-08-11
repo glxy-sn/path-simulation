@@ -4,7 +4,6 @@
 //
 //  Created by Shafa Tiara on 04/08/26.
 //
-
 import Foundation
 import CoreGraphics
 
@@ -15,7 +14,6 @@ struct EngineProcessingService: ProcessingService {
     private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
 
     func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error> {
-        // Rakit request sinkron di sini (di pemanggil), lalu Task cuma pegang DTO Sendable.
         let built: JobRequestDTO
         do { built = try buildRequest(session) }
         catch { return AsyncThrowingStream { $0.finish(throwing: error) } }
@@ -120,13 +118,16 @@ struct EngineProcessingService: ProcessingService {
                       hue: p.hue,
                       times: p.points.map { $0.t })
         }
+        let observations = dto.observations.compactMap { a -> CGPoint? in
+            a.count >= 2 ? CGPoint(x: a[0], y: a[1]) : nil
+        }
         return AnalysisResult(
             summary: summary, zones: zones, stops: stops, occupancy: occ,
             heatmapURL: artifactURL(dto.artifacts.heatmapImage),
             pathVideoURL: artifactURL(dto.artifacts.pathVideo),
             combinedVideoURL: artifactURL(dto.artifacts.combinedVideo),
             overlayVideos: overlays,
-            blobs: blobs, paths: paths
+            blobs: blobs, paths: paths, observations: observations
         )
     }
 }

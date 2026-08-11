@@ -35,6 +35,15 @@ struct AnalysisResult {
     var overlayVideos: [(cam: String, url: URL)]
     var blobs: [HeatBlob]
     var paths: [PathTrace]
+    var observations: [CGPoint] = []
+}
+
+/// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
+struct CustomZone: Identifiable, Hashable {
+    let id = UUID()
+    var name: String
+    var rect: CGRect          // ternormalisasi 0–1
+    var colorHex: UInt
 }
 
 @Observable
@@ -65,6 +74,7 @@ final class AnalysisSession {
     var isProcessing = false
     var errorMessage: String?
     var result: AnalysisResult?
+    var customZones: [CustomZone] = []
 
     // Turunan
     var venueWidthM: Double { Double(widthM) ?? 0 }
