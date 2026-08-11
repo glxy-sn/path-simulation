@@ -202,6 +202,9 @@ KALAU PEMAKAI MERAGUKAN ANGKAMU:
 14. Pertanyaan ANDAI-ANDAI ("kalau layoutnya diganti") paling gampang memancing
     karangan. Jawab HANYA dengan fakta terukur, lalu katakan selebihnya di luar
     jangkauan data.
+15b. Kalau DATA menyebut jam mulai rekaman, kamu TAHU jamnya. Jawaban lamamu
+    yang bilang "tidak tahu pukul berapa" sudah usang — abaikan, dan pakai jam
+    dari DATA.
 15. Yang kita ukur cuma SEBERAPA LAMA ORANG BERADA di suatu tempat. Itu bisa
     menjawab kegiatan yang intinya berlama-lama sambil duduk: board game,
     catur, belajar, rapat, mengobrol, mengerjakan tugas.
@@ -216,19 +219,80 @@ KALAU PEMAKAI MERAGUKAN ANGKAMU:
 """
 
 
+KERJA = Path.home() / "Library/Application Support/Foodcourt/work"
+
+
+def cari_video(nama: str) -> tuple[str | None, float]:
+    """Video sumber satu riwayat, dicocokkan lewat job.json di folder kerja.
+
+    Dicocokkan pada detik mulai DAN durasi: satu video yang sama sering
+    diproses berkali-kali dengan potongan berbeda, jadi nama berkas saja tidak
+    cukup membedakan.
+    """
+    try:
+        d = muat(nama)
+    except (OSError, ValueError):
+        return None, 0.0
+    mulai, durasi = d.get("startSec", 0), d.get("durationSec", 0)
+    for job in KERJA.glob("*/job.json"):
+        try:
+            j = json.loads(job.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        cam = (j.get("cameras") or [{}])[0]
+        if (abs(float(cam.get("startSec") or 0) - mulai) < 1.5
+                and abs(float(cam.get("durationSec") or 0) - durasi) < 1.5):
+            jalur = cam.get("videoPath")
+            if jalur and Path(jalur).is_file():
+                return jalur, float(cam.get("startSec") or 0)
+    return None, 0.0
+
+
+def jam_mulai_riwayat(nama: str, video: str | None,
+                      mulai_detik: float) -> datetime | None:
+    """Jam dinding saat rekaman mulai — dibaca sekali, lalu diingat.
+
+    Lintasan videonya cuma ada di sesi aplikasi yang sedang berjalan, jadi
+    kalau ini dibaca ulang tiap kali, jamnya muncul tepat setelah memproses lalu
+    HILANG begitu aplikasi ditutup. Hasil OCR-nya disimpan di sebelah
+    result.json supaya riwayat lama tetap tahu jamnya.
+    """
+    simpanan = folder_riwayat() / nama / "waktu_mulai.json"
+    if simpanan.is_file():
+        try:
+            return datetime.fromisoformat(json.loads(simpanan.read_text())["mulai"])
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            pass
+    if not video:
+        # Backend menyimpan lintasan video di job.json folder kerjanya. Dicari
+        # dari sana supaya jam tetap ketemu walau aplikasi baru dibuka dan
+        # sesinya kosong — kalau bergantung pada sesi, jam cuma muncul tepat
+        # setelah memproses lalu hilang selamanya.
+        video, mulai_detik = cari_video(nama)
+    if not video:
+        return None
+    try:
+        from waktu_dari_video import waktu_mulai
+        w = waktu_mulai(video, mulai_detik)
+    except Exception:                                        # noqa: BLE001
+        return None
+    if w:
+        try:
+            simpanan.write_text(json.dumps(
+                {"mulai": w.isoformat(), "sumber": "stempel di frame CCTV",
+                 "video": video, "mulai_detik": mulai_detik}))
+        except OSError:
+            pass
+    return w
+
+
 def susun_konteks(nama: str, zona_kiriman: list | None = None,
                   video: str | None = None, mulai_detik: float = 0.0) -> str:
     d = muat(nama)
     # Jam dinding dibaca dari stempel yang tercetak di frame CCTV. Tanpa ini
     # chatbot tahu polanya ("paling ramai menit ke-1") tapi tidak bisa menjawab
     # "peak hour jam berapa" — dan itu pertanyaan pertama yang orang tanyakan.
-    jam_mulai = None
-    if video:
-        try:
-            from waktu_dari_video import waktu_mulai
-            jam_mulai = waktu_mulai(video, mulai_detik)
-        except Exception:                                    # noqa: BLE001
-            jam_mulai = None
+    jam_mulai = jam_mulai_riwayat(nama, video, mulai_detik)
     b = ["=== FAKTA DASAR ==="]
     if jam_mulai:
         b.append(f"Rekaman ini dimulai pukul {jam_mulai.strftime('%H:%M')} "
@@ -403,7 +467,23 @@ def tanya(pertanyaan: str, konteks: str, riwayat=None, model: str = MODEL) -> st
     dijawab tanpa tahu 588 itu dari mana, dan model menyangkal angkanya sendiri.
     """
     pesan = [{"role": "system", "content": ATURAN + "\n\nDATA:\n" + konteks}]
-    for g in (riwayat or [])[-6:]:
+
+    # Jawaban lama bisa USANG. Waktu jam dinding belum bisa dibaca, chatbot
+    # menjawab "waktu pasti tidak diketahui"; sesudah jamnya masuk ke DATA,
+    # jawaban lama itu ikut terkirim dan model MENGULANGNYA kata per kata —
+    # tetap bilang tidak tahu padahal jamnya ada tepat di depannya. Giliran
+    # semacam itu dibuang, bukan dibiarkan menular.
+    punya_jam = "dimulai pukul" in konteks
+    bersih = []
+    for g in (riwayat or []):
+        teks = (g.get("teks") or "").lower()
+        if (punya_jam and g.get("peran") != "orang"
+                and ("tidak diketahui" in teks or "tidak menyertakan jam" in teks
+                     or "bukan jam dinding" in teks)):
+            continue
+        bersih.append(g)
+
+    for g in bersih[-6:]:
         pesan.append({"role": "user" if g.get("peran") == "orang" else "assistant",
                       "content": g.get("teks", "")})
     pesan.append({"role": "user", "content": pertanyaan})
