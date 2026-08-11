@@ -14,6 +14,7 @@ struct EngineProcessingService: ProcessingService {
     private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
 
     func run(_ session: AnalysisSession) -> AsyncThrowingStream<ProcessingUpdate, Error> {
+        // Rakit request sinkron di sini (di pemanggil), lalu Task cuma pegang DTO Sendable.
         let built: JobRequestDTO
         do { built = try buildRequest(session) }
         catch { return AsyncThrowingStream { $0.finish(throwing: error) } }
@@ -100,7 +101,8 @@ struct EngineProcessingService: ProcessingService {
                      rect: CGRect(x: z.rect.x, y: z.rect.y, width: z.rect.w, height: z.rect.h),
                      colorHex: palette[i % palette.count])
         }
-        let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds) }
+        let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds,
+                                                   point: CGPoint(x: $0.x, y: $0.y)) }
         let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) }
         let summary = VenueSummary(
             totalVisitors: dto.summary.totalVisitors,
@@ -118,8 +120,8 @@ struct EngineProcessingService: ProcessingService {
                       hue: p.hue,
                       times: p.points.map { $0.t })
         }
-        let observations = dto.observations.compactMap { a -> CGPoint? in
-            a.count >= 2 ? CGPoint(x: a[0], y: a[1]) : nil
+        let observations = dto.observations.compactMap { a -> TrackObservation? in
+            a.count >= 4 ? TrackObservation(trackId: Int(a[0]), point: CGPoint(x: a[1], y: a[2]), t: a[3]) : nil
         }
         return AnalysisResult(
             summary: summary, zones: zones, stops: stops, occupancy: occ,

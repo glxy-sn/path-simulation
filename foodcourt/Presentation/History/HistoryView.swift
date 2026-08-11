@@ -11,9 +11,12 @@ import SwiftData
 struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
-    @Environment(AnalysisSession.self) private var session
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \AnalysisRecord.date, order: .reverse) private var records: [AnalysisRecord]
+
+    // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
+    @State private var viewerSession = AnalysisSession()
+    @State private var showViewer = false
 
     var body: some View {
         ScrollView {
@@ -33,9 +36,9 @@ struct HistoryView: View {
                 } else {
                     VStack(spacing: Space.m) {
                         ForEach(records) { rec in
-                            HistoryRow(record: rec,
-                                       onOpen: { open(rec) },
-                                       onDelete: { remove(rec) })
+                            HistoryRow(record: rec, onDelete: { remove(rec) })
+                                .contentShape(Rectangle())
+                                .onTapGesture { open(rec) }
                         }
                     }
                 }
@@ -43,20 +46,31 @@ struct HistoryView: View {
             .spad(Space.xl, [.horizontal, .top])
             .padding(.bottom, Space.xl)
         }
+        .sheet(isPresented: $showViewer) {
+            ResultsView(isHistory: true)
+                .environment(viewerSession)
+                .environment(router)
+                .frame(minWidth: 960, minHeight: 680)
+        }
     }
 
     private func open(_ rec: AnalysisRecord) {
         guard let loaded = HistoryStore.load(folder: rec.folder) else { return }
-        session.reset()
-        session.venueName = loaded.venueName
-        if let vt = VenueType(rawValue: loaded.venueType) { session.venueType = vt }
-        session.widthM = loaded.widthM
-        session.heightM = loaded.heightM
-        session.usesScaledCanvas = loaded.usesScaledCanvas
-        session.floorPlanURL = loaded.floorPlanURL
-        session.customZones = loaded.customZones
-        session.result = loaded.result
-        router.openResult()
+        let s = viewerSession
+        s.reset()
+        s.venueName = loaded.venueName
+        if let vt = VenueType(rawValue: loaded.venueType) { s.venueType = vt }
+        s.widthM = loaded.widthM
+        s.heightM = loaded.heightM
+        s.usesScaledCanvas = loaded.usesScaledCanvas
+        s.floorPlanURL = loaded.floorPlanURL
+        s.customZones = loaded.customZones
+        s.result = loaded.result
+        s.trimStartSec = 0
+        s.trimEndSec = loaded.durationSec
+        s.overrideCameraCount = loaded.cameraCount
+        s.historyFolder = rec.folder      // edit zona di viewer ikut tersimpan
+        showViewer = true
     }
 
     private func remove(_ rec: AnalysisRecord) {
@@ -81,7 +95,6 @@ struct HistoryView: View {
 
 private struct HistoryRow: View {
     let record: AnalysisRecord
-    var onOpen: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
@@ -96,11 +109,7 @@ private struct HistoryRow: View {
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: Space.s) {
-                    Text(record.venueName).font(.headline).lineLimit(1)
-                    Tag(text: record.mode,
-                        color: record.mode.localizedCaseInsensitiveContains("lengkap") ? Theme.accent : .orange)
-                }
+                Text(record.venueName).font(.headline).lineLimit(1)
                 Text("\(record.venueType) · \(record.dateText)")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.l) {
@@ -108,15 +117,16 @@ private struct HistoryRow: View {
                     stat("clock", record.avgDwellText)
                     stat("chart.line.uptrend.xyaxis", "puncak \(record.peakOccupancy)")
                     stat("camera", "\(record.cameraCount) kamera")
+                    stat("timer", timecode(record.durationSec))
                 }
                 .padding(.top, 2)
             }
 
             Spacer()
 
-            GhostButton(title: "Buka", systemImage: "arrow.up.right", action: onOpen)
+            Image(systemName: "chevron.right").font(.callout).foregroundStyle(.tertiary)
             Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash").foregroundStyle(.red).padding(6).contentShape(Rectangle())
+                Image(systemName: "trash").foregroundStyle(.secondary).padding(6).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .help("Hapus dari riwayat")

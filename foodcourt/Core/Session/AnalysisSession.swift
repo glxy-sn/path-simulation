@@ -23,6 +23,7 @@ struct SessionCamera: Identifiable, Hashable {
     var isCalibrated: Bool { calibration?.isValid == true }
 }
 
+/// Hasil yang sudah dipetakan ke model UI (siap dipakai layar Hasil).
 struct AnalysisResult {
     var summary: VenueSummary
     var zones: [ZoneRank]
@@ -34,9 +35,10 @@ struct AnalysisResult {
     var overlayVideos: [(cam: String, url: URL)]
     var blobs: [HeatBlob]
     var paths: [PathTrace]
-    var observations: [CGPoint] = []
+    var observations: [TrackObservation] = []
 }
 
+/// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
 struct CustomZone: Identifiable, Hashable {
     let id = UUID()
     var name: String
@@ -73,6 +75,10 @@ final class AnalysisSession {
     var errorMessage: String?
     var result: AnalysisResult?
     var customZones: [CustomZone] = []
+    /// Folder riwayat untuk sesi ini (agar edit zona ikut tersimpan). nil = belum tersimpan.
+    var historyFolder: String? = nil
+    /// Jumlah kamera untuk ditampilkan saat melihat riwayat (kamera asli tak dimuat ulang).
+    var overrideCameraCount: Int? = nil
 
     // Turunan
     var venueWidthM: Double { Double(widthM) ?? 0 }
@@ -104,5 +110,7 @@ final class AnalysisSession {
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
         customZones = []
+        historyFolder = nil
+        overrideCameraCount = nil
     }
 }
