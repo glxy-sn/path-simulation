@@ -22,6 +22,7 @@ enum ResultVisual: String, CaseIterable, Identifiable {
 struct ResultsView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
+    @Environment(AppRouter.self) private var router
     @State private var visual: ResultVisual = .boundingBox
     @State private var showExport = false
 
@@ -90,6 +91,10 @@ struct ResultsView: View {
     private var header: some View {
         HStack(alignment: .center) {
             SectionHeader(title: "Hasil Analisis", subtitle: subtitle)
+            GhostButton(title: "Analisis Baru", systemImage: "plus") {
+                session.reset()
+                router.startNew()
+            }
             PrimaryButton(title: "Export Laporan", systemImage: "square.and.arrow.up") {
                 showExport = true
             }
