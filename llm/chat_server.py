@@ -58,7 +58,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._kirim(200, {"status": "ok", "model": K.MODEL,
                                      "riwayat": len(K.daftar_riwayat())})
         if ruas == ["riwayat"]:
-            return self._kirim(200, {"riwayat": K.daftar_riwayat()})
+            # Label ikut dikirim: aplikasi menampilkan yang bisa dibaca orang,
+            # tapi tetap mengirim balik `nama` (UUID) sebagai kuncinya.
+            return self._kirim(200, {"riwayat": [
+                {"nama": n, "label": K.label_riwayat(n)}
+                for n in K.daftar_riwayat()]})
         self._kirim(404, {"error": "rute tidak dikenal"})
 
     def do_POST(self):

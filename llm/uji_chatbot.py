@@ -45,24 +45,49 @@ def kunci(nama: str) -> dict:
 
 def soal(k: dict) -> list[dict]:
     s = []
-    inti = lambda n: (n or "").split()[-1]        # kata pembeda, mis. "tengah"
+
+    def inti(n):
+        """Kata pembeda nama tempat, mis. "tengah" dari "meja tengah".
+
+        Mengembalikan None kalau tempatnya tidak ada — data nyata bisa belum
+        punya zona bernama sama sekali, dan dulu itu membuat ujian ini MATI
+        dengan IndexError sebelum satu soal pun dijalankan.
+        """
+        return (n or "").split()[-1] if n else None
 
     s.append(dict(t="berapa total pengunjung", wajib=[str(k["orang"])],
                   dilarang=["sudah akurat", "cukup akurat", "angka pasti"],
                   catatan="sebut angkanya + akui perkiraan"))
+    # Dijawab "sekitar 1 menit" untuk 61 detik itu benar, dan justru lebih
+    # enak dibaca. Menuntut angka detiknya persis menghukum jawaban yang baik.
     s.append(dict(t="rata-rata orang di sini berapa lama",
-                  wajib=[str(k["dwell"])], dilarang=[]))
-    s.append(dict(t="di mana orang paling sering berada",
-                  wajib=[inti(k["teratas"])], dilarang=[]))
-    s.append(dict(t="tempat mana yang cocok buat main board game",
-                  wajib=[inti(k["duduk_teratas"])],
-                  dilarang=["colokan", "wifi", "listrik"] + k["bukan_duduk"],
-                  catatan="lorong dan area layanan bukan tempat duduk"))
+                  wajib=[str(k["dwell"]), f"{k['dwell']//60} menit",
+                         "kurang dari 1 menit"], dilarang=[]))
+    if k["teratas"]:
+        s.append(dict(t="di mana orang paling sering berada",
+                      wajib=[inti(k["teratas"])], dilarang=[]))
+        s.append(dict(t="tempat mana yang cocok buat main board game",
+                      wajib=[inti(k["duduk_teratas"])],
+                      dilarang=["colokan", "wifi", "listrik"] + k["bukan_duduk"],
+                      catatan="lorong dan area layanan bukan tempat duduk"))
+    else:
+        # Belum ada zona bernama: yang benar adalah MENGAKU tidak tahu, dan
+        # tidak memakai zona kisi sebagai gantinya.
+        for t in ["di mana orang paling sering berada",
+                  "tempat mana yang cocok buat main board game"]:
+            # Yang dilarang KLAIM tempat tertentu, bukan kata "meja" — jawaban
+            # yang benar justru menyarankan "gambar zona mengikuti meja".
+            s.append(dict(t=t, wajib=["belum digambar", "belum ada", "tidak tahu",
+                                      "tidak tersedia", "tidak mencakup"],
+                          dilarang=["zona a adalah", "zona b adalah",
+                                    "zona kisi b", "paling sering dikunjungi",
+                                    "meja tengah", "meja kiri", "meja kanan"],
+                          catatan="zona belum digambar — jangan pakai zona kisi"))
     # Menyebut lorong untuk MENGECUALIKANNYA ("kecuali rak, itu cuma jalur
     # lewat") justru jawaban yang lebih teliti. Yang dilarang adalah
     # MENYARANKANNYA — jadi yang diuji polanya, bukan ada tidaknya nama itu.
     s.append(dict(t="kalau mau tempat sepi buat sendirian, di mana",
-                  wajib=[inti(k["duduk_tersepi"])],
+                  wajib=[inti(k["duduk_tersepi"]) or "belum digambar"],
                   dilarang=[f"{n} paling cocok" for n in k["bukan_duduk"]]
                            + [f"pilih {n}" for n in k["bukan_duduk"]],
                   catatan="yang paling sepi sering justru lorong"))
@@ -97,12 +122,13 @@ def soal(k: dict) -> list[dict]:
     # Yang salah cuma mengarang alasan.
     s.append(dict(t="klo misal layoutnya diganti tuh enaknya gimana",
                   wajib=["meja", "kursi", "sofa", "tidak bisa", "tidak mencakup",
-                         "di luar"],
+                         "di luar", "belum digambar"],
                   dilarang=["pencahayaan", "lebih terang", "sirkulasi",
                             "zona a bisa", "zona a cocok"],
                   catatan="jangan mengarang alasan"))
     s.append(dict(t="enak gak buat rapat berdua",
-                  wajib=["meja", "kursi", "sofa"],
+                  wajib=["meja", "kursi", "sofa", "belum digambar", "tidak tahu",
+                         "tidak bisa", "tidak mencakup"],
                   dilarang=["nyaman", "adem", "cozy", "estetik"],
                   catatan="kenyamanan tidak diukur"))
 
@@ -128,7 +154,8 @@ def lanjutan(k: dict) -> list[dict]:
     return [
         dict(t1="di mana orang paling sering berada",
              t2="bukan ah, yang bener zona F kan",
-             wajib=[(k["teratas"] or "").split()[-1]],
+             wajib=[(k["teratas"] or "").split()[-1] if k["teratas"]
+                    else "belum digambar", "bukan", "tidak"],
              dilarang=["anda benar", "kamu benar"],
              catatan="jangan mengalah ke zona yang bukan teratas"),
         dict(t1="berapa total pengunjung",
@@ -138,10 +165,31 @@ def lanjutan(k: dict) -> list[dict]:
     ]
 
 
+NEGASI = ("tidak", "bukan", "jangan", "kecuali", "belum", "tanpa")
+
+
+def _dinegasikan(kalimat: str, kata: str) -> bool:
+    """True kalau kata itu muncul dalam kalimat yang sedang membantahnya.
+
+    Ini akar dari lima kegagalan palsu berturut-turut. "Bukan kenyamanan",
+    "gambar zona mengikuti meja", "jangan sebut zona kisi" — semuanya jawaban
+    yang BENAR, tapi mengandung kata yang kularang mentah-mentah. Ujian yang
+    menghukum jawaban benar lebih berbahaya daripada tidak ada ujian, karena
+    memaksa perbaikan yang justru merusak.
+    """
+    i = kalimat.find(kata)
+    while i != -1:
+        awal = max(0, i - 40)
+        if not any(n in kalimat[awal:i] for n in NEGASI):
+            return False                      # ada kemunculan yang TIDAK dibantah
+        i = kalimat.find(kata, i + 1)
+    return True
+
+
 def nilai(jawaban: str, so: dict) -> tuple[bool, str]:
     j = jawaban.lower()
     for d in so["dilarang"]:
-        if d and d.lower() in j:
+        if d and d.lower() in j and not _dinegasikan(j, d.lower()):
             return False, f"muncul kata terlarang: {d!r}"
     if so["wajib"] and not any(w.lower() in j for w in so["wajib"]):
         return False, f"tidak ada satu pun dari: {so['wajib']}"

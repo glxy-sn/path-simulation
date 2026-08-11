@@ -21,6 +21,7 @@ import json
 import os
 import re
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 # Riwayat ditulis aplikasi ber-sandbox, jadi "Application Support" miliknya ada
@@ -89,8 +90,27 @@ def daftar_riwayat() -> list[str]:
     d = folder_riwayat()
     if not d.is_dir():
         return []
-    return sorted((p.name for p in d.iterdir() if (p / "result.json").is_file()),
-                  reverse=True)
+    berkas = [p for p in d.iterdir() if (p / "result.json").is_file()]
+    berkas.sort(key=lambda p: (p / "result.json").stat().st_mtime, reverse=True)
+    return [p.name for p in berkas]
+
+
+def label_riwayat(nama: str) -> str:
+    """Nama yang bisa dibaca orang untuk satu riwayat.
+
+    Folder riwayat diberi nama UUID oleh aplikasi ("90B2B180-1BBC-46D9-..."),
+    dan itu tidak memberi tahu apa pun tentang isinya. Dalam daftar berisi
+    beberapa analisis, memilih yang benar jadi tebak-tebakan.
+    """
+    f = folder_riwayat() / nama / "result.json"
+    try:
+        d = json.loads(f.read_text())
+        waktu = datetime.fromtimestamp(f.stat().st_mtime).strftime("%d %b %H:%M")
+        return (f"{d.get('venueName') or 'Analisis'} · {waktu} · "
+                f"{d.get('totalVisitors', 0)} orang · "
+                f"{d.get('durationSec', 0):.0f} dtk")
+    except (OSError, ValueError, KeyError):
+        return nama
 
 
 def muat(nama: str) -> dict:
@@ -211,13 +231,32 @@ def susun_konteks(nama: str) -> str:
         b.append("BELUM ADA zona bernama. Buka aplikasi, gambar zona mengikuti "
                  "meja lalu beri nama, dan jalankan analisis lagi.")
         b.append("Karena itu kamu TIDAK TAHU nama tempat mana pun di ruangan ini. "
-                 "Kalau ditanya 'di mana', katakan zonanya belum digambar — "
-                 "JANGAN menebak nama meja.")
+                 "Kalau ditanya 'di mana', jawab HANYA bahwa zonanya belum "
+                 "digambar dan sarankan menggambarnya di layar Kalibrasi. "
+                 "JANGAN menebak nama meja, dan JANGAN menyebut zona kisi "
+                 "(A-F) sebagai gantinya — zona kisi cuma kotak yang membagi "
+                 "ruangan rata, bukan tempat yang bisa ditempati orang. "
+                 "Menyebutnya sebagai jawaban 'di mana' sama menyesatkannya "
+                 "dengan menebak nama meja.")
     b.append("")
 
     # ---- zona kisi bawaan ----
     zones = d.get("zones") or []
-    if zones:
+    # Angka zona kisi DICABUT kalau belum ada zona bernama. Dengan zona bernama
+    # tersedia, model memakai yang benar; tanpa itu, angka kisi jadi satu-satunya
+    # yang terlihat seperti jawaban "di mana" — dan model memakainya walau
+    # larangannya ditulis tepat di sebelahnya ("Zona kisi B adalah tempat yang
+    # paling sering dikunjungi"). Mencabut umpannya lebih ampuh daripada
+    # melarang memakannya.
+    if zones and not porsi:
+        b.append("=== ZONA KISI A-F ===")
+        b.append("Ada 6 zona kisi, tapi angkanya SENGAJA tidak diberikan di "
+                 "sini: kotak itu membagi ruangan rata dan tidak mengikuti "
+                 "perabot, jadi tidak bisa menjawab 'di mana'. Kalau pemakai "
+                 "bertanya soal zona kisi, katakan zonanya perlu digambar dan "
+                 "dinamai dulu di layar Kalibrasi supaya angkanya berarti.")
+        b.append("")
+    elif zones:
         b.append("=== ZONA KISI A-F (dibagi rata, BUKAN perabot) ===")
         tertinggi = max(z["visits"] for z in zones)
         b.append(f"Angka di bawah jumlah SAMPEL, BUKAN jumlah orang. Zona dengan "
@@ -225,6 +264,15 @@ def susun_konteks(nama: str) -> str:
                  f"pengunjungnya cuma {d.get('totalVisitors',0)}.")
         for z in zones:
             b.append(f"  Zona {z['code']}: {z['visits']} sampel")
+        # Peringatannya ditaruh DI SINI, menempel pada angkanya. Waktu larangan
+        # ini cuma ada di bagian zona bernama, model tetap menjawab "tempat mana
+        # yang cocok" dengan "Zona A dan B" — dia membaca angka di bagian ini
+        # dan tidak menghubungkannya dengan larangan yang jauh di atas.
+        b.append("JANGAN memakai zona kisi untuk menjawab 'di mana', 'tempat "
+                 "mana', atau saran tempat duduk. Kotak ini tidak mengikuti "
+                 "perabot — satu kotak bisa berisi setengah meja plus lantai "
+                 "kosong. Sebut zona kisi HANYA kalau pemakai bertanya "
+                 "khusus tentang 'zona'.")
         b.append("")
 
     # ---- keramaian per menit ----

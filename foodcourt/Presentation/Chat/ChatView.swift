@@ -19,8 +19,11 @@ struct ChatAPI {
 
     struct Giliran: Codable { let peran: String; let teks: String }
 
-    func riwayatTersedia() async throws -> [String] {
-        struct Res: Decodable { let riwayat: [String] }
+    /// Nama folder (UUID) beserta label yang bisa dibaca orang.
+    struct Riwayat: Decodable, Hashable { let nama: String; let label: String }
+
+    func riwayatTersedia() async throws -> [Riwayat] {
+        struct Res: Decodable { let riwayat: [Riwayat] }
         let (data, _) = try await URLSession.shared.data(from: baseURL.appendingPathComponent("riwayat"))
         return try JSONDecoder().decode(Res.self, from: data).riwayat
     }
@@ -77,7 +80,7 @@ struct PesanChat: Identifiable, Codable {
 @Observable
 @MainActor
 final class ChatViewModel {
-    var tersedia: [String] = []
+    var tersedia: [ChatAPI.Riwayat] = []
     var terpilih: String?
     var pesan: [PesanChat] = []
     var draf = ""
@@ -87,6 +90,47 @@ final class ChatViewModel {
     private let api = ChatAPI()
     private var riwayatKirim: [ChatAPI.Giliran] = []
     private var riwayatDibahas: String?
+
+    // MARK: simpanan
+    //
+    // Ditulis tiap giliran, bukan saat aplikasi ditutup: aplikasi bisa mati
+    // paksa, dan percakapan yang hilang karena itu terasa seperti kesalahan
+    // pemakai padahal bukan.
+
+    private struct Simpanan: Codable {
+        var pesan: [PesanChat]
+        var riwayat: [Giliran]
+        var dibahas: String?
+        struct Giliran: Codable { let peran: String; let teks: String }
+    }
+
+    /// Di dalam kontainer aplikasi — satu-satunya tempat yang boleh ditulis
+    /// aplikasi ber-sandbox tanpa dialog pilih berkas.
+    private static var berkas: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory,
+                                           in: .userDomainMask)[0]
+            .appendingPathComponent("Foodcourt", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("chat-riwayat.json")
+    }
+
+    init() {
+        guard let data = try? Data(contentsOf: Self.berkas),
+              let s = try? JSONDecoder().decode(Simpanan.self, from: data)
+        else { return }
+        pesan = s.pesan
+        riwayatKirim = s.riwayat.map { .init(peran: $0.peran, teks: $0.teks) }
+        riwayatDibahas = s.dibahas
+        terpilih = s.dibahas
+    }
+
+    private func simpan() {
+        let s = Simpanan(pesan: pesan,
+                         riwayat: riwayatKirim.map { .init(peran: $0.peran, teks: $0.teks) },
+                         dibahas: riwayatDibahas)
+        guard let data = try? JSONEncoder().encode(s) else { return }
+        try? data.write(to: Self.berkas, options: .atomic)
+    }
 
     func muat() async {
         do {
@@ -98,7 +142,7 @@ final class ChatViewModel {
             tersedia = []
             errorMessage = "Layanan chat belum jalan. Di Terminal: ./llm/jalankan.sh"
         }
-        if terpilih == nil { terpilih = tersedia.first }
+        if terpilih == nil { terpilih = tersedia.first?.nama }
     }
 
     func kirim() async {
@@ -110,7 +154,7 @@ final class ChatViewModel {
         // dipotong di sini, dan pemotongannya terlihat.
         if let lama = riwayatDibahas, lama != nama {
             pesan.append(PesanChat(dariOrang: false,
-                                   teks: "Ganti ke \(nama) — jawaban di atas memakai angka dari \(lama).",
+                                   teks: "Ganti analisis — jawaban di atas memakai angka dari yang sebelumnya.",
                                    pemisah: true))
             riwayatKirim = []
         }
@@ -131,12 +175,14 @@ final class ChatViewModel {
             errorMessage = error.localizedDescription
             riwayatKirim.removeLast()                     // pertanyaan tak terjawab
         }
+        simpan()
     }
 
     func hapusPercakapan() {
         pesan = []
         riwayatKirim = []
         riwayatDibahas = nil
+        try? FileManager.default.removeItem(at: Self.berkas)
     }
 }
 
@@ -144,7 +190,8 @@ final class ChatViewModel {
 
 struct ChatView: View {
     @Environment(\.uiScale) private var scale
-    @State private var vm = ChatViewModel()
+    // Dimiliki RootView, bukan layar ini — lihat catatan di sana.
+    @Environment(ChatViewModel.self) private var vm
 
     private let contoh = [
         "Tempat mana yang cocok buat main board game?",
@@ -165,12 +212,12 @@ struct ChatView: View {
                     }
                 }
                 Picker("", selection: $vm.terpilih) {
-                    ForEach(vm.tersedia, id: \.self) { r in
-                        Text(r).tag(String?.some(r))
+                    ForEach(vm.tersedia, id: \.nama) { r in
+                        Text(r.label).tag(String?.some(r.nama))
                     }
                 }
                 .labelsHidden()
-                .frame(width: 240)
+                .frame(width: 320)
             }
             .spad(Space.xl, [.horizontal, .top])
 
@@ -269,5 +316,7 @@ private struct GelembungPesan: View {
 }
 
 #Preview {
-    ChatView().frame(width: 1100, height: 780)
+    ChatView()
+        .environment(ChatViewModel())
+        .frame(width: 1100, height: 780)
 }
