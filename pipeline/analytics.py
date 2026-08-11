@@ -151,6 +151,19 @@ def compute_analytics(global_tracks, venue, cfg):
         if len(pts) >= 2:
             paths.append(PathTraceOut(points=pts, hue=round((i * 0.618) % 1.0, 3)))
 
+    # ---- observations: semua titik-kaki lantai ternormalisasi (untuk zona custom di app) ----
+    obs_all = []
+    for obs in global_tracks.values():
+        for (_, x, y) in obs:
+            obs_all.append((round(float(np.clip(x / W, 0, 1)), 4),
+                            round(float(np.clip(y / Hm, 0, 1)), 4)))
+    # cap ~5000 titik biar payload ringan
+    cap = 5000
+    if len(obs_all) > cap:
+        step = (len(obs_all) + cap - 1) // cap
+        obs_all = obs_all[::step]
+    observations = [[a, b] for (a, b) in obs_all]
+
     summary = Summary(
         totalVisitors=total,
         avgDwellSeconds=avg_dwell,
@@ -158,4 +171,5 @@ def compute_analytics(global_tracks, venue, cfg):
         captureRate=capture,
     )
     return {"summary": summary, "zones": zones, "stopPoints": stop_out,
-            "occupancy": occ, "blobs": blobs, "paths": paths}, heat
+            "occupancy": occ, "blobs": blobs, "paths": paths,
+            "observations": observations}, heat

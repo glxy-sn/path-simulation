@@ -134,6 +134,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
         occupancy=res["occupancy"],
         blobs=res["blobs"],
         paths=res["paths"],
+        observations=res["observations"],
         artifacts=artifacts,
         trajectories=traj_uri,
     )
