@@ -15,9 +15,6 @@ struct RootView: View {
     // dalam ChatView, pindah tab menghancurkannya — tanya-jawab yang baru saja
     // dibaca hilang tanpa peringatan.
     @State private var chat = ChatViewModel()
-    /// Panel chat terbuka atau tertutup. Disimpan di sini, bukan di dalam
-    /// panelnya, supaya pindah langkah wizard tidak menutupnya sendiri.
-    @State private var chatTerbuka = false
     private let referenceWidth: CGFloat = 1440
 
     var body: some View {
@@ -34,17 +31,6 @@ struct RootView: View {
 
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .bottomTrailing) { tombolChat }
-
-                // Panel chat DI SAMPING hasil, bukan tab tersendiri: pertanyaan
-                // yang muncul saat melihat hasil ("meja mana yang paling ramai")
-                // paling enak dijawab sambil grafiknya masih kelihatan.
-                if chatTerbuka {
-                    Divider()
-                    ChatView()
-                        .frame(width: min(max(geo.size.width * 0.30, 340), 460))
-                        .transition(.move(edge: .trailing))
-                }
             }
             .environment(\.uiScale, scale)
             .environment(router)
@@ -57,33 +43,12 @@ struct RootView: View {
         .task { await sidecar.checkHealth() }
     }
 
-    private var tombolChat: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.22)) { chatTerbuka.toggle() }
-        } label: {
-            Label(chatTerbuka ? "Tutup" : "Tanya Data",
-                  systemImage: chatTerbuka
-                      ? "sidebar.trailing"
-                      : "bubble.left.and.text.bubble.right")
-                .labelStyle(.titleAndIcon)
-                .font(.callout)
-                .padding(.horizontal, Space.m)
-                .padding(.vertical, Space.s)
-                .background(
-                    Capsule().fill(.thinMaterial)
-                        .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
-                )
-        }
-        .buttonStyle(.plain)
-        .padding(Space.l)
-        .help("Tanya-jawab tentang hasil analisis")
-    }
-
     @ViewBuilder
     private var content: some View {
         switch router.section {
         case .newAnalysis: WizardContainer()
         case .history:     HistoryView()
+        case .chat:        ChatView()
         }
     }
 }
