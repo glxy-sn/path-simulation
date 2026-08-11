@@ -12,20 +12,17 @@ import Observation
 enum AppSection: Hashable {
     case newAnalysis
     case history
-    case chat
 
     var title: String {
         switch self {
         case .newAnalysis: return "Analisis Baru"
         case .history:     return "Riwayat"
-        case .chat:        return "Tanya Data"
         }
     }
     var systemImage: String {
         switch self {
         case .newAnalysis: return "plus.viewfinder"
         case .history:     return "clock.arrow.circlepath"
-        case .chat:        return "bubble.left.and.text.bubble.right"
         }
     }
 }
