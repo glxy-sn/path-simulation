@@ -122,7 +122,7 @@ def _dalam(x: float, y: float, z: dict) -> bool:
     return z["x"] <= x <= z["x"] + z["w"] and z["y"] <= y <= z["y"] + z["h"]
 
 
-def porsi_per_zona(d: dict) -> list[tuple[str, float]]:
+def porsi_per_zona(d: dict, zona_kiriman: list | None = None) -> list[tuple[str, float]]:
     """Porsi waktu-orang di tiap zona bernama, dari titik-kaki mentah.
 
     `observations` sudah dijarangkan aplikasi (dibatasi ~5000 titik), jadi
@@ -130,15 +130,26 @@ def porsi_per_zona(d: dict) -> list[tuple[str, float]]:
     karena itu dilaporkan sebagai porsi, bukan sebagai satuan waktu. Menyebutnya
     "detik" akan terdengar seperti pengukuran yang tidak pernah kami lakukan.
     """
-    zona = d.get("customZones") or []
+    # Zona kiriman menang: aplikasi menulis riwayat SEKALI saat proses selesai,
+    # sedangkan zona digambar sesudahnya — jadi yang di disk hampir selalu
+    # ketinggalan dari yang ada di layar.
+    zona = zona_kiriman or d.get("customZones") or []
     obs = d.get("observations") or []
     if not zona or not obs:
         return []
     hitung = {z["name"]: 0 for z in zona}
     for titik in obs:
-        if len(titik) < 2:
+        # DUA BENTUK yang beredar, dan bedanya tidak menimbulkan galat apa pun:
+        #   lama : [x, y]
+        #   baru : [track_id, x, y, t]   (backend c2c8f0b)
+        # Membaca bentuk baru dengan aturan lama menaruh NOMOR ORANG di sumbu x,
+        # dan semua titik jatuh ke zona yang salah tanpa satu pun peringatan.
+        if len(titik) >= 4:
+            x, y = titik[1], titik[2]
+        elif len(titik) >= 2:
+            x, y = titik[0], titik[1]
+        else:
             continue
-        x, y = titik[0], titik[1]
         for z in zona:
             if _dalam(x, y, z):
                 hitung[z["name"]] += 1
@@ -199,7 +210,7 @@ KALAU PEMAKAI MERAGUKAN ANGKAMU:
 """
 
 
-def susun_konteks(nama: str) -> str:
+def susun_konteks(nama: str, zona_kiriman: list | None = None) -> str:
     d = muat(nama)
     b = ["=== FAKTA DASAR ==="]
     b.append(f"Ruangan {d.get('venueName','pujasera')} "
@@ -215,7 +226,7 @@ def susun_konteks(nama: str) -> str:
     b.append("")
 
     # ---- tempat, dari zona yang digambar dan dinamai pemakai ----
-    porsi = porsi_per_zona(d)
+    porsi = porsi_per_zona(d, zona_kiriman)
     b.append("=== TEMPAT (zona yang kamu gambar sendiri di aplikasi) ===")
     if porsi:
         b.append("Angka = PORSI waktu-orang, bukan detik. Titik pengamatan sudah "

@@ -3,7 +3,7 @@
 
     GET  /health                 -> {"status", "model", "riwayat"}
     GET  /riwayat                -> {"riwayat": [nama, ...]}
-    POST /chat  {nama, pertanyaan, riwayat?}  -> {"jawaban"}
+    POST /chat  {nama, pertanyaan, riwayat?, zona?}  -> {"jawaban"}
 
 BERDIRI SENDIRI di port 8766, terpisah dari engine analisis di 8765. Dua alasan:
 engine itu milik orang lain dan tidak perlu diubah, dan chatbot yang mati tidak
@@ -90,7 +90,9 @@ class Handler(BaseHTTPRequestHandler):
                           else f"Riwayat '{nama}' tidak ditemukan.")})
 
         try:
-            ctx = K.susun_konteks(nama)
+            zona = [z for z in (req.get("zona") or [])
+                    if isinstance(z, dict) and z.get("name")]
+            ctx = K.susun_konteks(nama, zona)
             jawab = K.tanya(tanya, ctx, req.get("riwayat") or [])
         except urllib.error.URLError:
             # Satu-satunya kegagalan yang bisa diperbaiki sendiri oleh pemakai,

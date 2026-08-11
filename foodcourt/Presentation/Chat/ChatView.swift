@@ -28,10 +28,22 @@ struct ChatAPI {
         return try JSONDecoder().decode(Res.self, from: data).riwayat
     }
 
-    func tanya(nama: String, pertanyaan: String,
-               riwayat: [Giliran]) async throws -> String {
+    /// Zona bernama, dikirim langsung dari sesi.
+    ///
+    /// Riwayat di disk ditulis SEKALI saat proses selesai, sedangkan zona
+    /// digambar sesudahnya di layar Hasil — jadi zona yang baru digambar tidak
+    /// pernah sampai ke result.json. Mengirimnya bersama pertanyaan membuat
+    /// nama tempat langsung terpakai tanpa memproses ulang video.
+    struct Zona: Encodable {
+        let name: String
+        let x: Double, y: Double, w: Double, h: Double
+    }
+
+    func tanya(nama: String, pertanyaan: String, riwayat: [Giliran],
+               zona: [Zona]) async throws -> String {
         struct Req: Encodable {
             let nama: String; let pertanyaan: String; let riwayat: [Giliran]
+            let zona: [Zona]
         }
         struct Res: Decodable { let jawaban: String }
         struct Galat: Decodable { let error: String }
@@ -43,7 +55,7 @@ struct ChatAPI {
         // URLSession, jawaban yang sedang disusun tampil sebagai kegagalan.
         req.timeoutInterval = 300
         req.httpBody = try JSONEncoder().encode(
-            Req(nama: nama, pertanyaan: pertanyaan, riwayat: riwayat))
+            Req(nama: nama, pertanyaan: pertanyaan, riwayat: riwayat, zona: zona))
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         let kode = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -145,7 +157,7 @@ final class ChatViewModel {
         if terpilih == nil { terpilih = tersedia.first?.nama }
     }
 
-    func kirim() async {
+    func kirim(zona: [ChatAPI.Zona] = []) async {
         let t = draf.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty, let nama = terpilih, !sedangJawab else { return }
 
@@ -168,7 +180,8 @@ final class ChatViewModel {
         defer { sedangJawab = false }
         do {
             let sebelum = Array(riwayatKirim.dropLast())   // tanpa pertanyaan ini
-            let j = try await api.tanya(nama: nama, pertanyaan: t, riwayat: sebelum)
+            let j = try await api.tanya(nama: nama, pertanyaan: t,
+                                        riwayat: sebelum, zona: zona)
             pesan.append(PesanChat(dariOrang: false, teks: j))
             riwayatKirim.append(.init(peran: "bot", teks: j))
         } catch {
@@ -192,6 +205,16 @@ struct ChatView: View {
     @Environment(\.uiScale) private var scale
     // Dimiliki RootView, bukan layar ini — lihat catatan di sana.
     @Environment(ChatViewModel.self) private var vm
+    // Dibaca saja, tidak diubah: zona yang baru digambar belum ada di riwayat
+    // yang tersimpan, jadi diambil langsung dari sesi.
+    @Environment(AnalysisSession.self) private var session
+
+    private var zonaSesi: [ChatAPI.Zona] {
+        session.customZones.map {
+            .init(name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
+                  w: $0.rect.width, h: $0.rect.height)
+        }
+    }
 
     private let contoh = [
         "Tempat mana yang cocok buat main board game?",
@@ -253,9 +276,9 @@ struct ChatView: View {
             HStack(spacing: Space.s) {
                 TextField("Tanya apa saja tentang hasil ini…", text: $vm.draf)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await vm.kirim() } }
+                    .onSubmit { Task { await vm.kirim(zona: zonaSesi) } }
                 PrimaryButton(title: "Kirim", systemImage: "paperplane.fill") {
-                    Task { await vm.kirim() }
+                    Task { await vm.kirim(zona: zonaSesi) }
                 }
                 .disabled(vm.sedangJawab || vm.terpilih == nil)
             }
@@ -269,7 +292,7 @@ struct ChatView: View {
         VStack(alignment: .leading, spacing: Space.s) {
             Text("Coba tanya:").font(.callout).foregroundStyle(.secondary)
             ForEach(contoh, id: \.self) { c in
-                Button(c) { vm.draf = c; Task { await vm.kirim() } }
+                Button(c) { vm.draf = c; Task { await vm.kirim(zona: zonaSesi) } }
                     .buttonStyle(.link)
             }
             InfoNote(text: "Jawaban hanya memakai angka dari analisis. Nama tempat "
@@ -318,5 +341,6 @@ private struct GelembungPesan: View {
 #Preview {
     ChatView()
         .environment(ChatViewModel())
+        .environment(AnalysisSession())
         .frame(width: 1100, height: 780)
 }
