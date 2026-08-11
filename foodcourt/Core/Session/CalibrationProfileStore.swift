@@ -46,8 +46,15 @@ enum CalibrationProfileStore {
         )
     }
 
-    static func apply(_ profile: CalibrationProfile, to session: AnalysisSession) throws {
-        guard profile.schemaVersion == CalibrationProfile.currentSchemaVersion else { throw CalibrationError.invalidProfile }
+    /// `sumberURL` = letak berkas profilnya. Dipakai untuk mencari denah profil
+    /// skema 2, yang menyimpan gambarnya sebagai berkas TERPISAH di sebelah
+    /// profil alih-alih menyematkannya.
+    static func apply(_ profile: CalibrationProfile,
+                      sumberURL: URL? = nil,
+                      to session: AnalysisSession) throws {
+        guard CalibrationProfile.readableSchemaVersions.contains(profile.schemaVersion) else {
+            throw CalibrationError.unsupportedSchema(profile.schemaVersion)
+        }
         guard profile.worldBoundsM.width > 0, profile.worldBoundsM.height > 0 else { throw CalibrationError.invalidProfile }
         session.widthM = Self.number(profile.worldBoundsM.width)
         session.heightM = Self.number(profile.worldBoundsM.height)
@@ -58,7 +65,7 @@ enum CalibrationProfileStore {
             // Tanpa baris ini panel denah tetap kosong setelah impor: layar
             // Kalibrasi memuat gambarnya dari `floorPlanURL`, dan dulu tidak
             // ada satu pun yang mengisinya kembali.
-            session.floorPlanURL = pulihkanDenah(profile.floorplan)
+            session.floorPlanURL = pulihkanDenah(profile.floorplan, sumberURL: sumberURL)
         }
 
         for index in session.cameras.indices {
@@ -135,9 +142,17 @@ enum CalibrationProfileStore {
     /// Memakai `fileExists` membuat denah di luar container tampak sehat,
     /// mengembalikan URL yang gagal dimuat, dan cadangan tersemat yang sudah
     /// ada di profil tidak pernah terpakai — layar denah kosong tanpa galat.
-    private static func pulihkanDenah(_ f: FloorplanProfile) -> URL? {
+    private static func pulihkanDenah(_ f: FloorplanProfile, sumberURL: URL? = nil) -> URL? {
         if let p = f.imagePath, bisaDibaca(p) {
             return URL(fileURLWithPath: p)
+        }
+        // Profil skema 2: denahnya berkas terpisah di folder yang sama dengan
+        // profilnya. Dicoba SEBELUM cadangan tersemat karena skema 2 memang
+        // tidak punya cadangan tersemat sama sekali.
+        if let nama = f.assetFileName, let sumberURL {
+            let sebelah = sumberURL.deletingLastPathComponent()
+                .appendingPathComponent(nama)
+            if bisaDibaca(sebelah.path) { return sebelah }
         }
         guard let data = f.imageData, !data.isEmpty else { return nil }
         let folder = FileManager.default

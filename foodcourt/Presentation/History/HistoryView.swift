@@ -178,8 +178,18 @@ private struct HistoryRow: View {
                     Tag(text: entry.mode,
                         color: entry.mode == "Mode Lengkap" ? Theme.accent : .orange)
                 }
-                Text("\(entry.type) · \(entry.dateText)")
-                    .font(.caption).foregroundStyle(.secondary)
+                // Nama lari ikut ditampilkan. Tanpa ini setiap baris berbunyi
+                // sama — semua analisis dari video yang sama tampil sebagai
+                // "day1cam1.mp4", dan satu-satunya pembeda cuma jam. Begitu ada
+                // belasan percobaan atas video yang sama, memilih yang benar
+                // jadi tebak-tebakan.
+                HStack(spacing: Space.s) {
+                    Text("\(entry.type) · \(entry.dateText)")
+                    if let id = entry.runId {
+                        Text(id).monospaced()
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.l) {
                     // Untuk lari sungguhan: puncak okupansi + durasi. Rata-rata
                     // dwell tidak ikut tersimpan di ringkasan, dan "0s" akan

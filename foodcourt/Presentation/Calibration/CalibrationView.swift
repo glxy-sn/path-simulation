@@ -796,12 +796,20 @@ struct CalibrationView: View {
     private func importProfile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.json]
+        // Profil skema 2 diekspor sebagai FOLDER `.foodcourtcalibration` berisi
+        // profile.json + denahnya, jadi folder harus ikut bisa dipilih.
+        panel.canChooseDirectories = true
+        panel.allowedContentTypes = [.json, .folder]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let profile = try CalibrationProfileStore.decode(Data(contentsOf: url))
-            try CalibrationProfileStore.apply(profile, to: session)
+            // Kalau yang dipilih folder, profilnya ada di dalam sebagai
+            // profile.json. `berkas` juga jadi acuan mencari denah di sebelahnya.
+            var berkas = url
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                berkas = url.appendingPathComponent("profile.json")
+            }
+            let profile = try CalibrationProfileStore.decode(Data(contentsOf: berkas))
+            try CalibrationProfileStore.apply(profile, sumberURL: berkas, to: session)
             let dibetulkan = perbaikiRasioTertukar()
             reloadToken = UUID()
             message = dibetulkan

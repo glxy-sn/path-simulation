@@ -33,18 +33,24 @@ struct HTTPClient {
         try await send(makeRequest(path, method: "GET"))
     }
 
-    func post<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
-        var req = try makeRequest(path, method: "POST")
+    /// `timeout` bisa dinaikkan untuk permintaan yang memang lama. Chat ke LLM
+    /// lokal butuh 20–90 detik di Mac ini; dengan batas 30 detik bawaan,
+    /// jawaban yang sebenarnya sedang disusun akan tampil sebagai "gagal
+    /// terhubung ke engine".
+    func post<B: Encodable, T: Decodable>(_ path: String, body: B,
+                                          timeout: TimeInterval = 30) async throws -> T {
+        var req = try makeRequest(path, method: "POST", timeout: timeout)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
         return try await send(req)
     }
 
-    private func makeRequest(_ path: String, method: String) throws -> URLRequest {
+    private func makeRequest(_ path: String, method: String,
+                             timeout: TimeInterval = 30) throws -> URLRequest {
         guard let url = URL(string: baseURL.absoluteString + path) else { throw EngineError.network }
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout
         return req
     }
 

@@ -115,7 +115,13 @@ struct CameraCalibration: Codable, Hashable {
 }
 
 struct CalibrationProfile: Codable {
+    /// Versi yang DITULIS aplikasi ini saat mengekspor.
     static let currentSchemaVersion = 1
+    /// Versi yang masih BISA DIBACA. Skema 2 dipakai aplikasi Shafa; bentuknya
+    /// hampir sama, cuma menambah beberapa field dan memindahkan denah ke berkas
+    /// terpisah. Menolaknya berarti profil satu tim tidak bisa saling dibuka —
+    /// padahal titik dan homografinya bisa dipakai apa adanya.
+    static let readableSchemaVersions = 1...2
 
     var schemaVersion: Int
     var worldBoundsM: PixelSize
@@ -154,6 +160,12 @@ struct FloorplanProfile: Codable {
     var imageData: Data?
     /// Lintasan asalnya, dipakai lebih dulu kalau berkasnya masih di tempat.
     var imagePath: String?
+    /// Nama berkas denah DI SEBELAH profil — cara skema 2 menyimpannya.
+    ///
+    /// Skema 2 (aplikasi Shafa) tidak menyematkan gambarnya. Dia mengekspor satu
+    /// folder `.foodcourtcalibration` berisi `profile.json` + berkas denahnya,
+    /// jadi denah dicari relatif terhadap LETAK profilnya, bukan dari isi profil.
+    var assetFileName: String?
 
     enum CodingKeys: String, CodingKey {
         case sourceName = "source_name"
@@ -161,6 +173,7 @@ struct FloorplanProfile: Codable {
         case usesCanvas = "uses_canvas"
         case imageData = "image_data"
         case imagePath = "image_path"
+        case assetFileName = "asset_file_name"
     }
 }
 
@@ -190,6 +203,11 @@ enum CalibrationError: LocalizedError, Equatable {
     case degeneratePoints
     case noValidModel
     case invalidProfile
+    /// Versi skema di luar jangkauan yang bisa dibaca. Dipisahkan dari
+    /// `invalidProfile` karena pesannya menyalahkan hal yang salah: profil skema
+    /// 2 ditolak dengan "tidak cocok dengan sesi", padahal sesinya tidak ada
+    /// hubungannya — orang lalu mengulang kalibrasi tanpa perlu.
+    case unsupportedSchema(Int)
 
     var errorDescription: String? {
         switch self {
@@ -199,6 +217,10 @@ enum CalibrationError: LocalizedError, Equatable {
         case .tooFewPoints: return "Setiap kamera membutuhkan minimal 4 pasangan titik."
         case .tooManyPoints: return "Maksimum 8 pasangan titik untuk setiap kamera."
         case .duplicatePoints: return "Ada titik yang terlalu berdekatan atau duplikat."
+        case .unsupportedSchema(let v):
+            return "Profil ini versi \(v); aplikasi ini baru bisa membaca versi "
+                + "\(CalibrationProfile.readableSchemaVersions.lowerBound)–"
+                + "\(CalibrationProfile.readableSchemaVersions.upperBound)."
         case .degeneratePoints: return "Susunan titik tidak dapat membentuk homografi. Sebarkan titik pada area lantai."
         case .noValidModel: return "Homografi gagal ditemukan. Periksa pasangan titik dan coba lagi."
         case .invalidProfile: return "Profil kalibrasi tidak cocok dengan sesi saat ini."

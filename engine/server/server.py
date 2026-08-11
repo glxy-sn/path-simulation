@@ -25,6 +25,7 @@ Jalankan:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -33,6 +34,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
@@ -43,6 +45,23 @@ APP = Path(__file__).resolve().parent.parent          # crowdflow_app/
 AKAR = APP.parent                                      # challenge2/
 SKRIP = APP / "experiments/ke_json_aplikasi.py"
 PYTHON = os.environ.get("CROWDFLOW_PYTHON", str(AKAR / "venv_boxmot/bin/python"))
+
+# Mesin analisisnya bisa ditukar ke pipeline `backend` milik Shafa. Yang berubah
+# hanya SIAPA yang menghitung — keluarannya tetap format ini, jadi Riwayat,
+# denah, animasi, dan zona di aplikasi tetap hidup.
+#
+# Bedanya bukan sekadar model: pipeline itu menyatukan identitas LINTAS KAMERA
+# (satu orang satu nomor di semua sudut), sesuatu yang pipeline di sini tidak
+# pernah berhasil lakukan. Sebaliknya dia tidak punya penyambungan ID temporal,
+# jadi jumlah orangnya cenderung berlebih. Dua-duanya disimpan supaya bisa
+# dibandingkan kapan saja, bukan dipilih sekali lalu yang lain dibuang.
+ADAPTOR_SHAFA = APP / "experiments/pakai_pipeline_shafa.py"
+PAKAI_SHAFA = os.environ.get("PAKAI_PIPELINE_SHAFA", "1") != "0"
+
+# Profil kalibrasi tetap. Kalau diisi, titik dari profil ini MENANG atas titik
+# yang tersimpan di sesi aplikasi — dipakai supaya semua analisis memakai
+# kalibrasi yang sama, bukan kalibrasi lama yang kebetulan masih tersimpan.
+PROFIL_KALIBRASI = os.environ.get("CROWDFLOW_PROFIL_KALIBRASI", "")
 
 # Hasil ditulis ke tempat yang sama dengan versi subprocess, supaya layar
 # Riwayat di aplikasi tetap menemukan lari lama maupun baru.
@@ -188,9 +207,12 @@ class Job:
         # layak dipakai. Yang bisa dipertanggungjawabkan adalah menampilkan
         # tiap sudut apa adanya, lalu menjumlahkan HANYA yang boleh
         # dijumlahkan (lihat gabungkan() di bawah).
-        hasil_kamera = []
-        for i, cam in enumerate(cams):
-            hasil_kamera.append(self._satu_kamera(i, len(cams), cam))
+        if PAKAI_SHAFA:
+            hasil_kamera = self._pipeline_shafa(cams)
+        else:
+            hasil_kamera = []
+            for i, cam in enumerate(cams):
+                hasil_kamera.append(self._satu_kamera(i, len(cams), cam))
 
         # SALINAN, bukan rujukan. `utama = hasil_kamera[0]` membuat objek itu
         # memuat dirinya sendiri lewat "cameras", dan json.dumps menolaknya
@@ -199,11 +221,101 @@ class Job:
         utama = dict(hasil_kamera[0])
         utama["cameras"] = hasil_kamera
         utama["gabungan"] = gabungkan(hasil_kamera)
+
+        # Daftar video tingkat-atas harus memuat SEMUA sudut. Karena `utama`
+        # disalin dari kamera pertama, tanpa ini yang terdaftar cuma kamera 1 —
+        # video kamera 2 tetap dirender (39 MB di disk) tapi tidak pernah bisa
+        # dibuka dari layar Hasil. Label diambil dari tiap kamera sendiri;
+        # sebelumnya semuanya memakai label kamera pertama, jadi dua sudut
+        # tampil dengan nama yang sama.
+        satukan_video(hasil_kamera, utama)
         self.result = utama
         with self.kunci:
             self.status = "done"
             self.stage = "selesai"
             self.fraction = 1.0
+
+    def _pipeline_shafa(self, cams: list[dict]) -> list[dict]:
+        """Analisis SEMUA kamera sekaligus lewat pipeline Shafa.
+
+        Sekaligus, bukan satu per satu seperti `_satu_kamera`: fusi lintas
+        kameranya membandingkan posisi orang di lantai pada waktu yang sama,
+        jadi dia butuh seluruh kamera hadir bersamaan. Memanggilnya per kamera
+        akan menghasilkan fusi yang tidak pernah punya pasangan.
+        """
+        n = len(cams)
+        self._maju("menyiapkan pipeline", 0.02)
+
+        # Permintaan dari aplikasi diteruskan apa adanya — titik kalibrasi yang
+        # baru saja diklik pengguna ikut, jadi hasilnya memakai kalibrasi itu,
+        # bukan berkas job yang ditulis tangan.
+        isi_job = {
+            "venue": self.req.get("venue") or {},
+            "mode": self.req.get("mode", "lengkap"),
+            "options": self.req.get("options") or {},
+            "cameras": cams,
+        }
+        # ...KECUALI kalau ada profil kalibrasi tetap yang dipilih. Titik yang
+        # tersimpan di sesi aplikasi pernah menang diam-diam atas profil yang
+        # sengaja diimpor, dan hasilnya diproses dengan kalibrasi yang salah
+        # tanpa satu pun tanda di layar.
+        if PROFIL_KALIBRASI:
+            pakai_profil(isi_job, PROFIL_KALIBRASI)
+
+        job = self.dir / "job.json"
+        job.write_text(json.dumps(isi_job))
+        cams = isi_job["cameras"]
+
+        perintah = [PYTHON, str(ADAPTOR_SHAFA), str(job), str(self.dir)]
+        self.proc = subprocess.Popen(
+            perintah, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1, cwd=str(AKAR))
+
+        ekor: list[str] = []
+        for baris in self.proc.stdout:                        # type: ignore[union-attr]
+            baris = baris.rstrip()
+            print(f"[{self.id[:8]}/shafa] {baris}", flush=True)
+            ekor.append(baris)
+            del ekor[:-40]
+            # Progres ditaksir dari tahap yang dicetak adaptor. Kasar, tapi
+            # lebih baik daripada bar diam belasan menit tanpa keterangan.
+            for kunci, (tahap, frac) in {
+                "deteksi": ("mendeteksi orang", 0.25),
+                "tracking": ("melacak", 0.55),
+                "fusi": ("menyatukan antar kamera", 0.75),
+                "video beranotasi": ("merender video", 0.9),
+            }.items():
+                if kunci in baris:
+                    self._maju(tahap, frac)
+                    break
+
+        if self.proc.wait() != 0:
+            raise RuntimeError("pipeline Shafa gagal\n" + "\n".join(ekor[-12:]))
+
+        hasil_kamera = []
+        for i, cam in enumerate(cams):
+            sub = self.dir / f"kamera-{i + 1}"
+            berkas = sub / "hasil.json"
+            if not berkas.exists():
+                raise RuntimeError(f"pipeline Shafa tidak menulis {berkas}")
+            label = cam.get("label") or f"Kamera {i + 1}"
+            _, lebar, tinggi = info_video(cam.get("videoPath") or "")
+            latar = simpan_frame(cam.get("videoPath") or "",
+                                 int(round(float(cam.get("startSec") or 0))),
+                                 sub / "latar.jpg")
+            mentah = json.loads(berkas.read_text())
+            hasil = petakan(self.id, self.req, mentah, sub, n, lebar, tinggi, latar)
+            hasil["label"] = label
+            hasil_kamera.append(hasil)
+
+        # Layar Hasil menggabungkan dua kamera dan menggambar di atas denah
+        # HANYA kalau tiap kamera punya homografi + ukuran frame + ukuran
+        # ruangan, dan ketiganya dibaca dari kalibrasi.json di folder kamera.
+        # Tanpa berkas itu tampilannya jatuh ke satu kamera di atas frame CCTV,
+        # tanpa satu pun pesan yang menjelaskan kenapa.
+        if PROFIL_KALIBRASI:
+            salin_profil(Path(PROFIL_KALIBRASI), self.dir, len(cams))
+        return hasil_kamera
 
     def _satu_kamera(self, i: int, n: int, cam: dict) -> dict:
         video = cam.get("videoPath") or ""
@@ -498,6 +610,99 @@ def daftar_lari() -> list[dict]:
     return sorted(out, key=lambda r: r["waktu"], reverse=True)
 
 
+def pakai_profil(isi_job: dict, profil_path: str) -> None:
+    """Ganti titik kalibrasi tiap kamera dengan titik dari profil aplikasi.
+
+    Profil menyimpan PIKSEL — titik kamera relatif ukuran frame saat
+    dikalibrasi, titik lantai relatif ukuran gambar denah — sementara job
+    memakai 0-1. Ukuran frame di profil pun bisa berbeda dari videonya (profil
+    ini dibuat pada 4608x2592 sementara videonya 2304x1296), jadi menyalin
+    piksel apa adanya akan menggeser semua titik dua kali lipat.
+    """
+    try:
+        prof = json.loads(Path(profil_path).read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[engine] profil kalibrasi tidak terbaca ({e}) — pakai titik dari aplikasi",
+              flush=True)
+        return
+
+    dw = prof["floorplan"]["pixel_size"]["width"]
+    dh = prof["floorplan"]["pixel_size"]["height"]
+    for i, cam in enumerate(isi_job["cameras"]):
+        if i >= len(prof.get("cameras") or []):
+            print(f"[engine] profil cuma punya {len(prof.get('cameras') or [])} "
+                  f"kamera — kamera {i+1} tetap memakai titik dari aplikasi", flush=True)
+            continue
+        pc = prof["cameras"][i]
+        kal = pc["calibration"]
+        fw, fh = pc["image_size"]["width"], pc["image_size"]["height"]
+        cam["imagePoints"] = [{"x": p[0] / fw, "y": p[1] / fh}
+                              for p in kal["camera_points_px"]]
+        cam["planePoints"] = [{"x": p[0] / dw, "y": p[1] / dh}
+                              for p in kal["floor_points_px"]]
+        print(f"[engine] {cam.get('label')}: {len(cam['imagePoints'])} titik "
+              f"dari profil kalibrasi", flush=True)
+    isi_job["venue"] = {**isi_job.get("venue", {}),
+                        "widthM": prof["world_bounds_m"]["width"],
+                        "heightM": prof["world_bounds_m"]["height"]}
+
+
+def salin_profil(profil_path: Path, dirjob: Path, n_kamera: int) -> None:
+    """Taruh profil kalibrasi + denahnya di tiap folder kamera.
+
+    Denahnya DISALIN, tidak dirujuk di tempat asalnya: aplikasi berjalan di
+    kotak pasir dan cuma boleh membaca Documents/crowdflow. Menunjuk ke
+    ~/Downloads gagal diam-diam, dan yang terlihat cuma panel denah kosong.
+    """
+    try:
+        prof = json.loads(profil_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+
+    # Skema 2 menyimpan denah sebagai berkas di sebelah profil; aplikasi ini
+    # membacanya lewat image_path atau gambar yang disematkan.
+    nama = (prof.get("floorplan") or {}).get("asset_file_name")
+    sumber = profil_path.parent / nama if nama else None
+    for i in range(1, n_kamera + 1):
+        sub = dirjob / f"kamera-{i}"
+        if not sub.is_dir():
+            continue
+        salinan = None
+        if sumber and sumber.is_file():
+            salinan = sub / sumber.name
+            salinan.write_bytes(sumber.read_bytes())
+        p = dict(prof)
+        p["floorplan"] = {**(prof.get("floorplan") or {}),
+                          "uses_canvas": False}
+        if salinan:
+            p["floorplan"]["image_path"] = str(salinan)
+            p["floorplan"]["image_data"] = base64.b64encode(
+                salinan.read_bytes()).decode()
+        (sub / "kalibrasi.json").write_text(json.dumps(p))
+
+
+def satukan_video(kamera: list[dict], utama: dict) -> None:
+    """Kumpulkan video semua sudut ke daftar tingkat-atas, dengan label benar.
+
+    `utama` selalu salinan kamera pertama, jadi tanpa ini yang terdaftar cuma
+    satu sudut — video kamera kedua tetap dirender puluhan MB ke disk tapi tidak
+    pernah bisa dibuka dari layar Hasil. Labelnya juga diambil dari tiap kamera
+    sendiri; sebelumnya semua memakai label kamera pertama, sehingga dua sudut
+    yang berbeda muncul dengan nama yang sama.
+    """
+    semua = []
+    for k in kamera:
+        seni = k.get("artifacts") or {}
+        nama = k.get("label") or "Kamera"
+        benar = [{"cam": nama, "uri": v["uri"]}
+                 for v in (seni.get("overlayVideos") or []) if v.get("uri")]
+        seni["overlayVideos"] = benar
+        semua += benar
+    if semua:
+        utama["artifacts"] = {**(utama.get("artifacts") or {}),
+                              "overlayVideos": semua}
+
+
 def baca_lari(nama: str) -> dict | None:
     """Hasil lengkap satu lari lama, dalam bentuk yang sama dengan /jobs/<id>/result."""
     d = _aman(nama)
@@ -514,6 +719,7 @@ def baca_lari(nama: str) -> dict | None:
         utama = dict(kamera[0])
         utama["cameras"] = kamera
         utama["gabungan"] = gabungkan(kamera)
+        satukan_video(kamera, utama)
         return utama
     return baca_satu(nama, d)
 
@@ -656,6 +862,46 @@ class Handler(BaseHTTPRequestHandler):
                 return self._galat(404, "lari tidak ditemukan")
             shutil.rmtree(d, ignore_errors=True)
             return self._kirim(200, {"dihapus": ruas[1]})
+
+        # Tanya-jawab atas satu lari. Konteksnya disusun ulang tiap permintaan
+        # (murah — cuma membaca satu JSON), jadi jawaban selalu mengikuti hasil
+        # terbaru tanpa perlu menyalakan ulang server.
+        if ruas == ["chat"]:
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                req = json.loads(self.rfile.read(n) or b"{}")
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._galat(400, f"body bukan JSON yang sah: {e}")
+            tanya_teks = (req.get("pertanyaan") or "").strip()
+            if not tanya_teks:
+                return self._galat(400, "pertanyaan kosong")
+            run_id = req.get("runId") or ""
+            if not run_id or _aman(run_id) is None:
+                return self._galat(404, "lari tidak ditemukan")
+            try:
+                sys.path.insert(0, str(APP / "experiments"))
+                import chatbot_konteks as ck
+                # Lari pembanding disaring dulu lewat _aman(): namanya datang
+                # dari luar, dan tanpa itu "../.." bisa dipakai membaca berkas
+                # di luar folder hasil.
+                lain = [r for r in (req.get("bandingkan") or [])
+                        if isinstance(r, str) and _aman(r) is not None and r != run_id]
+                konteks = ck.susun_konteks(run_id, lain)
+                jawab = ck.tanya(tanya_teks, req.get("model") or "qwen3:8b",
+                                 konteks, req.get("riwayat") or [])
+            except urllib.error.URLError:
+                # Bedakan dari galat lain: ini satu-satunya kegagalan yang bisa
+                # diperbaiki sendiri oleh pemakai, dan pesannya harus menyebut
+                # caranya — bukan "koneksi ditolak".
+                return self._galat(503, "Ollama belum jalan. Buka Terminal, "
+                                        "jalankan: ollama serve")
+            except Exception as e:
+                return self._galat(500, f"chat gagal: {e}")
+            # qwen3 menyisipkan penalarannya di <think>…</think>; itu bocoran
+            # dapur, bukan jawaban.
+            if "</think>" in jawab:
+                jawab = jawab.split("</think>")[-1]
+            return self._kirim(200, {"jawaban": jawab.strip()})
 
         if len(ruas) == 3 and ruas[0] == "jobs" and ruas[2] == "cancel":
             job = JOBS.get(ruas[1])

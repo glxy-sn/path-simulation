@@ -11,6 +11,11 @@ struct RootView: View {
     @State private var router = AppRouter()
     @State private var session = AnalysisSession()
     @State private var sidecar = Sidecar()
+    // Percakapan hidup selama aplikasi terbuka. Ketika model ini masih @State
+    // di dalam ChatView, pindah ke tab lain menghancurkannya — tanya-jawab yang
+    // baru saja dibaca hilang tanpa peringatan, dan pertanyaan lama harus
+    // diketik ulang.
+    @State private var chat = ChatViewModel()
     private let referenceWidth: CGFloat = 1440
 
     var body: some View {
@@ -32,6 +37,7 @@ struct RootView: View {
             .environment(router)
             .environment(session)
             .environment(sidecar)
+            .environment(chat)
         }
         .frame(minWidth: 1060, minHeight: 700)
         .background(WindowBackground())
@@ -43,6 +49,7 @@ struct RootView: View {
         switch router.section {
         case .newAnalysis: WizardContainer()
         case .history:     HistoryView()
+        case .chat:        ChatView()
         }
     }
 }

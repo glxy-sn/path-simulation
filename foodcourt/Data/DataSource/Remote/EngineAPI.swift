@@ -233,6 +233,32 @@ struct EngineAPI {
         try await http.get("/runs/\(id)/result")
     }
 
+    // MARK: tanya-jawab
+    //
+    // Konteksnya disusun di engine, bukan di sini: yang tahu arti tiap angka
+    // adalah kode yang menghasilkannya. Aplikasi cuma mengirim pertanyaan dan
+    // menandai lari mana yang sedang dibicarakan.
+
+    struct GiliranChat: Encodable { let peran: String; let teks: String }
+
+    func chat(runId: String, pertanyaan: String,
+              riwayat: [GiliranChat] = [],
+              bandingkan: [String] = []) async throws -> String {
+        struct Req: Encodable {
+            let runId: String
+            let pertanyaan: String
+            let riwayat: [GiliranChat]
+            let bandingkan: [String]
+        }
+        struct Res: Decodable { let jawaban: String }
+        let r: Res = try await http.post(
+            "/chat",
+            body: Req(runId: runId, pertanyaan: pertanyaan,
+                      riwayat: riwayat, bandingkan: bandingkan),
+            timeout: 300)
+        return r.jawaban
+    }
+
     @discardableResult
     func deleteRun(_ id: String) async throws -> [String: String] {
         try await http.post("/runs/\(id)/delete", body: [String: String]())
