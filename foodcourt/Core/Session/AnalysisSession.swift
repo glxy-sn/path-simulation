@@ -23,7 +23,6 @@ struct SessionCamera: Identifiable, Hashable {
     var isCalibrated: Bool { calibration?.isValid == true }
 }
 
-/// Hasil yang sudah dipetakan ke model UI (siap dipakai layar Hasil).
 struct AnalysisResult {
     var summary: VenueSummary
     var zones: [ZoneRank]
@@ -38,7 +37,6 @@ struct AnalysisResult {
     var observations: [CGPoint] = []
 }
 
-/// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
 struct CustomZone: Identifiable, Hashable {
     let id = UUID()
     var name: String
@@ -105,5 +103,6 @@ final class AnalysisSession {
         floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
+        customZones = []
     }
 }

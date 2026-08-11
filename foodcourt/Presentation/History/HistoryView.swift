@@ -6,16 +6,14 @@
 //
 
 import SwiftUI
-
-@Observable
-final class HistoryViewModel {
-    var entries: [HistoryEntry] = HistoryEntry.samples
-}
+import SwiftData
 
 struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
-    @State private var vm = HistoryViewModel()
+    @Environment(AnalysisSession.self) private var session
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \AnalysisRecord.date, order: .reverse) private var records: [AnalysisRecord]
 
     var body: some View {
         ScrollView {
@@ -23,19 +21,21 @@ struct HistoryView: View {
                 HStack(alignment: .top) {
                     SectionHeader(
                         title: "Riwayat Analisis",
-                        subtitle: "\(vm.entries.count) analisis tersimpan."
+                        subtitle: "\(records.count) analisis tersimpan."
                     )
                     PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
                         router.startNew()
                     }
                 }
 
-                if vm.entries.isEmpty {
+                if records.isEmpty {
                     emptyState
                 } else {
                     VStack(spacing: Space.m) {
-                        ForEach(vm.entries) { entry in
-                            HistoryRow(entry: entry) { router.openResult() }
+                        ForEach(records) { rec in
+                            HistoryRow(record: rec,
+                                       onOpen: { open(rec) },
+                                       onDelete: { remove(rec) })
                         }
                     }
                 }
@@ -45,14 +45,34 @@ struct HistoryView: View {
         }
     }
 
+    private func open(_ rec: AnalysisRecord) {
+        guard let loaded = HistoryStore.load(folder: rec.folder) else { return }
+        session.reset()
+        session.venueName = loaded.venueName
+        if let vt = VenueType(rawValue: loaded.venueType) { session.venueType = vt }
+        session.widthM = loaded.widthM
+        session.heightM = loaded.heightM
+        session.usesScaledCanvas = loaded.usesScaledCanvas
+        session.floorPlanURL = loaded.floorPlanURL
+        session.customZones = loaded.customZones
+        session.result = loaded.result
+        router.openResult()
+    }
+
+    private func remove(_ rec: AnalysisRecord) {
+        HistoryStore.delete(folder: rec.folder)
+        modelContext.delete(rec)
+    }
+
     private var emptyState: some View {
         VStack(spacing: Space.m) {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
             Text("Belum ada analisis").font(.headline)
-            Text("Mulai dari “Analisis Baru”.")
+            Text("Mulai dari “Analisis Baru”. Hasil akan otomatis tersimpan di sini.")
                 .font(.callout).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, minHeight: 240)
         .card()
@@ -60,8 +80,9 @@ struct HistoryView: View {
 }
 
 private struct HistoryRow: View {
-    let entry: HistoryEntry
+    let record: AnalysisRecord
     var onOpen: () -> Void
+    var onDelete: () -> Void
 
     var body: some View {
         HStack(spacing: Space.l) {
@@ -76,16 +97,17 @@ private struct HistoryRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: Space.s) {
-                    Text(entry.venue).font(.headline)
-                    Tag(text: entry.mode,
-                        color: entry.mode == "Mode Lengkap" ? Theme.accent : .orange)
+                    Text(record.venueName).font(.headline).lineLimit(1)
+                    Tag(text: record.mode,
+                        color: record.mode.localizedCaseInsensitiveContains("lengkap") ? Theme.accent : .orange)
                 }
-                Text("\(entry.type) · \(entry.dateText)")
+                Text("\(record.venueType) · \(record.dateText)")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.l) {
-                    stat("person.2", "\(entry.visitors) pengunjung")
-                    stat("clock", entry.avgDwellText)
-                    stat("camera", "\(entry.cameraCount) kamera")
+                    stat("person.2", "\(record.totalVisitors) pengunjung")
+                    stat("clock", record.avgDwellText)
+                    stat("chart.line.uptrend.xyaxis", "puncak \(record.peakOccupancy)")
+                    stat("camera", "\(record.cameraCount) kamera")
                 }
                 .padding(.top, 2)
             }
@@ -93,6 +115,11 @@ private struct HistoryRow: View {
             Spacer()
 
             GhostButton(title: "Buka", systemImage: "arrow.up.right", action: onOpen)
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash").foregroundStyle(.red).padding(6).contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Hapus dari riwayat")
         }
         .card(padding: Space.m)
     }
@@ -103,10 +130,4 @@ private struct HistoryRow: View {
             Text(text).font(.caption).foregroundStyle(.secondary)
         }
     }
-}
-
-#Preview {
-    HistoryView()
-        .environment(AppRouter())
-        .frame(width: 1100, height: 780)
 }

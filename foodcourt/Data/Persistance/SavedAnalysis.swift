@@ -1,0 +1,195 @@
+//
+//  SavedAnalysis.swift
+//  foodcourt
+//
+//  Created by Shafa Tiara on 11/08/26.
+//
+
+import Foundation
+import CoreGraphics
+
+struct SavedAnalysis: Codable {
+    // venue
+    var venueName: String
+    var venueType: String
+    var widthM: Double
+    var heightM: Double
+    var startSec: Double
+    var durationSec: Double
+    var usesScaledCanvas: Bool
+    // summary
+    var totalVisitors: Int
+    var avgDwellSeconds: Int
+    var peakOccupancy: Int
+    var captureRate: Double
+    // data
+    var zones: [SZone]
+    var stops: [SStop]
+    var occupancy: [SOcc]
+    var blobs: [SBlob]
+    var paths: [SPath]
+    var observations: [[Double]]
+    var customZones: [SCustomZone]
+    // artifact (nama file relatif di dalam folder; nil kalau tak ada)
+    var heatmapFile: String?
+    var pathVideoFile: String?
+    var combinedVideoFile: String?
+    var overlays: [SOverlay]
+    var floorPlanFile: String?
+
+    struct SZone: Codable { var code: String; var visits: Int; var share: Double
+        var x: Double; var y: Double; var w: Double; var h: Double; var color: UInt }
+    struct SStop: Codable { var name: String; var dwell: Int }
+    struct SOcc: Codable { var minute: Int; var count: Int }
+    struct SBlob: Codable { var x: Double; var y: Double; var intensity: Double; var radius: Double }
+    struct SPath: Codable { var hue: Double; var pts: [[Double]] }   // [x,y,t]
+    struct SCustomZone: Codable { var name: String; var x: Double; var y: Double
+        var w: Double; var h: Double; var color: UInt }
+    struct SOverlay: Codable { var cam: String; var file: String }
+}
+
+// MARK: - Bangun dari sesi + hasil (dipanggil di main)
+
+extension SavedAnalysis {
+    init(from s: AnalysisSession, result r: AnalysisResult) {
+        venueName = s.venueName; venueType = s.venueType.rawValue
+        widthM = s.venueWidthM; heightM = s.venueHeightM
+        startSec = s.trimStartSec; durationSec = max(0, s.trimEndSec - s.trimStartSec)
+        usesScaledCanvas = s.usesScaledCanvas
+        totalVisitors = r.summary.totalVisitors
+        avgDwellSeconds = r.summary.avgDwellSeconds
+        peakOccupancy = r.summary.peakOccupancy
+        captureRate = r.summary.captureRate
+        zones = r.zones.map { SZone(code: $0.code, visits: $0.visits, share: $0.share,
+                                    x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height,
+                                    color: $0.colorHex) }
+        stops = r.stops.map { SStop(name: $0.name, dwell: $0.dwellSeconds) }
+        occupancy = r.occupancy.map { SOcc(minute: $0.minute, count: $0.count) }
+        blobs = r.blobs.map { SBlob(x: $0.x, y: $0.y, intensity: $0.intensity, radius: $0.radius) }
+        paths = r.paths.map { p in
+            var pts: [[Double]] = []
+            for (i, pt) in p.points.enumerated() {
+                pts.append([Double(pt.x), Double(pt.y), i < p.times.count ? p.times[i] : 0])
+            }
+            return SPath(hue: p.hue, pts: pts)
+        }
+        observations = r.observations.map { [Double($0.x), Double($0.y)] }
+        customZones = s.customZones.map { SCustomZone(name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
+                                                      w: $0.rect.width, h: $0.rect.height, color: $0.colorHex) }
+        // nama file artifact (diunduh terpisah)
+        heatmapFile = r.heatmapURL != nil ? "heatmap.png" : nil
+        pathVideoFile = r.pathVideoURL != nil ? "path.mp4" : nil
+        combinedVideoFile = r.combinedVideoURL != nil ? "combined.mp4" : nil
+        overlays = r.overlayVideos.enumerated().map { i, ov in SOverlay(cam: ov.cam, file: "overlay_\(i).mp4") }
+        floorPlanFile = (!s.usesScaledCanvas && s.floorPlanURL != nil) ? "floorplan\(Self.ext(s.floorPlanURL))" : nil
+    }
+
+    private static func ext(_ url: URL?) -> String {
+        let e = url?.pathExtension ?? ""
+        return e.isEmpty ? ".png" : ".\(e)"
+    }
+}
+
+struct LoadedAnalysis {
+    var result: AnalysisResult
+    var customZones: [CustomZone]
+    var venueName: String
+    var venueType: String
+    var widthM: String
+    var heightM: String
+    var usesScaledCanvas: Bool
+    var floorPlanURL: URL?
+}
+
+// MARK: - Store
+
+enum HistoryStore {
+    static func baseDir() -> URL {
+        let appSup = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = appSup.appendingPathComponent("Foodcourt/history", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    static func folderURL(_ folder: String) -> URL {
+        baseDir().appendingPathComponent(folder, isDirectory: true)
+    }
+
+    /// Sinkron di main: tulis JSON + salin denah (selagi izin file aktif). Cepat.
+    static func writeMeta(_ saved: SavedAnalysis, folder: String, floorPlanSource: URL?) {
+        let dir = folderURL(folder)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let src = floorPlanSource, let name = saved.floorPlanFile {
+            try? FileManager.default.copyItem(at: src, to: dir.appendingPathComponent(name))
+        }
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+        if let data = try? enc.encode(saved) {
+            try? data.write(to: dir.appendingPathComponent("result.json"))
+        }
+    }
+
+    /// Async (detached): unduh artifact video/heatmap dari server ke folder app.
+    static func downloadArtifacts(_ items: [(name: String, url: URL)], folder: String) async {
+        let dir = folderURL(folder)
+        for item in items {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: item.url)
+                try data.write(to: dir.appendingPathComponent(item.name))
+            } catch {
+                // artifact gagal diunduh -> lewati; load nanti graceful (file tak ada)
+            }
+        }
+    }
+
+    /// Muat hasil lengkap dari folder (untuk dibuka lagi).
+    static func load(folder: String) -> LoadedAnalysis? {
+        let dir = folderURL(folder)
+        guard let data = try? Data(contentsOf: dir.appendingPathComponent("result.json")),
+              let s = try? JSONDecoder().decode(SavedAnalysis.self, from: data) else { return nil }
+
+        func fileURL(_ name: String?) -> URL? {
+            guard let name else { return nil }
+            let u = dir.appendingPathComponent(name)
+            return FileManager.default.fileExists(atPath: u.path) ? u : nil
+        }
+
+        let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
+        let zones = s.zones.enumerated().map { i, z in
+            ZoneRank(rank: i + 1, code: z.code, visits: z.visits, share: z.share,
+                     rect: CGRect(x: z.x, y: z.y, width: z.w, height: z.h),
+                     colorHex: z.color == 0 ? palette[i % palette.count] : z.color)
+        }
+        let result = AnalysisResult(
+            summary: VenueSummary(totalVisitors: s.totalVisitors, avgDwellSeconds: s.avgDwellSeconds,
+                                  peakOccupancy: s.peakOccupancy, captureRate: s.captureRate),
+            zones: zones,
+            stops: s.stops.map { StopPoint(name: $0.name, dwellSeconds: $0.dwell) },
+            occupancy: s.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) },
+            heatmapURL: fileURL(s.heatmapFile),
+            pathVideoURL: fileURL(s.pathVideoFile),
+            combinedVideoURL: fileURL(s.combinedVideoFile),
+            overlayVideos: s.overlays.compactMap { o in fileURL(o.file).map { (cam: o.cam, url: $0) } },
+            blobs: s.blobs.map { HeatBlob(x: $0.x, y: $0.y, intensity: $0.intensity, radius: $0.radius) },
+            paths: s.paths.map { p in
+                PathTrace(points: p.pts.map { CGPoint(x: $0[0], y: $0[1]) },
+                          hue: p.hue,
+                          times: p.pts.map { $0.count > 2 ? $0[2] : 0 })
+            },
+            observations: s.observations.compactMap { $0.count >= 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
+        )
+        let customZones = s.customZones.map {
+            CustomZone(name: $0.name, rect: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), colorHex: $0.color)
+        }
+        func numStr(_ d: Double) -> String { d.rounded() == d ? String(Int(d)) : String(format: "%.2f", d) }
+        return LoadedAnalysis(
+            result: result, customZones: customZones,
+            venueName: s.venueName, venueType: s.venueType,
+            widthM: numStr(s.widthM), heightM: numStr(s.heightM),
+            usesScaledCanvas: s.usesScaledCanvas,
+            floorPlanURL: fileURL(s.floorPlanFile)
+        )
+    }
+
+    static func delete(folder: String) {
+        try? FileManager.default.removeItem(at: folderURL(folder))
+    }
+}

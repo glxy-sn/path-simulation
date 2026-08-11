@@ -9,12 +9,13 @@ import SwiftUI
 import SwiftData
 
 @main
-struct foodcourtApp: App {
+struct FoodcourtApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
+        .modelContainer(for: AnalysisRecord.self)
     }
 }

@@ -4,13 +4,16 @@
 //
 //  Created by Shafa Tiara on 03/08/26.
 //
+
 import SwiftUI
+import SwiftData
 
 struct ProcessingView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
     @Environment(AnalysisSession.self) private var session
     @Environment(Sidecar.self) private var sidecar
+    @Environment(\.modelContext) private var modelContext
 
     @State private var stages = ProcessingStage.pipeline
     @State private var progress = 0.0
@@ -25,10 +28,7 @@ struct ProcessingView: View {
                     subtitle: done ? "Analisis selesai."
                         : (errorMsg == nil ? "Menjalankan pipeline pada footage kamu…" : "Terjadi masalah.")
                 )
-                HStack(alignment: .top, spacing: Space.l * scale) {
-                    stagesPanel.relativeWidth(0.42)
-                    previewPanel.frame(maxWidth: .infinity)
-                }
+                stagesPanel.frame(maxWidth: .infinity)
             }
             .spad(Space.xl, [.horizontal, .top])
             .padding(.bottom, Space.l)
@@ -66,6 +66,7 @@ struct ProcessingView: View {
                     applyStage(stage, frac)
                 case .finished(let result):
                     session.result = result
+                    saveToHistory(result)
                     progress = 1
                     for i in stages.indices { stages[i].state = .done }
                     done = true
@@ -74,6 +75,29 @@ struct ProcessingView: View {
         } catch {
             errorMsg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private func saveToHistory(_ result: AnalysisResult) {
+        let folder = UUID().uuidString
+        let saved = SavedAnalysis(from: session, result: result)
+        let floorSrc = session.usesScaledCanvas ? nil : session.floorPlanURL
+        HistoryStore.writeMeta(saved, folder: folder, floorPlanSource: floorSrc)
+
+        var arts: [(name: String, url: URL)] = []
+        if let u = result.heatmapURL, let f = saved.heatmapFile { arts.append((f, u)) }
+        if let u = result.pathVideoURL, let f = saved.pathVideoFile { arts.append((f, u)) }
+        if let u = result.combinedVideoURL, let f = saved.combinedVideoFile { arts.append((f, u)) }
+        for (i, ov) in result.overlayVideos.enumerated() where i < saved.overlays.count {
+            arts.append((saved.overlays[i].file, ov.url))
+        }
+
+        let rec = AnalysisRecord(from: session, result: result)
+        rec.folder = folder
+        modelContext.insert(rec)
+        try? modelContext.save()
+
+        let artsCopy = arts
+        Task.detached { await HistoryStore.downloadArtifacts(artsCopy, folder: folder) }
     }
 
     private func applyStage(_ name: String, _ fraction: Double) {
