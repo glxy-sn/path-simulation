@@ -95,6 +95,7 @@ struct ProcessingView: View {
         rec.folder = folder
         modelContext.insert(rec)
         try? modelContext.save()
+        session.historyFolder = folder   // agar edit zona di Hasil ikut tersimpan
 
         let artsCopy = arts
         Task.detached { await HistoryStore.downloadArtifacts(artsCopy, folder: folder) }

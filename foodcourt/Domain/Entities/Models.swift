@@ -83,7 +83,7 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Detection",         systemImage: "person.crop.rectangle"),
+        .init(name: "Deteksi",         systemImage: "person.crop.rectangle"),
         .init(name: "Tracking",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
         .init(name: "Fusion multi-kamera",             systemImage: "camera.metering.multispot"),
         .init(name: "Analisis", systemImage: "chart.dots.scatter")
@@ -120,6 +120,7 @@ struct StopPoint: Identifiable {
     let id = UUID()
     let name: String
     let dwellSeconds: Int
+    var point: CGPoint = .zero
     var dwellText: String {
         let m = dwellSeconds / 60, s = dwellSeconds % 60
         return m > 0 ? "\(m)m \(s)s" : "\(s)s"
@@ -146,6 +147,13 @@ struct PathTrace: Identifiable {
     let points: [CGPoint]
     let hue: Double
     var times: [Double] = []
+}
+
+/// Satu pengamatan titik-kaki: siapa (trackId), di mana (point 0–1), kapan (t detik).
+struct TrackObservation: Hashable {
+    let trackId: Int
+    let point: CGPoint
+    let t: Double
 }
 
 enum SampleResult {
