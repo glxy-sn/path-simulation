@@ -16,6 +16,7 @@ struct SavedAnalysis: Codable {
     var heightM: Double
     var startSec: Double
     var durationSec: Double
+    var cameraCount: Int
     var usesScaledCanvas: Bool
     // summary
     var totalVisitors: Int
@@ -39,7 +40,7 @@ struct SavedAnalysis: Codable {
 
     struct SZone: Codable { var code: String; var visits: Int; var share: Double
         var x: Double; var y: Double; var w: Double; var h: Double; var color: UInt }
-    struct SStop: Codable { var name: String; var dwell: Int }
+    struct SStop: Codable { var name: String; var dwell: Int; var x: Double = 0; var y: Double = 0 }
     struct SOcc: Codable { var minute: Int; var count: Int }
     struct SBlob: Codable { var x: Double; var y: Double; var intensity: Double; var radius: Double }
     struct SPath: Codable { var hue: Double; var pts: [[Double]] }   // [x,y,t]
@@ -55,6 +56,7 @@ extension SavedAnalysis {
         venueName = s.venueName; venueType = s.venueType.rawValue
         widthM = s.venueWidthM; heightM = s.venueHeightM
         startSec = s.trimStartSec; durationSec = max(0, s.trimEndSec - s.trimStartSec)
+        cameraCount = s.cameras.count
         usesScaledCanvas = s.usesScaledCanvas
         totalVisitors = r.summary.totalVisitors
         avgDwellSeconds = r.summary.avgDwellSeconds
@@ -63,7 +65,7 @@ extension SavedAnalysis {
         zones = r.zones.map { SZone(code: $0.code, visits: $0.visits, share: $0.share,
                                     x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height,
                                     color: $0.colorHex) }
-        stops = r.stops.map { SStop(name: $0.name, dwell: $0.dwellSeconds) }
+        stops = r.stops.map { SStop(name: $0.name, dwell: $0.dwellSeconds, x: $0.point.x, y: $0.point.y) }
         occupancy = r.occupancy.map { SOcc(minute: $0.minute, count: $0.count) }
         blobs = r.blobs.map { SBlob(x: $0.x, y: $0.y, intensity: $0.intensity, radius: $0.radius) }
         paths = r.paths.map { p in
@@ -73,7 +75,7 @@ extension SavedAnalysis {
             }
             return SPath(hue: p.hue, pts: pts)
         }
-        observations = r.observations.map { [Double($0.x), Double($0.y)] }
+        observations = r.observations.map { [Double($0.trackId), Double($0.point.x), Double($0.point.y), $0.t] }
         customZones = s.customZones.map { SCustomZone(name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
                                                       w: $0.rect.width, h: $0.rect.height, color: $0.colorHex) }
         // nama file artifact (diunduh terpisah)
@@ -99,6 +101,8 @@ struct LoadedAnalysis {
     var heightM: String
     var usesScaledCanvas: Bool
     var floorPlanURL: URL?
+    var cameraCount: Int
+    var durationSec: Double
 }
 
 // MARK: - Store
@@ -162,7 +166,7 @@ enum HistoryStore {
             summary: VenueSummary(totalVisitors: s.totalVisitors, avgDwellSeconds: s.avgDwellSeconds,
                                   peakOccupancy: s.peakOccupancy, captureRate: s.captureRate),
             zones: zones,
-            stops: s.stops.map { StopPoint(name: $0.name, dwellSeconds: $0.dwell) },
+            stops: s.stops.map { StopPoint(name: $0.name, dwellSeconds: $0.dwell, point: CGPoint(x: $0.x, y: $0.y)) },
             occupancy: s.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) },
             heatmapURL: fileURL(s.heatmapFile),
             pathVideoURL: fileURL(s.pathVideoFile),
@@ -174,19 +178,46 @@ enum HistoryStore {
                           hue: p.hue,
                           times: p.pts.map { $0.count > 2 ? $0[2] : 0 })
             },
-            observations: s.observations.compactMap { $0.count >= 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
+            observations: s.observations.compactMap {
+                $0.count >= 4 ? TrackObservation(trackId: Int($0[0]), point: CGPoint(x: $0[1], y: $0[2]), t: $0[3]) : nil
+            }
         )
-        let customZones = s.customZones.map {
+        let customZones = (loadZones(folder: folder) ?? s.customZones.map {
             CustomZone(name: $0.name, rect: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), colorHex: $0.color)
-        }
+        })
         func numStr(_ d: Double) -> String { d.rounded() == d ? String(Int(d)) : String(format: "%.2f", d) }
         return LoadedAnalysis(
             result: result, customZones: customZones,
             venueName: s.venueName, venueType: s.venueType,
             widthM: numStr(s.widthM), heightM: numStr(s.heightM),
             usesScaledCanvas: s.usesScaledCanvas,
-            floorPlanURL: fileURL(s.floorPlanFile)
+            floorPlanURL: fileURL(s.floorPlanFile),
+            cameraCount: s.cameraCount,
+            durationSec: s.durationSec
         )
+    }
+
+    // Zona disimpan di file terpisah (kecil) agar edit real-time cepat & tetap persist.
+    static func saveZones(folder: String, _ zones: [CustomZone]) {
+        guard !folder.isEmpty else { return }
+        let arr = zones.map { ["name": $0.name, "x": $0.rect.minX, "y": $0.rect.minY,
+                               "w": $0.rect.width, "h": $0.rect.height, "color": $0.colorHex] as [String: Any] }
+        if let data = try? JSONSerialization.data(withJSONObject: arr) {
+            try? data.write(to: folderURL(folder).appendingPathComponent("zones.json"))
+        }
+    }
+
+    static func loadZones(folder: String) -> [CustomZone]? {
+        let u = folderURL(folder).appendingPathComponent("zones.json")
+        guard let data = try? Data(contentsOf: u),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        return arr.compactMap { d in
+            guard let name = d["name"] as? String,
+                  let x = d["x"] as? Double, let y = d["y"] as? Double,
+                  let w = d["w"] as? Double, let h = d["h"] as? Double else { return nil }
+            let color = (d["color"] as? UInt) ?? UInt((d["color"] as? Int) ?? 0xB46A72)
+            return CustomZone(name: name, rect: CGRect(x: x, y: y, width: w, height: h), colorHex: color)
+        }
     }
 
     static func delete(folder: String) {

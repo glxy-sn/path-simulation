@@ -20,6 +20,8 @@ enum ResultVisual: String, CaseIterable, Identifiable {
 }
 
 struct ResultsView: View {
+    var isHistory: Bool = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
     @Environment(AppRouter.self) private var router
@@ -53,16 +55,37 @@ struct ResultsView: View {
         let p = session.result?.paths ?? []
         return p.isEmpty ? (hasResult ? [] : SampleResult.paths) : p
     }
-    private var observations: [CGPoint] { session.result?.observations ?? [] }
+    private var observations: [TrackObservation] { session.result?.observations ?? [] }
+
+    /// Lintasan per orang (rekonstruksi dari observasi ber-track) — untuk ringkasan path.
+    private var trajectories: [[CGPoint]] {
+        let byTrack = Dictionary(grouping: observations, by: { $0.trackId })
+        return byTrack.values
+            .map { obs in obs.sorted { $0.t < $1.t }.map { $0.point } }
+            .filter { $0.count >= 2 }
+    }
+    private var mainRoutes: [MainRoute] { Foodcourt_mainRoutes(trajectories) }
 
     private func obsCount(_ rect: CGRect) -> Int {
-        observations.reduce(0) { $0 + (rect.contains($1) ? 1 : 0) }
+        observations.reduce(0) { $0 + (rect.contains($1.point) ? 1 : 0) }
     }
 
-    private var rankedCustomZones: [(zone: CustomZone, count: Int)] {
+    /// Metrik per zona dari observasi ber-track: jumlah orang unik + rata-rata durasi.
+    private func zoneMetrics(_ rect: CGRect) -> (people: Int, avgDurSec: Double, count: Int) {
+        Foodcourt_zoneMetrics(rect, observations)
+    }
+
+    private var totalUniquePeople: Int {
+        Set(observations.map { $0.trackId }).count
+    }
+
+    private var rankedCustomZones: [(zone: CustomZone, people: Int, avgDur: Double)] {
         session.customZones
-            .map { (zone: $0, count: obsCount($0.rect)) }
-            .sorted { $0.count > $1.count }
+            .map { z -> (zone: CustomZone, people: Int, avgDur: Double) in
+                let m = zoneMetrics(z.rect)
+                return (zone: z, people: m.people, avgDur: m.avgDurSec)
+            }
+            .sorted { $0.people > $1.people }
     }
 
     /// Rasio venue (lebar : panjang) untuk membentuk area visual lantai.
@@ -86,19 +109,27 @@ struct ResultsView: View {
             .spad(Space.xl, [.horizontal, .top])
             .padding(.bottom, Space.xl)
         }
+        .onChange(of: session.customZones) { _, zones in
+            if let folder = session.historyFolder { HistoryStore.saveZones(folder: folder, zones) }
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            SectionHeader(title: "Hasil Analisis", subtitle: subtitle)
-            GhostButton(title: "Analisis Baru", systemImage: "plus") {
-                session.reset()
-                router.startNew()
+        HStack(alignment: .center, spacing: Space.s) {
+            SectionHeader(title: isHistory ? "Riwayat Analisis" : "Hasil Analisis", subtitle: subtitle)
+            if isHistory {
+                Button("Tutup") { dismiss() }
+                    .buttonStyle(.bordered).controlSize(.large)
+            } else {
+                Button("Analisis Baru", systemImage: "plus") {
+                    session.reset(); router.startNew()
+                }
+                .buttonStyle(.bordered).controlSize(.large)
             }
-            PrimaryButton(title: "Export Laporan", systemImage: "square.and.arrow.up") {
-                showExport = true
-            }
-            .disabled(session.result == nil)
+            Button("Export", systemImage: "square.and.arrow.up") { showExport = true }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .tint(Theme.accent)
+                .disabled(session.result == nil)
         }
         .confirmationDialog("Export Laporan", isPresented: $showExport, titleVisibility: .visible) {
             Button("JSON — lengkap (untuk analisis / LLM)") { exportJSON() }
@@ -141,7 +172,8 @@ struct ResultsView: View {
             "zones": r.zones.map { ["code": $0.code, "visits": $0.visits, "share": $0.share,
                                     "rect": ["x": $0.rect.minX, "y": $0.rect.minY,
                                              "w": $0.rect.width, "h": $0.rect.height]] },
-            "stopPoints": r.stops.map { ["name": $0.name, "dwellSeconds": $0.dwellSeconds] },
+            "stopPoints": r.stops.map { ["name": $0.name, "dwellSeconds": $0.dwellSeconds,
+                                         "x": Double($0.point.x), "y": Double($0.point.y)] },
             "occupancy": r.occupancy.map { ["minute": $0.minute, "count": $0.count] },
         ]
         dict["paths"] = r.paths.enumerated().map { (i, p) -> [String: Any] in
@@ -169,8 +201,8 @@ struct ResultsView: View {
         s += "Capture Rate,\(r.summary.captureRate)\n\n"
         s += "Zona,Visits,Share\n"
         for z in r.zones { s += "\(z.code),\(z.visits),\(z.share)\n" }
-        s += "\nStop Point,Dwell (detik)\n"
-        for st in r.stops { s += "\(st.name),\(st.dwellSeconds)\n" }
+        s += "\nStop Point,Dwell (detik),x,y\n"
+        for st in r.stops { s += "\(st.name),\(st.dwellSeconds),\(st.point.x),\(st.point.y)\n" }
         s += "\nMenit,Okupansi\n"
         for o in r.occupancy { s += "\(o.minute),\(o.count)\n" }
         guard let data = s.data(using: .utf8) else { return }
@@ -181,7 +213,8 @@ struct ResultsView: View {
         if hasResult {
             let name = session.venueName.isEmpty ? "Venue" : session.venueName
             let dur = timecode(session.trimEndSec - session.trimStartSec)
-            return "\(name) · \(session.cameras.count) kamera · durasi \(dur)"
+            let cams = session.overrideCameraCount ?? session.cameras.count
+            return "\(name) · \(cams) kamera · durasi \(dur)"
         }
         return "Contoh data — jalankan analisis untuk hasil nyata."
     }
@@ -216,14 +249,14 @@ struct ResultsView: View {
                     .frame(height: min(400, max(300, 360 * scale)))
                     .frame(maxWidth: .infinity)
                 case .path:
-                    PathContent(paths: paths, background: floorMapImage)
+                    PathTab(paths: paths, trajectories: trajectories, routes: mainRoutes,
+                            stops: stops, background: floorMapImage)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                 case .heatmap:
-                    HeatmapView(blobs: blobs, background: floorMapImage)
+                    HeatmapTab(observations: observations, fallbackBlobs: blobs, background: floorMapImage)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
                 case .zona:
                     ZonaEditor(session: session,
                                observations: observations,
@@ -260,18 +293,36 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: Space.s) {
                 Text("Zona Paling Sering Dilewati").font(.headline)
                 if session.customZones.isEmpty {
-                    Text("Buka tab Zona untuk menggambar zona sendiri (mis. area kasir, tempat duduk).")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(zones) { zone in ZoneRow(zone: zone) }
+                    VStack(alignment: .leading, spacing: Space.s) {
+                        Text("Belum ada zona.")
+                            .font(.callout.weight(.medium))
+                        Text("Buka tab Zona untuk menggambar area yang ingin dianalisis (mis. kasir, tempat duduk). Jumlah orang & rata-rata durasi dihitung otomatis.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        GhostButton(title: "Ke tab Zona", systemImage: "square.dashed") {
+                            visual = .zona
+                        }
+                        .padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, Space.s)
                 } else {
-                    ForEach(rankedCustomZones, id: \.zone.id) { item in
+                    ForEach(Array(rankedCustomZones.enumerated()), id: \.element.zone.id) { i, item in
                         HStack(spacing: Space.s) {
                             RoundedRectangle(cornerRadius: 3).fill(Color(hex: item.zone.colorHex))
                                 .frame(width: 12, height: 12)
-                            Text(item.zone.name).font(.callout).lineLimit(1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 5) {
+                                    Text(item.zone.name).font(.callout).lineLimit(1)
+                                    if i == 0 && item.people > 0 {
+                                        Text("★ Favorit").font(.caption2.weight(.bold)).foregroundStyle(.orange)
+                                    }
+                                }
+                                Text("rata-rata \(timecode(item.avgDur))")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
                             Spacer()
-                            Text("\(item.count)").font(.callout.monospacedDigit().weight(.semibold))
+                            Text("\(item.people) orang").font(.callout.monospacedDigit().weight(.semibold))
                         }
                     }
                 }
@@ -360,17 +411,251 @@ private struct FileImage: View {
     }
 }
 
+// MARK: - Heatmap 2 opsi (jumlah orang vs lama singgah)
+
+/// Bangun blob heatmap dari observasi.
+/// dwell=false → intensitas = jumlah ORANG unik per sel (traffic).
+/// dwell=true  → intensitas = total pengamatan per sel (∝ waktu yang dihabiskan).
+func Foodcourt_heatBlobs(_ obs: [TrackObservation], dwell: Bool, top: Int = 40) -> [HeatBlob] {
+    guard !obs.isEmpty else { return [] }
+    let GW = 56, GH = 42
+    var count = [Double](repeating: 0, count: GW * GH)
+    var tracks = Array(repeating: Set<Int>(), count: GW * GH)
+    for o in obs {
+        let cx = min(GW - 1, max(0, Int(o.point.x * Double(GW))))
+        let cy = min(GH - 1, max(0, Int(o.point.y * Double(GH))))
+        let idx = cy * GW + cx
+        count[idx] += 1
+        if !dwell { tracks[idx].insert(o.trackId) }
+    }
+    var work = dwell ? count : tracks.map { Double($0.count) }
+    let maxv = work.max() ?? 1
+    guard maxv > 0 else { return [] }
+    var blobs: [HeatBlob] = []
+    for _ in 0..<top {
+        guard let idx = work.indices.max(by: { work[$0] < work[$1] }), work[idx] > 0 else { break }
+        let cx = idx % GW, cy = idx / GW
+        blobs.append(HeatBlob(x: (Double(cx) + 0.5) / Double(GW),
+                              y: (Double(cy) + 0.5) / Double(GH),
+                              intensity: work[idx] / maxv, radius: 0.06))
+        for dy in -1...1 { for dx in -1...1 {
+            let nx = cx + dx, ny = cy + dy
+            if nx >= 0, nx < GW, ny >= 0, ny < GH { work[ny * GW + nx] = 0 }
+        }}
+    }
+    return blobs
+}
+
+private struct HeatmapTab: View {
+    let observations: [TrackObservation]
+    let fallbackBlobs: [HeatBlob]
+    var background: NSImage? = nil
+    @State private var dwell = false
+
+    var body: some View {
+        let blobs = observations.isEmpty ? fallbackBlobs
+                                         : Foodcourt_heatBlobs(observations, dwell: dwell)
+        ZStack(alignment: .top) {
+            HeatmapView(blobs: blobs, background: background)
+                .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
+
+            Picker("", selection: $dwell) {
+                Text("Jumlah Orang").tag(false)
+                Text("Lama Singgah").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 260)
+            .padding(6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(Space.s)
+        }
+    }
+}
+
+// MARK: - Path summary (jalur utama + heatmap garis + stop point)
+
+struct MainRoute: Identifiable {
+    let id = UUID()
+    let points: [CGPoint]
+    let count: Int
+    let hue: Double
+}
+
+func Foodcourt_resample(_ pts: [CGPoint], _ n: Int) -> [CGPoint] {
+    guard pts.count >= 2, n >= 2 else { return pts }
+    var out: [CGPoint] = []
+    for i in 0..<n {
+        let f = Double(i) / Double(n - 1) * Double(pts.count - 1)
+        let lo = Int(f), hi = min(lo + 1, pts.count - 1)
+        let frac = f - Double(lo)
+        out.append(CGPoint(x: pts[lo].x * (1 - frac) + pts[hi].x * frac,
+                           y: pts[lo].y * (1 - frac) + pts[hi].y * frac))
+    }
+    return out
+}
+
+/// Kelompokkan lintasan berdasar sel awal→akhir (grid 4×3), ambil rute paling ramai,
+/// gambar rata-ratanya sebagai "jalur utama".
+func Foodcourt_mainRoutes(_ trajs: [[CGPoint]], top: Int = 4) -> [MainRoute] {
+    let valid = trajs.filter { $0.count >= 3 }
+    func cell(_ p: CGPoint) -> Int {
+        let cx = min(3, max(0, Int(p.x * 4))), cy = min(2, max(0, Int(p.y * 3)))
+        return cy * 4 + cx
+    }
+    var groups: [Int: [[CGPoint]]] = [:]
+    for t in valid {
+        guard let s = t.first, let e = t.last, cell(s) != cell(e) else { continue }
+        groups[cell(s) * 100 + cell(e), default: []].append(t)
+    }
+    let ranked = groups.values.sorted { $0.count > $1.count }.prefix(top)
+    let N = 24
+    return ranked.enumerated().compactMap { i, group -> MainRoute? in
+        var acc = Array(repeating: CGPoint.zero, count: N); var cnt = 0
+        for t in group {
+            let rs = Foodcourt_resample(t, N)
+            guard rs.count == N else { continue }
+            for k in 0..<N { acc[k].x += rs[k].x; acc[k].y += rs[k].y }
+            cnt += 1
+        }
+        guard cnt > 0 else { return nil }
+        let rep = acc.map { CGPoint(x: $0.x / Double(cnt), y: $0.y / Double(cnt)) }
+        return MainRoute(points: rep, count: group.count, hue: Double(i) * 0.16 + 0.55)
+    }
+}
+
+private struct StopPinsLayer: View {
+    let stops: [StopPoint]
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(Array(stops.enumerated()), id: \.element.id) { i, s in
+                VStack(spacing: 1) {
+                    Image(systemName: "mappin.circle.fill").font(.title3).foregroundStyle(.orange)
+                        .background(Circle().fill(.white).padding(3))
+                    Text("\(i + 1) · \(s.dwellText)").font(.system(size: 8, weight: .bold))
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .position(x: s.point.x * geo.size.width, y: s.point.y * geo.size.height)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+private struct PathSummary: View {
+    let trajectories: [[CGPoint]]
+    let routes: [MainRoute]
+    var background: NSImage? = nil
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let background {
+                    Image(nsImage: background).resizable().allowsHitTesting(false)
+                    Color.black.opacity(0.18).allowsHitTesting(false)
+                } else {
+                    Color(hex: 0x0F1524)
+                }
+                // Heatmap garis: semua lintasan, garis tipis transparan -> menumpuk jadi terang
+                Canvas { ctx, size in
+                    for t in trajectories {
+                        var path = Path(); var started = false
+                        for i in 1..<t.count {
+                            let a = t[i - 1], b = t[i]
+                            if hypot(b.x - a.x, b.y - a.y) > 0.15 { started = false; continue }
+                            let pa = CGPoint(x: a.x * size.width, y: a.y * size.height)
+                            let pb = CGPoint(x: b.x * size.width, y: b.y * size.height)
+                            if !started { path.move(to: pa); started = true }
+                            path.addLine(to: pb)
+                        }
+                        ctx.stroke(path, with: .color(.cyan.opacity(0.16)),
+                                   style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                    }
+                }
+                .blur(radius: 2)
+                // Jalur utama: garis tebal berwarna + jumlah orang
+                Canvas { ctx, size in
+                    for r in routes {
+                        let color = Color(hue: r.hue, saturation: 0.85, brightness: 1.0)
+                        let pts = r.points.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+                        var path = Path()
+                        if let f = pts.first { path.move(to: f); for p in pts.dropFirst() { path.addLine(to: p) } }
+                        ctx.stroke(path, with: .color(color),
+                                   style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                        if let s = pts.first {
+                            ctx.fill(Path(ellipseIn: CGRect(x: s.x - 4, y: s.y - 4, width: 8, height: 8)),
+                                     with: .color(color.opacity(0.6)))
+                        }
+                        if let e = pts.last {
+                            ctx.fill(Path(ellipseIn: CGRect(x: e.x - 5, y: e.y - 5, width: 10, height: 10)),
+                                     with: .color(color))
+                            ctx.draw(Text("\(r.count)").font(.caption.bold()).foregroundColor(color),
+                                     at: CGPoint(x: e.x, y: e.y - 13))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct PathTab: View {
+    let paths: [PathTrace]
+    let trajectories: [[CGPoint]]
+    let routes: [MainRoute]
+    let stops: [StopPoint]
+    var background: NSImage? = nil
+    @State private var mode = 0   // 0 = detail, 1 = ringkasan
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Group {
+                if mode == 0 {
+                    PathContent(paths: paths, background: background)
+                } else {
+                    PathSummary(trajectories: trajectories, routes: routes, background: background)
+                }
+            }
+            .overlay(StopPinsLayer(stops: stops))
+
+            Picker("", selection: $mode) {
+                Text("Detail").tag(0)
+                Text("Ringkasan").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 220)
+            .padding(6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(Space.s)
+        }
+    }
+}
+
 // MARK: - Editor Zona (user gambar/geser/resize/rename)
+
+/// Metrik satu zona dari observasi ber-track: orang unik, rata-rata durasi (detik), jumlah observasi.
+func Foodcourt_zoneMetrics(_ rect: CGRect, _ obs: [TrackObservation]) -> (people: Int, avgDurSec: Double, count: Int) {
+    let inside = obs.filter { rect.contains($0.point) }
+    if inside.isEmpty { return (0, 0, 0) }
+    let byTrack = Dictionary(grouping: inside, by: { $0.trackId })
+    var durs: [Double] = []
+    for (_, o) in byTrack {
+        let ts = o.map { $0.t }
+        if let lo = ts.min(), let hi = ts.max() { durs.append(hi - lo) }
+    }
+    let avg = durs.isEmpty ? 0 : durs.reduce(0, +) / Double(durs.count)
+    return (byTrack.count, avg, inside.count)
+}
 
 private struct ZonaEditor: View {
     let session: AnalysisSession
-    let observations: [CGPoint]
+    let observations: [TrackObservation]
     var background: NSImage? = nil
 
     @State private var selected: UUID? = nil
     @State private var dragStart: [UUID: CGRect] = [:]
 
-    private let palette: [UInt] = [0x5457D6, 0xF59E0B, 0x22C55E, 0xEC4899, 0x14B8A6, 0x3B82F6]
+    private let palette: [UInt] = Theme.palette
 
     var body: some View {
         GeometryReader { geo in
@@ -385,8 +670,8 @@ private struct ZonaEditor: View {
                 }
                 // titik observasi (samar)
                 Canvas { ctx, size in
-                    for p in observations {
-                        ctx.fill(Path(ellipseIn: CGRect(x: p.x * size.width - 1.2, y: p.y * size.height - 1.2,
+                    for o in observations {
+                        ctx.fill(Path(ellipseIn: CGRect(x: o.point.x * size.width - 1.2, y: o.point.y * size.height - 1.2,
                                                         width: 2.4, height: 2.4)),
                                  with: .color(.orange.opacity(0.30)))
                     }
@@ -412,14 +697,15 @@ private struct ZonaEditor: View {
         let color = Color(hex: zone.colorHex)
         let sr = CGRect(x: zone.rect.minX * W, y: zone.rect.minY * H,
                         width: zone.rect.width * W, height: zone.rect.height * H)
-        let count = observations.reduce(0) { $0 + (zone.rect.contains($1) ? 1 : 0) }
+        let m = Foodcourt_zoneMetrics(zone.rect, observations)
         let isSel = selected == zone.id
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 6).fill(color.opacity(0.20))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(color, lineWidth: isSel ? 3 : 1.5))
             VStack(alignment: .leading, spacing: 1) {
                 Text(zone.name).font(.caption.bold()).foregroundStyle(color).lineLimit(1)
-                Text("\(count)").font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.primary)
+                Text("\(m.people) orang").font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.primary)
+                Text("~\(timecode(m.avgDurSec))").font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
             }
             .padding(5)
 
