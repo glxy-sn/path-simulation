@@ -40,10 +40,15 @@ struct ChatAPI {
     }
 
     func tanya(nama: String, pertanyaan: String, riwayat: [Giliran],
-               zona: [Zona]) async throws -> String {
+               zona: [Zona], video: String?, mulaiDetik: Double) async throws -> String {
         struct Req: Encodable {
             let nama: String; let pertanyaan: String; let riwayat: [Giliran]
             let zona: [Zona]
+            // Layanan membaca stempel waktu yang tercetak di frame video ini,
+            // supaya "peak hour jam berapa" bisa dijawab dengan jam dinding —
+            // bukan "menit ke-1".
+            let video: String?
+            let mulaiDetik: Double
         }
         struct Res: Decodable { let jawaban: String }
         struct Galat: Decodable { let error: String }
@@ -55,7 +60,8 @@ struct ChatAPI {
         // URLSession, jawaban yang sedang disusun tampil sebagai kegagalan.
         req.timeoutInterval = 300
         req.httpBody = try JSONEncoder().encode(
-            Req(nama: nama, pertanyaan: pertanyaan, riwayat: riwayat, zona: zona))
+            Req(nama: nama, pertanyaan: pertanyaan, riwayat: riwayat, zona: zona,
+                video: video, mulaiDetik: mulaiDetik))
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         let kode = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -157,7 +163,8 @@ final class ChatViewModel {
         if terpilih == nil { terpilih = tersedia.first?.nama }
     }
 
-    func kirim(zona: [ChatAPI.Zona] = []) async {
+    func kirim(zona: [ChatAPI.Zona] = [], video: String? = nil,
+               mulaiDetik: Double = 0) async {
         let t = draf.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty, let nama = terpilih, !sedangJawab else { return }
 
@@ -181,7 +188,8 @@ final class ChatViewModel {
         do {
             let sebelum = Array(riwayatKirim.dropLast())   // tanpa pertanyaan ini
             let j = try await api.tanya(nama: nama, pertanyaan: t,
-                                        riwayat: sebelum, zona: zona)
+                                        riwayat: sebelum, zona: zona,
+                                        video: video, mulaiDetik: mulaiDetik)
             pesan.append(PesanChat(dariOrang: false, teks: j))
             riwayatKirim.append(.init(peran: "bot", teks: j))
         } catch {
@@ -208,6 +216,12 @@ struct ChatView: View {
     // Dibaca saja, tidak diubah: zona yang baru digambar belum ada di riwayat
     // yang tersimpan, jadi diambil langsung dari sesi.
     @Environment(AnalysisSession.self) private var session
+
+    /// Video kamera pertama beserta detik mulainya — dipakai layanan untuk
+    /// membaca stempel waktu. Kamera mana pun boleh; jam keduanya sama.
+    private var videoSesi: (String?, Double) {
+        (session.cameras.first?.url?.path, session.trimStartSec)
+    }
 
     private var zonaSesi: [ChatAPI.Zona] {
         session.customZones.map {
@@ -276,9 +290,9 @@ struct ChatView: View {
             HStack(spacing: Space.s) {
                 TextField("Tanya apa saja tentang hasil ini…", text: $vm.draf)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await vm.kirim(zona: zonaSesi) } }
+                    .onSubmit { Task { await vm.kirim(zona: zonaSesi, video: videoSesi.0, mulaiDetik: videoSesi.1) } }
                 PrimaryButton(title: "Kirim", systemImage: "paperplane.fill") {
-                    Task { await vm.kirim(zona: zonaSesi) }
+                    Task { await vm.kirim(zona: zonaSesi, video: videoSesi.0, mulaiDetik: videoSesi.1) }
                 }
                 .disabled(vm.sedangJawab || vm.terpilih == nil)
             }
@@ -292,7 +306,7 @@ struct ChatView: View {
         VStack(alignment: .leading, spacing: Space.s) {
             Text("Coba tanya:").font(.callout).foregroundStyle(.secondary)
             ForEach(contoh, id: \.self) { c in
-                Button(c) { vm.draf = c; Task { await vm.kirim(zona: zonaSesi) } }
+                Button(c) { vm.draf = c; Task { await vm.kirim(zona: zonaSesi, video: videoSesi.0, mulaiDetik: videoSesi.1) } }
                     .buttonStyle(.link)
             }
             InfoNote(text: "Jawaban hanya memakai angka dari analisis. Nama tempat "

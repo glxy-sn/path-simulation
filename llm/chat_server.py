@@ -92,7 +92,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             zona = [z for z in (req.get("zona") or [])
                     if isinstance(z, dict) and z.get("name")]
-            ctx = K.susun_konteks(nama, zona)
+            ctx = K.susun_konteks(nama, zona,
+                                  video=req.get("video"),
+                                  mulai_detik=float(req.get("mulaiDetik") or 0))
             jawab = K.tanya(tanya, ctx, req.get("riwayat") or [])
         except urllib.error.URLError:
             # Satu-satunya kegagalan yang bisa diperbaiki sendiri oleh pemakai,

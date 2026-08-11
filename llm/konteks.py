@@ -21,7 +21,7 @@ import json
 import os
 import re
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Riwayat ditulis aplikasi ber-sandbox, jadi "Application Support" miliknya ada
@@ -174,6 +174,12 @@ CARA MENULIS:
 
 ISI:
 4. Pakai HANYA fakta di DATA. Dilarang mengarang angka.
+4b. DILARANG MENGHITUNG. Jangan mengalikan, membagi, menjumlah, atau
+    menurunkan angka baru dari angka yang ada — termasuk mengubah porsi (%)
+    jadi jumlah orang. Angka yang boleh kamu sebut HANYA yang tertulis persis
+    di DATA. Kalau pemakai minta angka yang tidak tertulis, katakan tidak
+    tersedia. (Pernah terjadi: 28% dikalikan sendiri jadi "sekitar 14 orang per
+    menit" — angka yang tidak pernah ada di data mana pun.)
 5. Bagian KESIMPULAN sudah dihitung dengan benar — percayai, jangan hitung ulang.
 6. HANYA kalau pertanyaannya tentang jumlah orang atau puncak okupansi, tambahkan
    satu kalimat bahwa angkanya perkiraan. Selain itu, jangan disinggung.
@@ -210,9 +216,24 @@ KALAU PEMAKAI MERAGUKAN ANGKAMU:
 """
 
 
-def susun_konteks(nama: str, zona_kiriman: list | None = None) -> str:
+def susun_konteks(nama: str, zona_kiriman: list | None = None,
+                  video: str | None = None, mulai_detik: float = 0.0) -> str:
     d = muat(nama)
+    # Jam dinding dibaca dari stempel yang tercetak di frame CCTV. Tanpa ini
+    # chatbot tahu polanya ("paling ramai menit ke-1") tapi tidak bisa menjawab
+    # "peak hour jam berapa" — dan itu pertanyaan pertama yang orang tanyakan.
+    jam_mulai = None
+    if video:
+        try:
+            from waktu_dari_video import waktu_mulai
+            jam_mulai = waktu_mulai(video, mulai_detik)
+        except Exception:                                    # noqa: BLE001
+            jam_mulai = None
     b = ["=== FAKTA DASAR ==="]
+    if jam_mulai:
+        b.append(f"Rekaman ini dimulai pukul {jam_mulai.strftime('%H:%M')} "
+                 f"tanggal {jam_mulai.strftime('%d %B %Y')} "
+                 f"(dibaca dari stempel waktu di gambar CCTV).")
     b.append(f"Ruangan {d.get('venueName','pujasera')} "
              f"{d.get('widthM',0):g} x {d.get('heightM',0):g} meter, "
              f"rekaman {d.get('durationSec',0):.0f} detik.")
@@ -294,9 +315,19 @@ def susun_konteks(nama: str, zona_kiriman: list | None = None) -> str:
                  f"menyimpulkan kapan ramai atau sepi.")
     else:
         for o in occ:
-            b.append(f"  menit ke-{o['minute']}: {o['count']} orang")
-    b.append("  Menit dihitung dari awal rekaman, bukan jam dinding — kita tidak "
-             "tahu pukul berapa rekaman ini dibuat.")
+            if jam_mulai:
+                jam = (jam_mulai + timedelta(minutes=o["minute"])).strftime("%H:%M")
+                b.append(f"  pukul {jam}: {o['count']} orang")
+            else:
+                b.append(f"  menit ke-{o['minute']}: {o['count']} orang")
+    if jam_mulai:
+        b.append("  Jam di atas jam dinding sungguhan, dari stempel kamera. "
+                 "Boleh dipakai menjawab 'jam berapa'. Tapi rekaman ini cuma "
+                 f"{len(occ)} menit — JANGAN menyimpulkan pola harian "
+                 "(pagi/siang/sore) dari potongan sependek ini.")
+    else:
+        b.append("  Menit dihitung dari awal rekaman, bukan jam dinding — kita "
+                 "tidak tahu pukul berapa rekaman ini dibuat.")
     b.append("")
 
     # ---- KESIMPULAN: dihitung Python ----
@@ -307,13 +338,16 @@ def susun_konteks(nama: str, zona_kiriman: list | None = None) -> str:
         beda = ramai["count"] - sepi["count"]
         # Selisih sekecil ini di bawah ketelitian deteksi; menyebutnya puncak
         # berarti melaporkan derau sebagai temuan.
+        def _jam(o):
+            return ((jam_mulai + timedelta(minutes=o["minute"])).strftime("%H:%M")
+                    if jam_mulai else f"menit ke-{o['minute']}")
         if beda <= 3 or beda < 0.2 * max(ramai["count"], 1):
             b.append(f"  Keramaian RATA: paling sepi {sepi['count']} orang, paling "
                      f"ramai {ramai['count']}. Selisih sekecil ini masih dalam "
                      f"ketelitian deteksi — TIDAK ADA menit yang menonjol.")
         else:
-            b.append(f"  Paling ramai: menit ke-{ramai['minute']} ({ramai['count']} orang).")
-            b.append(f"  Paling sepi: menit ke-{sepi['minute']} ({sepi['count']} orang).")
+            b.append(f"  Paling ramai: {_jam(ramai)} ({ramai['count']} orang).")
+            b.append(f"  Paling sepi: {_jam(sepi)} ({sepi['count']} orang).")
     if porsi:
         b.append(f"  Tempat paling sering ditempati: {porsi[0][0]} "
                  f"({porsi[0][1]*100:.0f}%).")

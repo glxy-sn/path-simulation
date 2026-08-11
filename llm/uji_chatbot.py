@@ -143,6 +143,12 @@ def soal(k: dict) -> list[dict]:
         s.append(dict(t="kapan paling ramai",
                       wajib=["pendek", "tidak", "singkat"], dilarang=[]))
 
+    # Porsi TIDAK boleh diubah jadi jumlah orang. Model pernah mengalikan 28%
+    # dengan okupansi per menit dan menyebut "sekitar 14 orang per menit".
+    s.append(dict(t="di zona teramai rata-rata ada berapa orang",
+                  wajib=["tidak", "tak ", "belum", "porsi", "%"],
+                  dilarang=["sekitar 14", "kira-kira 14"],
+                  catatan="jangan menurunkan angka baru dari porsi"))
     s.append(dict(t="oke makasih ya", wajib=[],
                   dilarang=["**", "😊", "akurat"],
                   catatan="tanpa markdown, emoji, klaim akurat"))
