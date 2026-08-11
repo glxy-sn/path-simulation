@@ -13,6 +13,7 @@ import numpy as np
 import cv2
 
 from .detect import seek_accurate
+from .timing import camera_source_start
 
 def _open_writer(path, fps, size):
     # mp4v = frame benar & andal di OpenCV. (avc1 di macOS sering korup/hijau.)
@@ -73,7 +74,18 @@ def render_heatmap(heat: np.ndarray, out_path, out_w: int = 720, bg_path=None):
     cv2.imwrite(str(out_path), out)
 
 
-def render_bbox_video(video_path, cam_info, cam_to_global, cam_idx, cfg, out_path):
+def _identity_label(cam_idx, track_id, cam_to_global, identity_confidence):
+    global_id = cam_to_global.get((cam_idx, track_id))
+    if global_id is None:
+        return None, "unassigned", (145, 145, 145)
+    quality = identity_confidence.get(global_id, {"score": None, "level": "singleCamera"})
+    level = quality["level"]
+    score = quality.get("score")
+    suffix = "Single Camera" if level == "singleCamera" else f"{level.title()} {score:.2f}"
+    return global_id, f"ID {global_id} · {suffix}", _gid_color(global_id)
+
+
+def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, cam_idx, cfg, out_path):
     per_frame = cam_info["per_frame"]
     if not per_frame:
         return
@@ -93,12 +105,15 @@ def render_bbox_video(video_path, cam_info, cam_to_global, cam_idx, cfg, out_pat
         if idx > max_fi:
             break
         if idx in fset:
-            for (tid, x1, y1, x2, y2) in per_frame[idx]:
-                gid = cam_to_global.get((cam_idx, tid), tid)
+            for box in per_frame[idx]:
+                tid, x1, y1, x2, y2 = box[:5]
+                _gid, label, color = _identity_label(
+                    cam_idx, tid, cam_to_global, identity_confidence
+                )
                 p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
-                cv2.rectangle(frame, p1, p2, (214, 87, 84), 2)          # BGR ~ indigo
-                cv2.putText(frame, f"ID {gid}", (int(x1), int(y1) - 6),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (214, 87, 84), 2)
+                cv2.rectangle(frame, p1, p2, color, 2)
+                cv2.putText(frame, label, (int(x1), int(y1) - 6),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 cv2.circle(frame, (int((x1 + x2) / 2), int(y2)), 4, (0, 165, 255), -1)  # titik kaki
             vw.write(frame)
         idx += 1
@@ -153,12 +168,12 @@ def _gid_color(gid):
     return tuple(int(v) for v in rng.randint(60, 230, size=3))
 
 
-def _draw_global_boxes(frame, boxes, cam_idx, cam_to_global):
-    for (tid, x1, y1, x2, y2) in boxes:
-        gid = cam_to_global.get((cam_idx, tid), tid)
-        c = _gid_color(gid)
+def _draw_global_boxes(frame, boxes, cam_idx, cam_to_global, identity_confidence):
+    for box in boxes:
+        tid, x1, y1, x2, y2 = box[:5]
+        _gid, label, c = _identity_label(cam_idx, tid, cam_to_global, identity_confidence)
         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), c, 2)
-        cv2.putText(frame, f"ID {gid}", (int(x1), max(12, int(y1) - 5)),
+        cv2.putText(frame, label, (int(x1), max(12, int(y1) - 5)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1)
 
 
@@ -186,7 +201,8 @@ def _bev_cell(global_tracks, venue, t, w, h, bg=None):
     return canvas
 
 
-def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_tracks, venue, cfg,
+def render_combined_video(cams, cam_det, cam_render, cam_to_global, identity_confidence,
+                          global_tracks, venue, cfg,
                           out_path, cell_w=480, cell_h=270, bg_path=None):
     """
     Susun semua kamera (ID global) dalam grid + satu panel BEV fusion -> 1 video.
@@ -200,7 +216,8 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_track
     for i, c in enumerate(cams):
         det = cam_det[i]
         fps = det["fps"] or 30.0
-        start_frame = max(0, int(getattr(c, "startSec", 0.0) * fps))
+        source_start = camera_source_start(c)
+        start_frame = max(0, int(source_start * fps))
         proc = [fi for (fi, _t, _b) in det["dets"]]      # frame yang diproses (urut waktu)
         cap = cv2.VideoCapture(c.videoPath)
         seek_accurate(cap, start_frame)
@@ -234,7 +251,13 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, global_track
             if not ok or frame is None:
                 frame = np.zeros((cell_h, cell_w, 3), np.uint8)
             else:
-                _draw_global_boxes(frame, r["per_frame"].get(target, []), r["idx"], cam_to_global)
+                _draw_global_boxes(
+                    frame,
+                    r["per_frame"].get(target, []),
+                    r["idx"],
+                    cam_to_global,
+                    identity_confidence,
+                )
                 frame = cv2.resize(frame, (cell_w, cell_h))
             cv2.putText(frame, f"C{r['idx'] + 1}", (8, 22),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
