@@ -43,6 +43,7 @@ struct RootView: View {
         switch router.section {
         case .newAnalysis: WizardContainer()
         case .history:     HistoryView()
+        case .chat:        ChatView()
         }
     }
 }
