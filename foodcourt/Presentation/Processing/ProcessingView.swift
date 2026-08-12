@@ -87,6 +87,7 @@ struct ProcessingView: View {
         if let u = result.heatmapURL, let f = saved.heatmapFile { arts.append((f, u)) }
         if let u = result.pathVideoURL, let f = saved.pathVideoFile { arts.append((f, u)) }
         if let u = result.combinedVideoURL, let f = saved.combinedVideoFile { arts.append((f, u)) }
+        if let u = result.fusionDiagnosticsURL, let f = saved.fusionDiagnosticsFile { arts.append((f, u)) }
         for (i, ov) in result.overlayVideos.enumerated() where i < saved.overlays.count {
             arts.append((saved.overlays[i].file, ov.url))
         }

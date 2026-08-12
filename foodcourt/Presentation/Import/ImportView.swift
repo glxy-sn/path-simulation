@@ -108,6 +108,12 @@ private struct ImportMainColumn: View {
                                     session.cameras[i].label = newLabel
                                 }
                             },
+                            onOffsetChange: { offset in
+                                if let i = session.cameras.firstIndex(where: { $0.id == cam.id }) {
+                                    session.cameras[i].timeOffsetSec = min(300, max(-300, offset))
+                                    session.normalizeTrim()
+                                }
+                            },
                             onRemove: {
                                 session.cameras.removeAll { $0.id == cam.id }
                                 session.normalizeTrim()
@@ -119,6 +125,7 @@ private struct ImportMainColumn: View {
                 if session.timelineMax > 0 {
                     GlobalTrimCard(startSec: $session.trimStartSec,
                                    endSec: $session.trimEndSec,
+                                   minSec: session.timelineMin,
                                    maxSec: session.timelineMax,
                                    cameras: session.previews)
                 }
@@ -169,6 +176,7 @@ private struct ImportInspector: View {
 private struct CameraRow: View {
     let camera: SessionCamera
     var onLabelChange: (String) -> Void
+    var onOffsetChange: (Double) -> Void
     var onRemove: () -> Void
 
     var body: some View {
@@ -191,6 +199,36 @@ private struct CameraRow: View {
                 Text(camera.durationSec > 0 ? timecode(camera.durationSec) : "—").font(.caption.monospacedDigit())
                 Text(camera.resolution).font(.caption).foregroundStyle(.secondary)
             }
+
+            Divider().frame(height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Offset waktu").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: Space.xs) {
+                    TextField(
+                        "0,0",
+                        value: Binding(
+                            get: { camera.timeOffsetSec },
+                            set: { onOffsetChange($0) }
+                        ),
+                        format: .number.precision(.fractionLength(1...2))
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 72)
+                    Stepper(
+                        "",
+                        value: Binding(
+                            get: { camera.timeOffsetSec },
+                            set: { onOffsetChange($0) }
+                        ),
+                        in: -300...300,
+                        step: 0.1
+                    )
+                    .labelsHidden()
+                    Text("s").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .help("Waktu sumber = waktu global + offset. Positif membaca frame lebih akhir.")
 
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "xmark.circle.fill")

@@ -49,12 +49,31 @@ enum HomographySolver {
         return CalibrationPoint(x: x, y: y)
     }
 
+    /// Convert a pixel->world homography into normalized-image->world.
+    /// H_norm = H_pixel × scale(frameWidth, frameHeight).
+    static func normalizedImageToWorld(
+        pixelToWorld: Matrix3x3,
+        imageSize: PixelSize
+    ) throws -> Matrix3x3 {
+        guard imageSize.isValid else { throw CalibrationError.invalidImageSize }
+        guard pixelToWorld.isFiniteAndInvertible else { throw CalibrationError.degeneratePoints }
+        let pixelScale = Matrix3x3([
+            [imageSize.width, 0, 0],
+            [0, imageSize.height, 0],
+            [0, 0, 1]
+        ])
+        let result = normalized(multiply(pixelToWorld, pixelScale))
+        guard result.isFiniteAndInvertible else { throw CalibrationError.degeneratePoints }
+        return result
+    }
+
     static func calibrate(
         cameraPointsPx: [CalibrationPoint],
         floorPointsPx: [CalibrationPoint],
         floorSize: PixelSize,
         venueWidthM: Double,
-        venueHeightM: Double
+        venueHeightM: Double,
+        cameraImageSize: PixelSize? = nil
     ) throws -> CameraCalibration {
         guard cameraPointsPx.count == floorPointsPx.count else { throw CalibrationError.unequalPointCounts }
         guard cameraPointsPx.count >= minimumPoints else { throw CalibrationError.tooFewPoints }
@@ -109,7 +128,15 @@ enum HomographySolver {
                 medianErrorM: percentile(chosen.errors, 0.5),
                 p95ErrorM: percentile(chosen.errors, 0.95),
                 inliers: chosen.inlierCount,
-                points: chosen.errors.count
+                points: chosen.errors.count,
+                cameraCoverage: cameraImageSize.flatMap {
+                    coverage(of: cameraPointsPx, width: $0.width, height: $0.height)
+                },
+                floorCoverage: coverage(
+                    of: floorPointsPx,
+                    width: floorSize.width,
+                    height: floorSize.height
+                )
             )
         )
     }
@@ -221,6 +248,42 @@ enum HomographySolver {
             }
         }
         return false
+    }
+
+    private static func coverage(of points: [CalibrationPoint], width: Double, height: Double) -> Double? {
+        guard width > 0, height > 0, points.count >= 3 else { return nil }
+        return convexHullArea(points) / (width * height)
+    }
+
+    private static func convexHullArea(_ points: [CalibrationPoint]) -> Double {
+        let sorted = points.sorted { lhs, rhs in
+            lhs.x == rhs.x ? lhs.y < rhs.y : lhs.x < rhs.x
+        }
+        guard sorted.count >= 3 else { return 0 }
+        func cross(_ origin: CalibrationPoint, _ a: CalibrationPoint, _ b: CalibrationPoint) -> Double {
+            (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x)
+        }
+        var lower: [CalibrationPoint] = []
+        for point in sorted {
+            while lower.count >= 2, cross(lower[lower.count - 2], lower.last!, point) <= 0 {
+                lower.removeLast()
+            }
+            lower.append(point)
+        }
+        var upper: [CalibrationPoint] = []
+        for point in sorted.reversed() {
+            while upper.count >= 2, cross(upper[upper.count - 2], upper.last!, point) <= 0 {
+                upper.removeLast()
+            }
+            upper.append(point)
+        }
+        let hull = Array(lower.dropLast()) + Array(upper.dropLast())
+        guard hull.count >= 3 else { return 0 }
+        let twiceArea = hull.indices.reduce(0.0) { sum, index in
+            let next = hull[(index + 1) % hull.count]
+            return sum + hull[index].x * next.y - next.x * hull[index].y
+        }
+        return abs(twiceArea) / 2
     }
 
     private static func combinations(of values: [Int], choosing count: Int) -> [[Int]] {

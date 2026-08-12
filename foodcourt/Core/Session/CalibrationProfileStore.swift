@@ -23,6 +23,7 @@ enum CalibrationProfileStore {
                 cameraID: camera.id,
                 label: camera.label,
                 referenceFrameSeconds: camera.referenceFrameSeconds,
+                timeOffsetSec: camera.timeOffsetSec,
                 imageSize: imageSize,
                 sourceFileName: camera.url?.lastPathComponent,
                 calibration: calibration
@@ -89,10 +90,12 @@ enum CalibrationProfileStore {
                 },
                 floorSize: profile.floorplan.pixelSize,
                 venueWidthM: profile.worldBoundsM.width,
-                venueHeightM: profile.worldBoundsM.height
+                venueHeightM: profile.worldBoundsM.height,
+                cameraImageSize: frameSize
             )
             guard recalibrated.isValid else { throw CalibrationError.invalidProfile }
             stagedCameras[sessionIndex].referenceFrameSeconds = max(0, saved.referenceFrameSeconds)
+            stagedCameras[sessionIndex].timeOffsetSec = saved.timeOffsetSec ?? 0
             stagedCameras[sessionIndex].framePixelSize = frameSize
             stagedCameras[sessionIndex].imagePoints = imagePoints
             stagedCameras[sessionIndex].planePoints = planePoints

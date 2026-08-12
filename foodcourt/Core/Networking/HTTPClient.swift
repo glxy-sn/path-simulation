@@ -33,8 +33,13 @@ struct HTTPClient {
         try await send(makeRequest(path, method: "GET"))
     }
 
-    func post<B: Encodable, T: Decodable>(_ path: String, body: B) async throws -> T {
+    func post<B: Encodable, T: Decodable>(
+        _ path: String,
+        body: B,
+        timeout: TimeInterval = 30
+    ) async throws -> T {
         var req = try makeRequest(path, method: "POST")
+        req.timeoutInterval = timeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
         return try await send(req)
@@ -52,6 +57,8 @@ struct HTTPClient {
         let data: Data
         let resp: URLResponse
         do { (data, resp) = try await session.data(for: req) }
+        catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         catch { throw EngineError.network }
 
         guard let http = resp as? HTTPURLResponse else { throw EngineError.network }

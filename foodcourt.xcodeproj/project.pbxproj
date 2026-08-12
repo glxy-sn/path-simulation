@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		7A00000A30206CB500A4579F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 45962BB930206CB500A4579F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 45962BC030206CB500A4579F;
+			remoteInfo = foodcourt;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		45962BC130206CB500A4579F /* foodcourt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = foodcourt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A00000130206CB500A4579F /* foodcourtTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = foodcourtTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -29,10 +40,22 @@
 			path = foodcourt;
 			sourceTree = "<group>";
 		};
+		7A00000330206CB500A4579F /* foodcourtTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = foodcourtTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		45962BBE30206CB500A4579F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A00000430206CB500A4579F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				45962BC330206CB500A4579F /* foodcourt */,
+				7A00000330206CB500A4579F /* foodcourtTests */,
 				45962BC230206CB500A4579F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				45962BC130206CB500A4579F /* foodcourt.app */,
+				7A00000130206CB500A4579F /* foodcourtTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +108,28 @@
 			productReference = 45962BC130206CB500A4579F /* foodcourt.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7A00000230206CB500A4579F /* foodcourtTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A00000630206CB500A4579F /* Build configuration list for PBXNativeTarget "foodcourtTests" */;
+			buildPhases = (
+				7A00000530206CB500A4579F /* Sources */,
+				7A00000430206CB500A4579F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7A00000930206CB500A4579F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7A00000330206CB500A4579F /* foodcourtTests */,
+			);
+			name = foodcourtTests;
+			packageProductDependencies = (
+			);
+			productName = foodcourtTests;
+			productReference = 7A00000130206CB500A4579F /* foodcourtTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +142,10 @@
 				TargetAttributes = {
 					45962BC030206CB500A4579F = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					7A00000230206CB500A4579F = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 45962BC030206CB500A4579F;
 					};
 				};
 			};
@@ -113,6 +164,7 @@
 			projectRoot = "";
 			targets = (
 				45962BC030206CB500A4579F /* foodcourt */,
+				7A00000230206CB500A4579F /* foodcourtTests */,
 			);
 		};
 /* End PBXProject section */
@@ -135,7 +187,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A00000530206CB500A4579F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7A00000930206CB500A4579F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 45962BC030206CB500A4579F /* foodcourt */;
+			targetProxy = 7A00000A30206CB500A4579F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		45962BCC30206CB500A4579F /* Debug */ = {
@@ -266,7 +333,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
@@ -313,7 +380,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
@@ -352,6 +419,42 @@
 			};
 			name = Release;
 		};
+		7A00000730206CB500A4579F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.foodcourtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/foodcourt.app/Contents/MacOS/foodcourt";
+			};
+			name = Debug;
+		};
+		7A00000830206CB500A4579F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5LHF4C6NGF;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.foodcourtTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/foodcourt.app/Contents/MacOS/foodcourt";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -369,6 +472,15 @@
 			buildConfigurations = (
 				45962BCF30206CB500A4579F /* Debug */,
 				45962BD030206CB500A4579F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A00000630206CB500A4579F /* Build configuration list for PBXNativeTarget "foodcourtTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A00000730206CB500A4579F /* Debug */,
+				7A00000830206CB500A4579F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
