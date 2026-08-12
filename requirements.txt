@@ -21,3 +21,9 @@ lap>=0.4
 # Opsional: ekspor trajektori ke parquet
 pandas>=2.2,<3
 pyarrow>=15
+
+# Runtime explanatory analysis + local structured RAG (notebook UI packages stay separate).
+scikit-image>=0.23
+shapely>=2.0
+matplotlib>=3.8
+pillow>=10

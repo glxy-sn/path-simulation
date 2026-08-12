@@ -15,12 +15,27 @@ class Point(BaseModel):
     y: float
 
 
+class NormalizedRect(BaseModel):
+    x: float = Field(..., ge=0.0, le=1.0)
+    y: float = Field(..., ge=0.0, le=1.0)
+    width: float = Field(..., gt=0.0, le=1.0)
+    height: float = Field(..., gt=0.0, le=1.0)
+
+
+class TableAnnotationInput(BaseModel):
+    id: str
+    label: str
+    rectNormalized: NormalizedRect
+    verified: bool = True
+
+
 class VenueInput(BaseModel):
     widthM: float
     heightM: float
     name: str = ""
     type: str = ""
     floorPlanPath: str | None = None      # path gambar denah (opsional) untuk background
+    tables: list[TableAnnotationInput] = Field(default_factory=list)
 
 
 class CalibrationInput(BaseModel):

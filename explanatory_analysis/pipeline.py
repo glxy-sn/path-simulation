@@ -858,6 +858,32 @@ def build_table_areas(context: dict[str, Any], width_m: float, height_m: float) 
     return areas
 
 
+def build_custom_zone_areas(context: dict[str, Any], width_m: float, height_m: float) -> list[dict[str, Any]]:
+    venue = box(0, 0, width_m, height_m)
+    areas: list[dict[str, Any]] = []
+    for index, zone in enumerate(context.get("customZones") or [], 1):
+        rect = zone.get("rectNormalized") or {}
+        x = float(rect.get("x", 0)) * width_m
+        y = float(rect.get("y", 0)) * height_m
+        w = float(rect.get("width", 0)) * width_m
+        h = float(rect.get("height", 0)) * height_m
+        polygon = box(x, y, x + w, y + h)
+        if w <= 0 or h <= 0 or not venue.covers(polygon):
+            raise ValueError(f"Custom zone tidak valid atau di luar venue: {zone.get('id') or index}")
+        area_id = str(zone.get("id") or f"custom-zone-{index:02d}")
+        areas.append({
+            "areaId": area_id,
+            "kind": "custom_zone",
+            "label": str(zone.get("label") or area_id),
+            "geometryM": _polygon_geometry(polygon),
+            "metrics": {"zoneAreaM2": float(polygon.area)},
+            "confidence": 1.0,
+            "confidenceBasis": "manual_named_zone",
+            "limitation": "Zona ditentukan manual; metrik hanya berasal dari trajectory valid di dalam rectangle.",
+        })
+    return areas
+
+
 def build_area_visits(frame: pd.DataFrame, areas: list[dict[str, Any]], minimum_sec: float = 1.0) -> pd.DataFrame:
     columns = ["visitId", "areaId", "trackId", "segmentId", "startSec", "endSec", "durationSec", "sampleCount"]
     rows: list[dict[str, Any]] = []
@@ -960,6 +986,7 @@ def build_evidence_cards(job_id: str, summary: dict[str, Any], areas: list[dict[
         elif area["kind"] == "bottleneck_area": types, label = ["bottleneck", "queue_facility"], "Bottleneck observasional"
         elif area["kind"] == "route_archetype": types, label = ["usual_route", "movement_pattern"], "Route archetype"
         elif area["kind"] == "table": types, label = ["table_effectiveness", "board_game_table"], "Meja teranotasi"
+        elif area["kind"] == "custom_zone": types, label = ["named_area", "custom_zone", "dwell_area", "most_occupied_area"], f"Zona {area.get('label') or area['areaId']}"
         else: continue
         coordinate_text = f" di sekitar ({center[0]:.2f} m, {center[1]:.2f} m)" if center else ""
         add(types, f"{label}{coordinate_text} dengan area ID {area['areaId']}.", area["metrics"], float(area.get("confidence", 0)), ["spatial_areas.json", "area_visits.parquet"], area=area)
@@ -1158,10 +1185,13 @@ def run_analysis(config: AnalysisConfig | None = None) -> AnalysisResult:
     groups, group_summary = build_group_episodes(resampled, config)
     history = _compatible_history(config, job_id, fingerprint)
     routes = build_route_archetypes(history, config)
-    context_path = config.backend_root / "notebooks" / "venue_context" / f"{fingerprint}.json"
+    job_context_path = job_dir / "analysis-context.json"
+    legacy_context_path = config.backend_root / "notebooks" / "venue_context" / f"{fingerprint}.json"
+    context_path = job_context_path if job_context_path.is_file() else legacy_context_path
     context = load_venue_context(context_path, fingerprint, width_m, height_m)
     table_areas = build_table_areas(context, width_m, height_m)
-    areas = presence_areas + low_presence_areas + crowd_areas + flow_areas + low_flow_areas + stop_areas + bottleneck_areas + routes + table_areas
+    custom_zone_areas = build_custom_zone_areas(context, width_m, height_m)
+    areas = presence_areas + low_presence_areas + crowd_areas + flow_areas + low_flow_areas + stop_areas + bottleneck_areas + routes + table_areas + custom_zone_areas
     visits = build_area_visits(trajectory, [area for area in areas if area["kind"] != "route_archetype"])
     _enrich_area_visit_metrics(areas, visits)
     peak = occupancy.sort_values(["count", "binStartSec"], ascending=[False, True]).iloc[0]

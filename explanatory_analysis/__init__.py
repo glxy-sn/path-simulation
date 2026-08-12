@@ -7,6 +7,7 @@ from .pipeline import (
     discover_jobs,
     run_analysis,
 )
+from .rag import LocalRAG, RAGConfig, load_package
 
 __all__ = [
     "AnalysisConfig",
@@ -14,4 +15,7 @@ __all__ = [
     "create_table_annotation_widget",
     "discover_jobs",
     "run_analysis",
+    "LocalRAG",
+    "RAGConfig",
+    "load_package",
 ]

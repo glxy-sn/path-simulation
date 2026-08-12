@@ -132,6 +132,7 @@ FIELD_DESCRIPTIONS: dict[str, str] = {
     "usualAcrossJobs": "apakah route didukung lintas job",
     "tableAreaM2": "luas polygon permukaan meja",
     "interactionAreaM2": "luas interaction zone meja",
+    "zoneAreaM2": "luas zona manual dalam meter persegi",
     "count": "jumlah anonymous track pada bin waktu",
     "binStartSec": "awal bin waktu relatif dalam detik",
     "binEndSec": "akhir bin waktu relatif dalam detik",
@@ -168,6 +169,7 @@ AREA_KIND_DESCRIPTIONS: dict[str, str] = {
     "bottleneck_area": "Area bottleneck observasional dari density, speed drop dan persistence.",
     "route_archetype": "Polyline pola lintasan yang didukung beberapa track.",
     "table": "Polygon meja manual dan interaction zone terhitung.",
+    "custom_zone": "Rectangle area bernama yang dibuat pengguna pada denah.",
 }
 
 

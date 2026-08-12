@@ -18,7 +18,6 @@ from urllib.request import Request, urlopen
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from IPython.display import HTML, Markdown, display
 from matplotlib.patches import Ellipse, Polygon as MplPolygon
 from pydantic import ValidationError
 from shapely.geometry import LineString, Point, Polygon, box
@@ -87,20 +86,15 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
 
 
-def load_latest_package(config: RAGConfig | None = None) -> Package:
-    config = config or RAGConfig.default()
-    pointer = config.output_root / "latest.json"
-    if not pointer.is_file():
-        raise FileNotFoundError("latest.json belum tersedia; jalankan notebook analysis terlebih dahulu.")
-    latest = _read_json(pointer)
-    package_path = Path(latest["packagePath"]).expanduser().resolve()
+def load_package(package_path: str | Path) -> Package:
+    package_path = Path(package_path).expanduser().resolve()
     required = ["manifest.json", "summary.json", "spatial_areas.json", "evidence_cards.jsonl", "capability_catalog.json"]
     missing = [name for name in required if not (package_path / name).is_file()]
     if missing:
         raise FileNotFoundError(f"Package v2 tidak lengkap: {missing}")
     manifest = _read_json(package_path / "manifest.json")
     if str(manifest.get("schemaVersion")) != "2.0":
-        raise ValueError("Notebook RAG membutuhkan explanatory package schema 2.0.")
+        raise ValueError("RAG membutuhkan explanatory package schema 2.0.")
     with (package_path / "evidence_cards.jsonl").open(encoding="utf-8") as handle:
         cards = [json.loads(line) for line in handle if line.strip()]
     return Package(
@@ -112,6 +106,16 @@ def load_latest_package(config: RAGConfig | None = None) -> Package:
         cards,
         _read_json(package_path / "capability_catalog.json"),
     )
+
+
+def load_latest_package(config: RAGConfig | None = None) -> Package:
+    config = config or RAGConfig.default()
+    pointer = config.output_root / "latest.json"
+    if not pointer.is_file():
+        raise FileNotFoundError("latest.json belum tersedia; jalankan notebook analysis terlebih dahulu.")
+    latest = _read_json(pointer)
+    package_path = Path(latest["packagePath"]).expanduser().resolve()
+    return load_package(package_path)
 
 
 def evidence_text(card: dict[str, Any]) -> str:
@@ -157,7 +161,13 @@ class OllamaClient:
 
 
 class LocalRAG:
-    def __init__(self, config: RAGConfig | None = None, package: Package | None = None):
+    def __init__(
+        self,
+        config: RAGConfig | None = None,
+        package: Package | None = None,
+        run_root: str | Path | None = None,
+        session_id: str | None = None,
+    ):
         self.config = config or RAGConfig.default()
         self.package = package or load_latest_package(self.config)
         self.client = OllamaClient(self.config.ollama_url)
@@ -173,7 +183,8 @@ class LocalRAG:
         self.card_by_id = {card["cardId"]: card for card in self.package.cards}
         self.catalog = DataCatalog(self.package.path, self.package.areas, self.package.summary)
         self.executor = QueryExecutor(self.catalog, self.area_by_id)
-        self.session_id = uuid.uuid4().hex[:12]
+        self.run_root = Path(run_root).expanduser().resolve() if run_root else None
+        self.session_id = session_id or uuid.uuid4().hex[:12]
         self.history: list[dict[str, Any]] = []
 
     def new_session(self) -> str:
@@ -202,7 +213,7 @@ class LocalRAG:
             return self._document_embeddings
         digest = hashlib.sha256((self.config.embed_model + "\n" + "\n---\n".join(self.documents)).encode()).hexdigest()[:16]
         safe_model = re.sub(r"[^A-Za-z0-9_.-]+", "_", self.config.embed_model)
-        cache_path = self.config.output_root / self.package.job_id / "llm-rag-v2" / "cache" / f"{safe_model}-{digest}.npz"
+        cache_path = self.package.path.parent / "llm-rag-v2" / "cache" / f"{safe_model}-{digest}.npz"
         if cache_path.is_file():
             self._document_embeddings = np.load(cache_path)["embeddings"]
         else:
@@ -297,6 +308,47 @@ class LocalRAG:
             cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.I | re.S)
         return model.model_validate_json(cleaned)
 
+    @staticmethod
+    def _parse_query_plan(content: str, question: str) -> QueryPlan:
+        """Parse planner JSON and repair only an omitted ranking direction.
+
+        Qwen occasionally emits the correct dataset, kind, and metric but leaves
+        ``direction`` at its schema default.  This deterministic repair does not
+        select an area: it only maps explicit low/quiet wording to ``min`` and
+        otherwise uses ``max`` for a rank/recommend operation.  The executor
+        remains the sole selection authority.
+        """
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.I | re.S)
+        payload = json.loads(cleaned)
+        metrics = payload.get("metrics") or []
+        if payload.get("operation") in {"rank", "recommend"} and metrics:
+            directions = [str(metric.get("direction") or "none") for metric in metrics]
+            if all(direction == "none" for direction in directions):
+                question_text = question.lower()
+                planner_text = " ".join([
+                    str(payload.get("interpretation") or ""),
+                    str(payload.get("assumption") or ""),
+                ]).lower()
+                low_markers = (
+                    "paling sepi", "jarang", "terendah", "minimum", "terkecil",
+                    "paling rendah", "least", "lowest", "minimum", "low activity",
+                )
+                high_markers = (
+                    "paling ramai", "tertinggi", "maksimum", "terbesar", "paling tinggi",
+                    "most", "highest", "maximum", "busiest", "most crowded",
+                )
+                if any(marker in question_text for marker in low_markers):
+                    direction = "min"
+                elif any(marker in question_text for marker in high_markers):
+                    direction = "max"
+                else:
+                    direction = "min" if any(marker in planner_text for marker in low_markers) else "max"
+                for metric in metrics:
+                    metric["direction"] = direction
+        return QueryPlan.model_validate(payload)
+
     def _planner_payload(
         self,
         question: str,
@@ -330,7 +382,7 @@ class LocalRAG:
             context["repairInstruction"] = repair
         system = """Anda adalah query planner trajectory. Buat keputusan singkat, lalu keluarkan QueryPlan JSON valid.
 REASONING COMPACT: maksimal enam langkah pendek; jangan mengulang pertanyaan, catalog, schema, atau semua kandidat. Cukup tentukan interpretasi, dataset, populasi, metrik, operator, dan filter.
-Aturan: pilih satu interpretasi; alternatif masuk alternativeInterpretations. Area kind wajib masuk entityKinds, bukan metrics. Dilarang membuat SQL, Python, geometry, field, kind, atau areaId baru. relativeIntensity hanya boleh dibandingkan dalam satu kind.
+Aturan: pilih satu interpretasi; alternatif masuk alternativeInterpretations. Area kind wajib masuk entityKinds, bukan metrics. Dilarang membuat SQL, Python, geometry, field, kind, atau areaId baru. relativeIntensity hanya boleh dibandingkan dalam satu kind. Operasi rank/recommend WAJIB memberi direction min atau max pada sedikitnya satu metric; jangan gunakan none.
 Untuk ranking spasial gunakan spatial_areas. "Jarang dilewati" = flow_hotspot, relativeIntensity/value/min. "Sepi" = presence rendah. Jika keduanya muncul, pilih frasa paling spesifik dan catat alternatif. low_flow_area hanya untuk permintaan eksplisit kandidat aktivitas rendah pada observed-support envelope.
 Contoh: "area mana yang paling sepi atau yang jarang dilewati" => analytical; spatial_areas; rank; [flow_hotspot]; relativeIntensity/value/min; spatialAnswer true.
 general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spatialAnswer. Klaim venue harus berbasis data. Follow-up boleh memakai sessionContext. message.content hanya JSON sesuai schema."""
@@ -383,8 +435,7 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
                 attempts.append(metadata)
                 continue
             try:
-                plan = self._parse_json_model(str(message.get("content") or ""), QueryPlan)
-                assert isinstance(plan, QueryPlan)
+                plan = self._parse_query_plan(str(message.get("content") or ""), question)
                 plan = self.catalog.normalize_plan(plan)
                 self.catalog.validate_plan(plan, self.area_by_id)
             except (ValidationError, ValueError, json.JSONDecodeError, AssertionError) as error:
@@ -618,7 +669,7 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
             "usageAndLatency": final["usage"],
             "files": sorted(set(files + ["run_manifest.json"])),
         })
-        latest = run_dir.parent.parent / "latest.json"
+        latest = run_dir.parent / "latest.json" if self.run_root else run_dir.parent.parent / "latest.json"
         temporary = latest.with_suffix(".tmp")
         _write_json(temporary, {"runId": run_dir.name, "runDirectory": str(run_dir), "response": str(run_dir / "response.json"), "floorplanOverlay": str(overlay) if overlay else None})
         temporary.replace(latest)
@@ -630,9 +681,9 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
     def _save_run(self, final: dict[str, Any], retrieval_audit: dict[str, Any], thinking: str, query_plan: dict[str, Any], execution: dict[str, Any]) -> Path:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         query_hash = hashlib.sha256(final["question"].encode()).hexdigest()[:8]
-        root = self.config.output_root / self.package.job_id / "llm-rag-v2"
-        target = root / "runs" / f"{timestamp}-{query_hash}"
-        staging = root / f".run.{uuid.uuid4().hex}.build"
+        runs = self.run_root or (self.config.output_root / self.package.job_id / "llm-rag-v2" / "runs")
+        target = runs / f"{timestamp}-{query_hash}"
+        staging = runs.parent / f".run.{uuid.uuid4().hex}.build"
         staging.mkdir(parents=True, exist_ok=False)
         try:
             _write_json(staging / "response.json", final)
@@ -649,6 +700,8 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
         return target
 
     def _history_roots(self) -> list[tuple[Path, bool]]:
+        if self.run_root:
+            return [(self.run_root, False)]
         base = self.config.output_root / self.package.job_id
         return [(base / "llm-rag-v2" / "runs", False), (base / "llm-rag-v1" / "runs", True)]
 
@@ -716,11 +769,17 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
         area = final.get("selectedArea")
         if not area or final["dataGrounding"] == "general_knowledge": return None
         floorplan_value = self.package.manifest.get("floorplan", {}).get("sourcePath")
-        floorplan = Path(floorplan_value).expanduser() if floorplan_value else None
-        if not floorplan or not floorplan.is_file(): return None
         coordinate = self.package.manifest["coordinateSystem"]; width, height = float(coordinate["widthM"]), float(coordinate["heightM"])
         color = "#f4a261" if final["supportLevel"] == "partially_supported" else "#0077b6"
-        figure, axis = plt.subplots(figsize=(11, 8)); axis.imshow(plt.imread(floorplan), origin="upper", extent=(0, width, height, 0), aspect="equal")
+        figure, axis = plt.subplots(figsize=(11, 8))
+        floorplan = Path(floorplan_value).expanduser() if floorplan_value else None
+        if floorplan and floorplan.is_file():
+            axis.imshow(plt.imread(floorplan), origin="upper", extent=(0, width, height, 0), aspect="equal")
+        else:
+            axis.set_facecolor("#f6f7f9")
+            axis.set_xticks(np.arange(0, width + 0.001, max(0.5, width / 10)), minor=True)
+            axis.set_yticks(np.arange(0, height + 0.001, max(0.5, height / 10)), minor=True)
+            axis.grid(which="minor", color="#c7ccd4", alpha=0.45, linewidth=0.7)
         self._draw_geometry(axis, area["geometryM"], color, area["areaId"])
         if area.get("interactionGeometryM"): self._draw_geometry(axis, area["interactionGeometryM"], "#2a9d8f", "interaction zone", alpha=0.12, dashed=True)
         metric_items = list((area.get("metrics") or {}).items())[:5]
@@ -745,6 +804,10 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
 
     @staticmethod
     def display_result(final: dict[str, Any], evidence: list[dict[str, Any]], thinking: str, query_plan: dict[str, Any] | None = None, execution: dict[str, Any] | None = None, legacy: bool = False) -> None:
+        try:
+            from IPython.display import HTML, Markdown, display
+        except ImportError as error:
+            raise RuntimeError("display_result hanya tersedia di runtime notebook/IPython") from error
         audit = final.get("thinkingAudit") or {}; state = str(audit.get("status") or ("legacy" if legacy else "unknown"))
         if thinking:
             display(HTML("<details open><summary><b>Raw thinking</b> — " + html.escape(state) + "</summary><pre style='white-space:pre-wrap;max-height:34rem;overflow:auto;padding:12px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px'>" + html.escape(thinking) + "</pre></details>"))

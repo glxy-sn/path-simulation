@@ -130,6 +130,20 @@ def test_planner_payload_uses_thinking_and_structured_schema(tmp_path: Path) -> 
     assert payload["format"]["title"] == "QueryPlan"
 
 
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Area mana yang paling ramai?", "max"),
+        ("Area mana yang paling sepi atau jarang dilewati?", "min"),
+    ],
+)
+def test_planner_repairs_only_missing_ranking_direction(question: str, expected: str) -> None:
+    payload = quiet_flow_plan().model_dump()
+    payload["metrics"][0]["direction"] = "none"
+    parsed = LocalRAG._parse_query_plan(json.dumps(payload), question)
+    assert parsed.metrics[0].direction == expected
+
+
 def test_truncated_planner_is_retried_and_second_plan_is_used(tmp_path: Path) -> None:
     rag = service(tmp_path)
     rag.semantic_hints = lambda question: []
@@ -246,3 +260,17 @@ def test_saved_new_and_legacy_runs_are_loadable(tmp_path: Path) -> None:
     bundle = rag.load_saved_bundle(new_dir)
     assert bundle["legacy"] is False
     assert bundle["execution"]["selectedAreaId"] == "flow-05"
+
+
+def test_scaled_canvas_still_renders_floorplan_overlay(tmp_path: Path) -> None:
+    rag = service(tmp_path)
+    run_dir = tmp_path / "rendered-run"
+    run_dir.mkdir()
+    overlay = rag._render_overlay(run_dir, {
+        "selectedArea": rag.area_by_id["flow-05"],
+        "selectedAreaId": "flow-05",
+        "dataGrounding": "grounded",
+        "supportLevel": "supported",
+    })
+    assert overlay == run_dir / "floorplan_overlay.png"
+    assert overlay.is_file()
