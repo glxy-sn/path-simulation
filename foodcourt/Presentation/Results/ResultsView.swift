@@ -64,7 +64,7 @@ struct ResultsView: View {
             .map { obs in obs.sorted { $0.t < $1.t }.map { $0.point } }
             .filter { $0.count >= 2 }
     }
-    private var mainRoutes: [MainRoute] { Foodcourt_mainRoutes(trajectories) }
+    private var flowField: [FlowArrow] { Foodcourt_flowField(trajectories) }
 
     private func obsCount(_ rect: CGRect) -> Int {
         observations.reduce(0) { $0 + (rect.contains($1.point) ? 1 : 0) }
@@ -249,7 +249,7 @@ struct ResultsView: View {
                     .frame(height: min(400, max(300, 360 * scale)))
                     .frame(maxWidth: .infinity)
                 case .path:
-                    PathTab(paths: paths, trajectories: trajectories, routes: mainRoutes,
+                    PathTab(paths: paths, trajectories: trajectories, flow: flowField,
                             stops: stops, background: floorMapImage)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
@@ -414,9 +414,8 @@ private struct FileImage: View {
 // MARK: - Heatmap 2 opsi (jumlah orang vs lama singgah)
 
 /// Bangun blob heatmap dari observasi.
-/// dwell=false → intensitas = jumlah ORANG unik per sel (traffic).
-/// dwell=true  → intensitas = total pengamatan per sel (∝ waktu yang dihabiskan).
-func Foodcourt_heatBlobs(_ obs: [TrackObservation], dwell: Bool, top: Int = 40) -> [HeatBlob] {
+/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (∝ waktu); 2 = GABUNGAN (keduanya dinormalisasi).
+func Foodcourt_heatBlobs(_ obs: [TrackObservation], mode: Int, top: Int = 40) -> [HeatBlob] {
     guard !obs.isEmpty else { return [] }
     let GW = 56, GH = 42
     var count = [Double](repeating: 0, count: GW * GH)
@@ -426,9 +425,18 @@ func Foodcourt_heatBlobs(_ obs: [TrackObservation], dwell: Bool, top: Int = 40) 
         let cy = min(GH - 1, max(0, Int(o.point.y * Double(GH))))
         let idx = cy * GW + cx
         count[idx] += 1
-        if !dwell { tracks[idx].insert(o.trackId) }
+        tracks[idx].insert(o.trackId)
     }
-    var work = dwell ? count : tracks.map { Double($0.count) }
+    let traffic = tracks.map { Double($0.count) }
+    let dwell = count
+    func norm(_ a: [Double]) -> [Double] { let m = a.max() ?? 1; return m > 0 ? a.map { $0 / m } : a }
+
+    var work: [Double]
+    switch mode {
+    case 1:  work = dwell
+    case 2:  let nt = norm(traffic), nd = norm(dwell); work = zip(nt, nd).map { 0.5 * $0 + 0.5 * $1 }
+    default: work = traffic
+    }
     let maxv = work.max() ?? 1
     guard maxv > 0 else { return [] }
     var blobs: [HeatBlob] = []
@@ -450,21 +458,22 @@ private struct HeatmapTab: View {
     let observations: [TrackObservation]
     let fallbackBlobs: [HeatBlob]
     var background: NSImage? = nil
-    @State private var dwell = false
+    @State private var mode = 0   // 0 orang, 1 singgah, 2 gabungan
 
     var body: some View {
         let blobs = observations.isEmpty ? fallbackBlobs
-                                         : Foodcourt_heatBlobs(observations, dwell: dwell)
+                                         : Foodcourt_heatBlobs(observations, mode: mode)
         ZStack(alignment: .top) {
             HeatmapView(blobs: blobs, background: background)
                 .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
 
-            Picker("", selection: $dwell) {
-                Text("Jumlah Orang").tag(false)
-                Text("Lama Singgah").tag(true)
+            Picker("", selection: $mode) {
+                Text("Jumlah Orang").tag(0)
+                Text("Lama Singgah").tag(1)
+                Text("Gabungan").tag(2)
             }
             .pickerStyle(.segmented)
-            .frame(width: 260)
+            .frame(width: 340)
             .padding(6)
             .background(.ultraThinMaterial, in: Capsule())
             .padding(Space.s)
@@ -474,53 +483,44 @@ private struct HeatmapTab: View {
 
 // MARK: - Path summary (jalur utama + heatmap garis + stop point)
 
-struct MainRoute: Identifiable {
+struct FlowArrow: Identifiable {
     let id = UUID()
-    let points: [CGPoint]
-    let count: Int
-    let hue: Double
+    let at: CGPoint
+    let dx: Double
+    let dy: Double
+    let weight: Double
 }
 
-func Foodcourt_resample(_ pts: [CGPoint], _ n: Int) -> [CGPoint] {
-    guard pts.count >= 2, n >= 2 else { return pts }
-    var out: [CGPoint] = []
-    for i in 0..<n {
-        let f = Double(i) / Double(n - 1) * Double(pts.count - 1)
-        let lo = Int(f), hi = min(lo + 1, pts.count - 1)
-        let frac = f - Double(lo)
-        out.append(CGPoint(x: pts[lo].x * (1 - frac) + pts[hi].x * frac,
-                           y: pts[lo].y * (1 - frac) + pts[hi].y * frac))
-    }
-    return out
-}
-
-/// Kelompokkan lintasan berdasar sel awal→akhir (grid 4×3), ambil rute paling ramai,
-/// gambar rata-ratanya sebagai "jalur utama".
-func Foodcourt_mainRoutes(_ trajs: [[CGPoint]], top: Int = 4) -> [MainRoute] {
-    let valid = trajs.filter { $0.count >= 3 }
-    func cell(_ p: CGPoint) -> Int {
-        let cx = min(3, max(0, Int(p.x * 4))), cy = min(2, max(0, Int(p.y * 3)))
-        return cy * 4 + cx
-    }
-    var groups: [Int: [[CGPoint]]] = [:]
-    for t in valid {
-        guard let s = t.first, let e = t.last, cell(s) != cell(e) else { continue }
-        groups[cell(s) * 100 + cell(e), default: []].append(t)
-    }
-    let ranked = groups.values.sorted { $0.count > $1.count }.prefix(top)
-    let N = 24
-    return ranked.enumerated().compactMap { i, group -> MainRoute? in
-        var acc = Array(repeating: CGPoint.zero, count: N); var cnt = 0
-        for t in group {
-            let rs = Foodcourt_resample(t, N)
-            guard rs.count == N else { continue }
-            for k in 0..<N { acc[k].x += rs[k].x; acc[k].y += rs[k].y }
-            cnt += 1
+/// Medan aliran: rata-rata arah gerak orang di tiap sel grid.
+/// Menjawab "sepanjang waktu, rata-rata orang di area ini bergerak ke mana".
+func Foodcourt_flowField(_ trajs: [[CGPoint]], gx: Int = 14, gy: Int = 10) -> [FlowArrow] {
+    var sumX = [Double](repeating: 0, count: gx * gy)
+    var sumY = [Double](repeating: 0, count: gx * gy)
+    var cnt  = [Double](repeating: 0, count: gx * gy)
+    for t in trajs where t.count >= 2 {
+        for i in 1..<t.count {
+            let a = t[i - 1], b = t[i]
+            let dx = b.x - a.x, dy = b.y - a.y
+            let d = (dx * dx + dy * dy).squareRoot()
+            if d < 0.002 || d > 0.15 { continue }        // buang noise & lompatan ID
+            let cx = min(gx - 1, max(0, Int(a.x * Double(gx))))
+            let cy = min(gy - 1, max(0, Int(a.y * Double(gy))))
+            let idx = cy * gx + cx
+            sumX[idx] += dx; sumY[idx] += dy; cnt[idx] += 1
         }
-        guard cnt > 0 else { return nil }
-        let rep = acc.map { CGPoint(x: $0.x / Double(cnt), y: $0.y / Double(cnt)) }
-        return MainRoute(points: rep, count: group.count, hue: Double(i) * 0.16 + 0.55)
     }
+    let maxC = cnt.max() ?? 1
+    var arrows: [FlowArrow] = []
+    for idx in 0..<(gx * gy) where cnt[idx] >= 2 {
+        let vx = sumX[idx] / cnt[idx], vy = sumY[idx] / cnt[idx]
+        let mag = (vx * vx + vy * vy).squareRoot()
+        if mag < 0.004 { continue }                      // tak ada arah dominan (diam)
+        let cx = idx % gx, cy = idx / gx
+        arrows.append(FlowArrow(
+            at: CGPoint(x: (Double(cx) + 0.5) / Double(gx), y: (Double(cy) + 0.5) / Double(gy)),
+            dx: vx, dy: vy, weight: cnt[idx] / max(maxC, 1)))
+    }
+    return arrows
 }
 
 private struct StopPinsLayer: View {
@@ -544,7 +544,7 @@ private struct StopPinsLayer: View {
 
 private struct PathSummary: View {
     let trajectories: [[CGPoint]]
-    let routes: [MainRoute]
+    let flow: [FlowArrow]
     var background: NSImage? = nil
 
     var body: some View {
@@ -568,30 +568,28 @@ private struct PathSummary: View {
                             if !started { path.move(to: pa); started = true }
                             path.addLine(to: pb)
                         }
-                        ctx.stroke(path, with: .color(.cyan.opacity(0.16)),
+                        ctx.stroke(path, with: .color(.cyan.opacity(0.14)),
                                    style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                     }
                 }
                 .blur(radius: 2)
-                // Jalur utama: garis tebal berwarna + jumlah orang
+                // Medan aliran: panah arah rata-rata orang bergerak per area
                 Canvas { ctx, size in
-                    for r in routes {
-                        let color = Color(hue: r.hue, saturation: 0.85, brightness: 1.0)
-                        let pts = r.points.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
-                        var path = Path()
-                        if let f = pts.first { path.move(to: f); for p in pts.dropFirst() { path.addLine(to: p) } }
-                        ctx.stroke(path, with: .color(color),
-                                   style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-                        if let s = pts.first {
-                            ctx.fill(Path(ellipseIn: CGRect(x: s.x - 4, y: s.y - 4, width: 8, height: 8)),
-                                     with: .color(color.opacity(0.6)))
-                        }
-                        if let e = pts.last {
-                            ctx.fill(Path(ellipseIn: CGRect(x: e.x - 5, y: e.y - 5, width: 10, height: 10)),
-                                     with: .color(color))
-                            ctx.draw(Text("\(r.count)").font(.caption.bold()).foregroundColor(color),
-                                     at: CGPoint(x: e.x, y: e.y - 13))
-                        }
+                    for a in flow {
+                        let base = CGPoint(x: a.at.x * size.width, y: a.at.y * size.height)
+                        let ang = atan2(a.dy, a.dx)
+                        let len = (0.028 + 0.05 * a.weight) * size.width
+                        let tip = CGPoint(x: base.x + cos(ang) * len, y: base.y + sin(ang) * len)
+                        let col = Color(hue: 0.09, saturation: 0.85, brightness: 1.0)
+                            .opacity(0.35 + 0.55 * a.weight)
+                        var line = Path(); line.move(to: base); line.addLine(to: tip)
+                        ctx.stroke(line, with: .color(col),
+                                   style: StrokeStyle(lineWidth: 1.5 + 2.5 * a.weight, lineCap: .round))
+                        let ah = 4.0 + 4.0 * a.weight
+                        let l = CGPoint(x: tip.x - cos(ang - .pi / 6) * ah, y: tip.y - sin(ang - .pi / 6) * ah)
+                        let r = CGPoint(x: tip.x - cos(ang + .pi / 6) * ah, y: tip.y - sin(ang + .pi / 6) * ah)
+                        var head = Path(); head.move(to: tip); head.addLine(to: l); head.addLine(to: r); head.closeSubpath()
+                        ctx.fill(head, with: .color(col))
                     }
                 }
             }
@@ -602,7 +600,7 @@ private struct PathSummary: View {
 private struct PathTab: View {
     let paths: [PathTrace]
     let trajectories: [[CGPoint]]
-    let routes: [MainRoute]
+    let flow: [FlowArrow]
     let stops: [StopPoint]
     var background: NSImage? = nil
     @State private var mode = 0   // 0 = detail, 1 = ringkasan
@@ -613,7 +611,7 @@ private struct PathTab: View {
                 if mode == 0 {
                     PathContent(paths: paths, background: background)
                 } else {
-                    PathSummary(trajectories: trajectories, routes: routes, background: background)
+                    PathSummary(trajectories: trajectories, flow: flow, background: background)
                 }
             }
             .overlay(StopPinsLayer(stops: stops))
@@ -764,15 +762,19 @@ private struct ZonaEditor: View {
             }
             .buttonStyle(.plain)
 
-            if let sid = selected, let i = idx(sid) {
+            if let sid = selected, session.customZones.contains(where: { $0.id == sid }) {
                 HStack(spacing: 6) {
                     TextField("Nama zona", text: Binding(
-                        get: { session.customZones[i].name },
-                        set: { session.customZones[i].name = $0 }))
+                        get: { session.customZones.first(where: { $0.id == sid })?.name ?? "" },
+                        set: { newVal in
+                            if let i = session.customZones.firstIndex(where: { $0.id == sid }) {
+                                session.customZones[i].name = newVal
+                            }
+                        }))
                         .textFieldStyle(.roundedBorder).frame(width: 130)
                     Button(role: .destructive) {
-                        session.customZones.removeAll { $0.id == sid }
                         selected = nil
+                        session.customZones.removeAll { $0.id == sid }
                     } label: { Image(systemName: "trash").foregroundStyle(.red) }
                     .buttonStyle(.borderless)
                 }
