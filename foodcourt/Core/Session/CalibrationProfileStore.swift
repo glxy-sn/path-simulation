@@ -45,7 +45,8 @@ enum CalibrationProfileStore {
             ),
             homographyFloorToWorld: floorToWorld,
             homographyWorldToFloor: worldToFloor,
-            cameras: profiles
+            cameras: profiles,
+            tables: session.tableAnnotations
         )
     }
 
@@ -108,6 +109,7 @@ enum CalibrationProfileStore {
         session.floorPlanURL = profile.floorplan.usesCanvas ? nil : floorPlanURL
         session.floorPlanName = profile.floorplan.usesCanvas ? nil : profile.floorplan.sourceName
         session.floorPlanPixelSize = profile.floorplan.usesCanvas ? nil : profile.floorplan.pixelSize
+        session.tableAnnotations = profile.tables ?? []
         session.cameras = stagedCameras
         return stagedCameras.filter(\.isCalibrated).count
     }

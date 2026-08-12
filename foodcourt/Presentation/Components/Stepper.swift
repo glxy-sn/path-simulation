@@ -10,7 +10,20 @@ import SwiftUI
 struct HorizontalStepper: View {
     let steps: [FlowStep]
     let current: FlowStep
+    let isLocked: Bool
     let onSelect: (FlowStep) -> Void
+
+    init(
+        steps: [FlowStep],
+        current: FlowStep,
+        isLocked: Bool = false,
+        onSelect: @escaping (FlowStep) -> Void
+    ) {
+        self.steps = steps
+        self.current = current
+        self.isLocked = isLocked
+        self.onSelect = onSelect
+    }
 
     var body: some View {
         HStack(spacing: Space.s) {
@@ -29,6 +42,9 @@ struct HorizontalStepper: View {
                 }
             }
         }
+        .opacity(isLocked ? 0.62 : 1)
+        .disabled(isLocked)
+        .accessibilityHint(isLocked ? "Navigasi dikunci sampai analisis selesai." : "")
     }
 
     private func state(for step: FlowStep) -> StepNode.State {

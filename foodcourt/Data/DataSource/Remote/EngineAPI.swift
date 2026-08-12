@@ -10,6 +10,13 @@ import Foundation
 // MARK: Request DTO
 
 struct PointDTO: Codable { let x: Double; let y: Double }
+struct NormalizedRectDTO: Codable { let x: Double; let y: Double; let width: Double; let height: Double }
+struct TableAnnotationDTO: Codable {
+    let id: String
+    let label: String
+    let rectNormalized: NormalizedRectDTO
+    let verified: Bool
+}
 
 struct VenueDTO: Codable {
     let widthM: Double
@@ -17,6 +24,7 @@ struct VenueDTO: Codable {
     let name: String
     let type: String
     let floorPlanPath: String?
+    let tables: [TableAnnotationDTO]?
 }
 
 struct CalibrationDTO: Codable {

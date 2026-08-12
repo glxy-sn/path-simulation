@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import foodcourt
 
 final class CalibrationSolverTests: XCTestCase {
@@ -40,6 +41,45 @@ final class CalibrationSolverTests: XCTestCase {
         XCTAssertNil(decoded.observations)
         XCTAssertNil(decoded.customZones)
         XCTAssertNil(decoded.identityQuality)
+        XCTAssertNil(decoded.jobId)
+        XCTAssertNil(decoded.tables)
+    }
+
+    @MainActor
+    func testVenueRequestCarriesRectangleTableAnnotation() throws {
+        let session = AnalysisSession()
+        session.venueName = "Venue"
+        session.widthM = "10"
+        session.heightM = "8"
+        session.tableAnnotations = [
+            TableAnnotation(label: "Meja 1", rectNormalized: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.25))
+        ]
+        let venue = EngineRequestBuilder.venue(from: session)
+        XCTAssertEqual(venue.tables?.count, 1)
+        XCTAssertEqual(venue.tables?.first?.label, "Meja 1")
+        XCTAssertEqual(try XCTUnwrap(venue.tables?.first?.rectNormalized.width), 0.3, accuracy: 1e-10)
+    }
+
+    func testLegacyCalibrationProfileWithoutTablesDecodes() throws {
+        let floor = FloorplanProfile(
+            sourceName: "Canvas", pixelSize: PixelSize(width: 1000, height: 1000),
+            usesCanvas: true, assetFileName: nil
+        )
+        let profile = CalibrationProfile(
+            schemaVersion: 2,
+            profileID: UUID(), displayName: "Legacy", savedAt: .now, venueName: "Venue",
+            worldBoundsM: PixelSize(width: 10, height: 7.5), floorplan: floor,
+            homographyFloorToWorld: .identity, homographyWorldToFloor: .identity,
+            cameras: [], tables: nil
+        )
+        let encoded = try JSONEncoder().encode(profile)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "tables")
+        let decoded = try JSONDecoder().decode(
+            CalibrationProfile.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        XCTAssertNil(decoded.tables)
     }
 
     @MainActor

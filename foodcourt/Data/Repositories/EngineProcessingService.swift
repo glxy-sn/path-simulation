@@ -131,6 +131,7 @@ struct EngineProcessingService: ProcessingService {
             a.count >= 4 ? TrackObservation(trackId: Int(a[0]), point: CGPoint(x: a[1], y: a[2]), t: a[3]) : nil
         }
         return AnalysisResult(
+            jobId: dto.jobId,
             summary: summary, zones: zones, stops: stops, occupancy: occ,
             heatmapURL: artifactURL(dto.artifacts.heatmapImage),
             pathVideoURL: artifactURL(dto.artifacts.pathVideo),

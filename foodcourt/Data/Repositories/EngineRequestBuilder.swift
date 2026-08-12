@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 @MainActor
 enum EngineRequestBuilder {
@@ -8,7 +9,20 @@ enum EngineRequestBuilder {
             heightM: session.venueHeightM,
             name: session.venueName,
             type: session.venueType.rawValue,
-            floorPlanPath: session.usesScaledCanvas ? nil : session.floorPlanURL?.path
+            floorPlanPath: session.usesScaledCanvas ? nil : session.floorPlanURL?.path,
+            tables: session.tableAnnotations.map {
+                TableAnnotationDTO(
+                    id: $0.id.uuidString,
+                    label: $0.label,
+                    rectNormalized: NormalizedRectDTO(
+                        x: $0.rectNormalized.minX,
+                        y: $0.rectNormalized.minY,
+                        width: $0.rectNormalized.width,
+                        height: $0.rectNormalized.height
+                    ),
+                    verified: $0.verified
+                )
+            }
         )
     }
 

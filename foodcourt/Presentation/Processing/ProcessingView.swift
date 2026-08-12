@@ -35,7 +35,7 @@ struct ProcessingView: View {
 
             Spacer(minLength: 0)
 
-            WizardFooter(onBack: { router.back() }) {
+            WizardFooter(onBack: done ? { router.back() } : nil) {
                 PrimaryButton(title: "Lihat Hasil", systemImage: "arrow.right", enabled: done) {
                     router.next()
                 }
@@ -65,6 +65,7 @@ struct ProcessingView: View {
                 case .progress(let stage, let frac):
                     applyStage(stage, frac)
                 case .finished(let result):
+                    session.jobId = result.jobId
                     session.result = result
                     saveToHistory(result)
                     progress = 1

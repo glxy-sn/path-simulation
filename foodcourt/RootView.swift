@@ -11,10 +11,6 @@ struct RootView: View {
     @State private var router = AppRouter()
     @State private var session = AnalysisSession()
     @State private var sidecar = Sidecar()
-    // Percakapan hidup selama aplikasi terbuka. Waktu model ini masih @State di
-    // dalam ChatView, pindah tab menghancurkannya — tanya-jawab yang baru saja
-    // dibaca hilang tanpa peringatan.
-    @State private var chat = ChatViewModel()
     private let referenceWidth: CGFloat = 1440
 
     var body: some View {
@@ -36,11 +32,10 @@ struct RootView: View {
             .environment(router)
             .environment(session)
             .environment(sidecar)
-            .environment(chat)
         }
         .frame(minWidth: 1060, minHeight: 700)
         .background(WindowBackground())
-        .task { await sidecar.checkHealth() }
+        .task { await sidecar.ensureRunning() }
     }
 
     @ViewBuilder
@@ -56,12 +51,6 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(WindowBackground())
             }
-
-            if router.section == .chat {
-                ChatView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(WindowBackground())
-            }
         }
     }
 }
@@ -69,12 +58,17 @@ struct RootView: View {
 /// Wizard: stepper horizontal di atas, layar aktif di bawah.
 private struct WizardContainer: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AnalysisSession.self) private var session
 
     var body: some View {
         VStack(spacing: 0) {
             HorizontalStepper(steps: FlowStep.allCases,
                               current: router.step,
-                              onSelect: { router.go(to: $0) })
+                              isLocked: router.step == .processing && session.result == nil,
+                              onSelect: { step in
+                                  guard !(router.step == .processing && session.result == nil) else { return }
+                                  router.go(to: step)
+                              })
                 .spad(Space.xl, [.horizontal])
                 .padding(.vertical, Space.m)
                 .background(.bar)
