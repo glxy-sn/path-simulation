@@ -16,11 +16,13 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from config import Config
-from models import JobRequest
+from models import JobRequest, CalibrationPreviewRequest, CalibrationReprojectRequest
 from jobs import JobManager
+from pipeline.preview import CalibrationPreviewManager
 
 app = FastAPI(title="Foodcourt Engine", version="0.1.0")
 manager = JobManager()
+preview_manager = CalibrationPreviewManager()
 
 
 @app.get("/health")
@@ -74,6 +76,28 @@ def video_info(path: str = Query(...)):
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
     return {"durationSec": (frames / fps if fps else 0), "width": w, "height": h, "fps": fps}
+
+
+@app.post("/calibration-preview/sample")
+async def calibration_preview_sample(req: CalibrationPreviewRequest):
+    """Run one short YOLO/OSNet burst and cache descriptors in memory."""
+    try:
+        return preview_manager.sample(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/calibration-preview/reproject")
+async def calibration_preview_reproject(req: CalibrationReprojectRequest):
+    """Re-use cached detections/descriptors after homography edits."""
+    try:
+        return preview_manager.reproject(req)
+    except KeyError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/thumbnail")

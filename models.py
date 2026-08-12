@@ -23,13 +23,30 @@ class VenueInput(BaseModel):
     floorPlanPath: str | None = None      # path gambar denah (opsional) untuk background
 
 
+class CalibrationInput(BaseModel):
+    """Kalibrasi authoritative dari app dalam koordinat normalized-image -> world."""
+
+    homographyNormToWorld: list[list[float]]
+    inlierMask: list[bool] = Field(default_factory=list)
+    medianErrorM: Optional[float] = None
+    p95ErrorM: Optional[float] = None
+    inliers: Optional[int] = None
+    points: Optional[int] = None
+
+
 class CameraInput(BaseModel):
+    cameraId: Optional[str] = None
     label: str
     videoPath: str
+    calibrationFingerprint: Optional[str] = None
+    frameWidth: Optional[int] = None
+    frameHeight: Optional[int] = None
     imagePoints: list[Point] = Field(..., min_length=4, max_length=8)
     planePoints: list[Point] = Field(..., min_length=4, max_length=8)
     startSec: float = 0.0                 # mulai proses dari detik ke- (trim)
     durationSec: Optional[float] = None   # berapa lama diproses; None = pakai default engine
+    timeOffsetSec: float = 0.0            # source time = global time + offset kamera
+    calibration: Optional[CalibrationInput] = None
 
 
 class JobOptions(BaseModel):
@@ -87,7 +104,8 @@ class Artifacts(BaseModel):
     heatmapImage: Optional[str] = None
     pathVideo: Optional[str] = None
     combinedVideo: Optional[str] = None
-    overlayVideos: list[OverlayVideo] = []
+    overlayVideos: list[OverlayVideo] = Field(default_factory=list)
+    fusionDiagnostics: Optional[str] = None
 
 
 class HeatBlobOut(BaseModel):
@@ -108,6 +126,20 @@ class PathTraceOut(BaseModel):
     hue: float
 
 
+class IdentityQuality(BaseModel):
+    globalIds: int = 0
+    localStitches: int = 0
+    overlapMerges: int = 0
+    handoverMerges: int = 0
+    unmatchedTracklets: int = 0
+    filteredTracklets: int = 0
+    highConfidence: int = 0
+    mediumConfidence: int = 0
+    lowConfidence: int = 0
+    singleCamera: int = 0
+    calibrationWarnings: list[str] = Field(default_factory=list)
+
+
 class JobResult(BaseModel):
     jobId: str
     venue: VenueInput
@@ -115,11 +147,12 @@ class JobResult(BaseModel):
     zones: list[Zone]
     stopPoints: list[StopPointOut]
     occupancy: list[OccupancyBin]
-    blobs: list[HeatBlobOut] = []
-    paths: list[PathTraceOut] = []
-    observations: list[list[float]] = []
+    blobs: list[HeatBlobOut] = Field(default_factory=list)
+    paths: list[PathTraceOut] = Field(default_factory=list)
+    observations: list[list[float]] = Field(default_factory=list)
     artifacts: Artifacts
     trajectories: Optional[str] = None
+    identityQuality: Optional[IdentityQuality] = None
 
 
 class ProgressResponse(BaseModel):
@@ -128,3 +161,63 @@ class ProgressResponse(BaseModel):
     stage: str                      # detection | tracking | fusion | analytics | done
     fraction: float                 # 0.0–1.0 (progress keseluruhan)
     error: Optional[str] = None
+
+
+# ---------- Calibration preview ----------
+
+class CalibrationPreviewRequest(BaseModel):
+    venue: VenueInput
+    cameras: list[CameraInput] = Field(..., min_length=1, max_length=2)
+    globalTimeSec: float
+
+
+class CalibrationReprojectRequest(BaseModel):
+    token: str
+    venue: VenueInput
+    cameras: list[CameraInput] = Field(..., min_length=1, max_length=2)
+
+
+class PreviewMarker(BaseModel):
+    cameraIndex: int
+    localId: int
+    identityLabel: str
+    globalId: Optional[int] = None
+    bboxNorm: list[float]
+    confidence: float
+    worldX: float
+    worldY: float
+    identityScore: Optional[float] = None
+    identityLevel: str
+
+
+class PreviewCameraOut(BaseModel):
+    cameraIndex: int
+    cameraId: str
+    label: str
+    videoPath: str
+    calibrationFingerprint: str
+    sourceTimeSec: float
+    frameWidth: int
+    frameHeight: int
+    frameJpegBase64: str
+    markers: list[PreviewMarker] = Field(default_factory=list)
+
+
+class PreviewMatchOut(BaseModel):
+    cameraALocalId: int
+    cameraBLocalId: int
+    similarity: Optional[float] = None
+    distanceM: float
+    uncertaintyGateM: float
+    score: Optional[float] = None
+    decision: str
+    reason: str
+
+
+class CalibrationPreviewResponse(BaseModel):
+    token: str
+    globalTimeSec: float
+    cameras: list[PreviewCameraOut]
+    matches: list[PreviewMatchOut] = Field(default_factory=list)
+    calibrationWarnings: list[str] = Field(default_factory=list)
+    inferenceWarnings: list[str] = Field(default_factory=list)

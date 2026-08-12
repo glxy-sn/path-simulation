@@ -7,8 +7,9 @@ uvicorn[standard]>=0.29
 pydantic>=2.6
 
 numpy>=1.26
-opencv-python>=4.9
+opencv-python>=4.9,<5
 scikit-learn>=1.4
+scipy>=1.11
 
 # Deteksi + tracking (versi boxmot DIPIN — 22.x wheel-nya kehilangan boxmot/data)
 ultralytics>=8.2
@@ -18,5 +19,5 @@ torchvision>=0.17
 lap>=0.4
 
 # Opsional: ekspor trajektori ke parquet
-pandas>=2.2
+pandas>=2.2,<3
 pyarrow>=15
