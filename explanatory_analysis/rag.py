@@ -804,11 +804,12 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
             axis.set_xticks(np.arange(0, width + 0.001, max(0.5, width / 10)), minor=True)
             axis.set_yticks(np.arange(0, height + 0.001, max(0.5, height / 10)), minor=True)
             axis.grid(which="minor", color="#c7ccd4", alpha=0.45, linewidth=0.7)
-        self._draw_geometry(axis, area["geometryM"], color, area["areaId"])
+        area_label = str(area.get("label") or "Area terpilih")
+        self._draw_geometry(axis, area["geometryM"], color, area_label)
         if area.get("interactionGeometryM"): self._draw_geometry(axis, area["interactionGeometryM"], "#2a9d8f", "interaction zone", alpha=0.12, dashed=True)
         metric_items = list((area.get("metrics") or {}).items())[:5]
         metric_text = "\n".join(f"{key}: {value:.3g}" if isinstance(value, (float, int)) else f"{key}: {value}" for key, value in metric_items)
-        axis.text(1.02, 0.98, f"{area['areaId']}\nconfidence: {area.get('confidence', 0):.2f}\n{metric_text}", transform=axis.transAxes, va="top", fontsize=9, bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.92})
+        axis.text(1.02, 0.98, f"{area_label}\nconfidence: {area.get('confidence', 0):.2f}\n{metric_text}", transform=axis.transAxes, va="top", fontsize=9, bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.92})
         axis.set(xlim=(0, width), ylim=(height, 0), aspect="equal", xlabel="x (m)", ylabel="y (m)", title=f"Area terpilih — {final['dataGrounding']}")
         figure.subplots_adjust(right=0.78); target = run_dir / "floorplan_overlay.png"; figure.savefig(target, dpi=180, bbox_inches="tight"); plt.close(figure); return target
 
