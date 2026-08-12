@@ -444,8 +444,11 @@ struct HistoryChatInspector: View {
                     .lineLimit(2)
                 Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, Space.m)
         .padding(.vertical, 12)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: Radius.m))
