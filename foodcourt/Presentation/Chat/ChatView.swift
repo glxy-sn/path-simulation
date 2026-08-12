@@ -336,15 +336,6 @@ struct HistoryChatInspector: View {
                 Text(viewModel.active?.title ?? "Tanya Data")
                     .font(.headline)
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 7, height: 7)
-                    Text(statusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
             }
             Spacer()
 
@@ -372,21 +363,6 @@ struct HistoryChatInspector: View {
         .buttonStyle(.plain)
         .help(help)
     }
-
-    private var statusText: String {
-        guard let status = viewModel.status else { return "Memeriksa pipeline…" }
-        switch status.state {
-        case "ready" where !status.modelReady:
-            return "Model belum siap: \(status.missingModels.joined(separator: ", "))"
-        case "ready": return "Qwen3 14B · data siap"
-        case "building": return "Membangun analisis \(Int(status.progress * 100))%"
-        case "stale": return "Memperbarui konteks…"
-        case "error": return status.error ?? "Pipeline gagal"
-        default: return "Menunggu analisis mendalam…"
-        }
-    }
-
-    private var statusColor: Color { viewModel.isReady ? .green : (viewModel.status?.state == "error" ? .red : .secondary) }
 
     private var sessionList: some View {
         VStack(spacing: 0) {
@@ -458,59 +434,33 @@ struct HistoryChatInspector: View {
     }
 
     private func sessionRow(_ session: ChatSessionSummaryDTO) -> some View {
-        HStack(alignment: .top, spacing: Space.s) {
-            Button {
-                Task { await viewModel.open(session) }
-            } label: {
-                HStack(alignment: .top, spacing: Space.s) {
-                Image(systemName: "bubble.left.fill")
-                    .font(.callout)
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Radius.s))
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(session.title)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    HStack(spacing: 5) {
-                        Text("\(session.messageCount) pesan")
-                        Text("•")
-                        Text(relativeDate(session.updatedAt))
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Text("Konteks revisi \(session.contextRevision)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                    Spacer(minLength: 4)
-                }
+        Button {
+            Task { await viewModel.open(session) }
+        } label: {
+            HStack {
+                Text(session.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Spacer()
             }
-            .buttonStyle(.plain)
-
-            Menu {
-                Button("Ubah Nama", systemImage: "pencil") {
-                    renameCandidate = session
-                    renameText = session.title
-                }
-                Divider()
-                Button("Hapus", systemImage: "trash", role: .destructive) {
-                    deleteCandidate = session
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 28, height: 28)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
         }
-        .padding(Space.s)
+        .buttonStyle(.plain)
+        .padding(.horizontal, Space.m)
+        .padding(.vertical, 12)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: Radius.m))
         .overlay {
             RoundedRectangle(cornerRadius: Radius.m)
                 .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+        }
+        .contextMenu {
+            Button("Ubah Nama", systemImage: "pencil") {
+                renameCandidate = session
+                renameText = session.title
+            }
+            Button("Hapus", systemImage: "trash", role: .destructive) {
+                deleteCandidate = session
+            }
         }
     }
 
@@ -529,9 +479,7 @@ struct HistoryChatInspector: View {
                                 ImageBubble(media: media, url: mediaURL(media.thumbnailURL)) {
                                     onOpenMedia(media)
                                 }
-                            }
-                            if !exchange.limitations.isEmpty {
-                                LimitationBubble(items: exchange.limitations)
+                                .padding(.leading, 28 + Space.s)
                             }
                         }
                         if let pendingQuestion = viewModel.pendingQuestion {
@@ -605,13 +553,6 @@ struct HistoryChatInspector: View {
         URL(string: path, relativeTo: viewModel.baseURL)?.absoluteURL
     }
 
-    private func relativeDate(_ value: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-        guard let date else { return "Baru diperbarui" }
-        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
-    }
 }
 
 private struct UserBubble: View {
@@ -638,29 +579,26 @@ private struct AssistantBubble: View {
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 7) {
-                Text(exchange.text)
+                Text(displayText)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 6) {
-                    if let area = exchange.selectedAreaId {
-                        Text(area)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    if let support = exchange.supportLevel {
-                        Text(support)
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.10), in: Capsule())
-                    }
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var displayText: String {
+        guard let areaId = exchange.selectedAreaId,
+              let label = exchange.selectedAreaLabel,
+              !label.isEmpty else { return exchange.text }
+        return exchange.text
+            .replacingOccurrences(of: "Meja dengan ID \(areaId)", with: label, options: .caseInsensitive)
+            .replacingOccurrences(of: "Area dengan ID \(areaId)", with: label, options: .caseInsensitive)
+            .replacingOccurrences(of: "ID \(areaId)", with: label, options: .caseInsensitive)
+            .replacingOccurrences(of: areaId, with: label, options: .caseInsensitive)
     }
 }
 
@@ -682,35 +620,16 @@ private struct ImageBubble: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(media.caption).font(.callout.weight(.semibold))
-                        if let area = media.selectedAreaId { Text(area).font(.caption.monospaced()).foregroundStyle(.secondary) }
                         if let metric = media.metricSummary?.sorted(by: { $0.key < $1.key }).first {
                             Text("\(metric.key): \(metric.value)").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
-                    if let support = media.supportLevel {
-                        Text(support).font(.caption2).padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-                    }
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
             }
             .padding(8).background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: Radius.m))
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct LimitationBubble: View {
-    let items: [String]
-    @State private var expanded = false
-    var body: some View {
-        DisclosureGroup("Keterbatasan data", isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(items, id: \.self) { Text("• \($0)").font(.caption).foregroundStyle(.secondary) }
-            }.padding(.top, 4)
-        }
-        .font(.caption.weight(.medium)).padding(8)
-        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: Radius.s))
     }
 }
