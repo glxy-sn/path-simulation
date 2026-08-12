@@ -149,6 +149,7 @@ class JobResult(BaseModel):
     occupancy: list[OccupancyBin]
     blobs: list[HeatBlobOut] = Field(default_factory=list)
     paths: list[PathTraceOut] = Field(default_factory=list)
+    observations: list[list[float]] = Field(default_factory=list)
     artifacts: Artifacts
     trajectories: Optional[str] = None
     identityQuality: Optional[IdentityQuality] = None

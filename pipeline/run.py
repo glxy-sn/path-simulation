@@ -215,6 +215,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
         occupancy=analytics["occupancy"],
         blobs=analytics["blobs"],
         paths=analytics["paths"],
+        observations=analytics["observations"],
         artifacts=artifacts,
         trajectories=trajectories,
         identityQuality=quality,
