@@ -40,9 +40,17 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch router.section {
-        case .newAnalysis: WizardContainer()
-        case .history:     HistoryView()
+        ZStack {
+            // Wizard tetap hidup walau buka Riwayat -> analisis yang berjalan tidak restart.
+            WizardContainer()
+                .opacity(router.section == .newAnalysis ? 1 : 0)
+                .allowsHitTesting(router.section == .newAnalysis)
+
+            if router.section == .history {
+                HistoryView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(WindowBackground())
+            }
         }
     }
 }

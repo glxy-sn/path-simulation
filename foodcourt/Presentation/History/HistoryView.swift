@@ -8,6 +8,11 @@
 import SwiftUI
 import SwiftData
 
+// ============================================================
+//  Layar Riwayat — daftar analisis yang tersimpan (SwiftData).
+//  Taruh di: Foodcourt/Sources/Presentation/History/HistoryView.swift
+// ============================================================
+
 struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
@@ -16,47 +21,54 @@ struct HistoryView: View {
 
     // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
     @State private var viewerSession = AnalysisSession()
-    @State private var showViewer = false
+    @State private var path: [String] = []
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.l * scale) {
-                HStack(alignment: .top) {
-                    SectionHeader(
-                        title: "Riwayat Analisis",
-                        subtitle: "\(records.count) analisis tersimpan."
-                    )
-                    PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
-                        router.startNew()
+        NavigationStack(path: $path) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.l * scale) {
+                    HStack(alignment: .top) {
+                        SectionHeader(
+                            title: "Riwayat Analisis",
+                            subtitle: "\(records.count) analisis tersimpan."
+                        )
+                        PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
+                            router.startNew()
+                        }
                     }
-                }
 
-                if records.isEmpty {
-                    emptyState
-                } else {
-                    VStack(spacing: Space.m) {
-                        ForEach(records) { rec in
-                            HistoryRow(record: rec, onDelete: { remove(rec) })
-                                .contentShape(Rectangle())
-                                .onTapGesture { open(rec) }
+                    if records.isEmpty {
+                        emptyState
+                    } else {
+                        VStack(spacing: Space.m) {
+                            ForEach(records) { rec in
+                                HistoryRow(record: rec, onDelete: { remove(rec) })
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { open(rec) }
+                            }
                         }
                     }
                 }
+                .spad(Space.xl, [.horizontal, .top])
+                .padding(.bottom, Space.xl)
             }
-            .spad(Space.xl, [.horizontal, .top])
-            .padding(.bottom, Space.xl)
-        }
-        .sheet(isPresented: $showViewer) {
-            ResultsView(isHistory: true)
-                .environment(viewerSession)
-                .environment(router)
-                .frame(minWidth: 960, minHeight: 680)
+            .navigationDestination(for: String.self) { _ in
+                ResultsView(isHistory: true)
+                    .environment(viewerSession)
+                    .environment(router)
+                    .navigationTitle("Detail Riwayat")
+            }
         }
     }
 
     private func open(_ rec: AnalysisRecord) {
-        guard let loaded = HistoryStore.load(folder: rec.folder) else { return }
-        let s = viewerSession
+        guard load(into: viewerSession, folder: rec.folder) else { return }
+        path.append(rec.folder)
+    }
+
+    @discardableResult
+    private func load(into s: AnalysisSession, folder: String) -> Bool {
+        guard let loaded = HistoryStore.load(folder: folder) else { return false }
         s.reset()
         s.venueName = loaded.venueName
         if let vt = VenueType(rawValue: loaded.venueType) { s.venueType = vt }
@@ -69,8 +81,8 @@ struct HistoryView: View {
         s.trimStartSec = 0
         s.trimEndSec = loaded.durationSec
         s.overrideCameraCount = loaded.cameraCount
-        s.historyFolder = rec.folder      // edit zona di viewer ikut tersimpan
-        showViewer = true
+        s.historyFolder = folder      // edit zona di viewer ikut tersimpan
+        return true
     }
 
     private func remove(_ rec: AnalysisRecord) {
