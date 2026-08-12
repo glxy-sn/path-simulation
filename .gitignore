@@ -6,6 +6,9 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+!notebooks/
+!notebooks/*.ipynb
+notebooks/output/
 
 # Models
 *.pt
@@ -19,6 +22,7 @@ __pycache__/
 # Environment
 .env
 .venv/
+.venv-analysis/
 venv/
 
 # macOS

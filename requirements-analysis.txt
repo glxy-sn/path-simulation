@@ -1,0 +1,19 @@
+# Dependencies khusus notebook explanatory analysis.
+# Pipeline inference tetap memakai requirements.txt.
+pandas>=2.2,<4
+pyarrow>=15
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+scikit-image>=0.23
+shapely>=2.0
+matplotlib>=3.8
+seaborn>=0.13
+pillow>=10
+pydantic>=2.6
+ipywidgets>=8.1
+ipympl>=0.9
+jupyterlab>=4
+nbconvert>=7
+ipykernel>=6.29
+pytest>=8
