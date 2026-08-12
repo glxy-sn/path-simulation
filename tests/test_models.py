@@ -18,6 +18,7 @@ class ModelCompatibilityTests(unittest.TestCase):
         )
         self.assertEqual(result.blobs, [])
         self.assertEqual(result.paths, [])
+        self.assertEqual(result.observations, [])
         self.assertIsNone(result.identityQuality)
         self.assertIsNone(result.artifacts.fusionDiagnostics)
 
