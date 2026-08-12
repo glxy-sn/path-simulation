@@ -22,57 +22,57 @@ struct HistoryView: View {
 
     // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
     @State private var viewerSession = AnalysisSession()
-    @State private var path: [HistoryRoute] = []
+    @State private var selectedFolder: String?
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.l * scale) {
-                    HStack(alignment: .top) {
-                        SectionHeader(
-                            title: "Riwayat Analisis",
-                            subtitle: "\(records.count) analisis tersimpan."
-                        )
-                        PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
-                            router.startNew()
-                        }
-                    }
+        Group {
+            if let selectedFolder {
+                HistoryDetailView(
+                    jobId: records.first(where: { $0.folder == selectedFolder })?.jobId ?? viewerSession.jobId,
+                    viewerSession: viewerSession,
+                    http: sidecar.http,
+                    onClose: { self.selectedFolder = nil }
+                )
+                .environment(router)
+            } else {
+                historyList
+            }
+        }
+    }
 
-                    if records.isEmpty {
-                        emptyState
-                    } else {
-                        VStack(spacing: Space.m) {
-                            ForEach(records) { rec in
-                                HistoryRow(record: rec, onDelete: { remove(rec) })
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { open(rec) }
-                            }
+    private var historyList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.l * scale) {
+                HStack(alignment: .top) {
+                    SectionHeader(
+                        title: "Riwayat Analisis",
+                        subtitle: "\(records.count) analisis tersimpan."
+                    )
+                    PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
+                        router.startNew()
+                    }
+                }
+
+                if records.isEmpty {
+                    emptyState
+                } else {
+                    VStack(spacing: Space.m) {
+                        ForEach(records) { rec in
+                            HistoryRow(record: rec, onDelete: { remove(rec) })
+                                .contentShape(Rectangle())
+                                .onTapGesture { open(rec) }
                         }
                     }
                 }
-                .spad(Space.xl, [.horizontal, .top])
-                .padding(.bottom, Space.xl)
             }
-            .navigationDestination(for: HistoryRoute.self) { route in
-                switch route {
-                case .detail(let folder):
-                    HistoryDetailView(
-                        jobId: records.first(where: { $0.folder == folder })?.jobId ?? viewerSession.jobId,
-                        viewerSession: viewerSession,
-                        http: sidecar.http,
-                        onOpenMedia: { path.append(.artifact($0)) }
-                    )
-                    .environment(router)
-                case .artifact(let media):
-                    ArtifactDetailView(media: media, baseURL: sidecar.baseURL)
-                }
-            }
+            .spad(Space.xl, [.horizontal, .top])
+            .padding(.bottom, Space.xl)
         }
     }
 
     private func open(_ rec: AnalysisRecord) {
         guard load(into: viewerSession, folder: rec.folder) else { return }
-        path.append(.detail(rec.folder))
+        selectedFolder = rec.folder
     }
 
     @discardableResult
@@ -116,62 +116,105 @@ struct HistoryView: View {
     }
 }
 
-private enum HistoryRoute: Hashable {
-    case detail(String)
-    case artifact(ChatMediaDTO)
-}
-
 private struct HistoryDetailView: View {
     let jobId: String?
     let viewerSession: AnalysisSession
     let http: HTTPClient
-    let onOpenMedia: (ChatMediaDTO) -> Void
+    let onClose: () -> Void
 
-    @SceneStorage("history.showsTanyaDataInspector") private var showsInspector = true
-    @State private var restoreInspectorAfterArtifact = false
+    @SceneStorage("history.showsTanyaDataPanel") private var showsChat = true
+    @State private var selectedMedia: ChatMediaDTO?
+    @State private var restoreChatAfterArtifact = false
 
     var body: some View {
-        ResultsView(isHistory: true)
-            .environment(viewerSession)
-            .navigationTitle("Detail Riwayat")
-            .toolbar {
-                ToolbarItem {
-                    Button {
-                        showsInspector.toggle()
-                    } label: {
-                        Label("Tanya Data", systemImage: "sidebar.right")
-                    }
-                    .help(showsInspector ? "Tutup Tanya Data" : "Buka Tanya Data")
-                }
+        Group {
+            if let selectedMedia {
+                ArtifactDetailView(
+                    media: selectedMedia,
+                    baseURL: http.baseURL,
+                    onBack: closeArtifact
+                )
+            } else {
+                detailLayout
             }
-            .inspector(isPresented: $showsInspector) {
+        }
+        .environment(viewerSession)
+    }
+
+    private var detailLayout: some View {
+        HStack(spacing: 0) {
+            ResultsView(
+                isHistory: true,
+                onClose: onClose,
+                onOpenChat: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = true } },
+                isChatVisible: showsChat
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if showsChat {
+                Divider()
                 if let jobId, !jobId.isEmpty {
                     HistoryChatInspector(
                         jobId: jobId,
                         http: http,
                         zones: viewerSession.customZones,
                         onOpenMedia: { media in
-                            restoreInspectorAfterArtifact = showsInspector
-                            showsInspector = false
-                            onOpenMedia(media)
-                        }
+                            restoreChatAfterArtifact = showsChat
+                            selectedMedia = media
+                        },
+                        onClose: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = false } }
                     )
-                    .inspectorColumnWidth(min: 360, ideal: 420, max: 520)
+                    .frame(width: 420)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 } else {
-                    ContentUnavailableView(
-                        "Tanya Data tidak tersedia",
-                        systemImage: "bubble.left.and.exclamationmark.bubble.right",
-                        description: Text("Riwayat lama ini tidak memiliki jobId yang dapat dipetakan secara aman ke backend.")
+                    LegacyChatUnavailable(
+                        onClose: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = false } }
                     )
-                    .frame(minWidth: 360, idealWidth: 420)
+                    .frame(width: 420)
                 }
             }
-            .onAppear {
-                if restoreInspectorAfterArtifact {
-                    showsInspector = true
-                    restoreInspectorAfterArtifact = false
+        }
+    }
+
+    private func closeArtifact() {
+        selectedMedia = nil
+        if restoreChatAfterArtifact {
+            showsChat = true
+            restoreChatAfterArtifact = false
+        }
+    }
+}
+
+private struct LegacyChatUnavailable: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Tanya Data").font(.headline)
+                    Text("Tidak tersedia untuk riwayat ini")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
+                }
+                .buttonStyle(.plain)
+                .help("Tutup Tanya Data")
             }
+            .padding(Space.m)
+            Divider()
+            ContentUnavailableView(
+                "Tanya Data tidak tersedia",
+                systemImage: "bubble.left.and.exclamationmark.bubble.right",
+                description: Text("Riwayat lama ini tidak memiliki jobId yang dapat dipetakan secara aman ke backend.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(.regularMaterial)
     }
 }
 

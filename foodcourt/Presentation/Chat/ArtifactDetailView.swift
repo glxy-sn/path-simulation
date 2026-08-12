@@ -3,6 +3,7 @@ import SwiftUI
 struct ArtifactDetailView: View {
     let media: ChatMediaDTO
     let baseURL: URL
+    var onBack: (() -> Void)? = nil
 
     @State private var image: NSImage?
     @State private var zoom: CGFloat = 1
@@ -15,6 +16,15 @@ struct ArtifactDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                if let onBack {
+                    Button(action: onBack) {
+                        Label("Kembali ke Chat", systemImage: "chevron.left")
+                            .padding(.horizontal, Space.s)
+                            .frame(height: 34)
+                            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
+                    }
+                    .buttonStyle(.plain)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(media.caption).font(.headline)
                     if let area = media.selectedAreaId {
@@ -70,7 +80,6 @@ struct ArtifactDetailView: View {
                 .onChange(of: geo.size) { _, value in viewportSize = value }
             }
         }
-        .navigationTitle("Detail Area")
         .task { await load() }
     }
 

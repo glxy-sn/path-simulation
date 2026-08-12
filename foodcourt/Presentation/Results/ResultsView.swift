@@ -21,7 +21,9 @@ enum ResultVisual: String, CaseIterable, Identifiable {
 
 struct ResultsView: View {
     var isHistory: Bool = false
-    @Environment(\.dismiss) private var dismiss
+    var onClose: (() -> Void)? = nil
+    var onOpenChat: (() -> Void)? = nil
+    var isChatVisible: Bool = false
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
     @Environment(AppRouter.self) private var router
@@ -118,11 +120,18 @@ struct ResultsView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: Space.s) {
+            if isHistory, let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 36, height: 36)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
+                }
+                .buttonStyle(.plain)
+                .help("Kembali ke daftar riwayat")
+            }
             SectionHeader(title: isHistory ? "Riwayat Analisis" : "Hasil Analisis", subtitle: subtitle)
-            if isHistory {
-                Button("Tutup") { dismiss() }
-                    .buttonStyle(.bordered).controlSize(.large)
-            } else {
+            if !isHistory {
                 Button("Analisis Baru", systemImage: "plus") {
                     session.reset(); router.startNew()
                 }
@@ -132,6 +141,14 @@ struct ResultsView: View {
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .tint(Theme.accent)
                 .disabled(session.result == nil)
+            if isHistory, !isChatVisible, let onOpenChat {
+                Button("Tanya Data", systemImage: "bubble.left.and.text.bubble.right") {
+                    onOpenChat()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("Buka panel Tanya Data")
+            }
         }
         .confirmationDialog("Export Laporan", isPresented: $showExport, titleVisibility: .visible) {
             Button("JSON — lengkap (untuk analisis / LLM)") { exportJSON() }

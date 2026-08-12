@@ -147,6 +147,7 @@ final class HistoryChatViewModel {
     var draft = ""
     var isLoading = false
     var isAnswering = false
+    var pendingQuestion: String?
     var errorMessage: String?
 
     init(jobId: String, http: HTTPClient) {
@@ -206,14 +207,18 @@ final class HistoryChatViewModel {
         if active == nil { await newChat() }
         guard let sessionID = active?.sessionId else { return }
         draft = ""
+        pendingQuestion = question
         isAnswering = true
         defer { isAnswering = false }
         do {
             _ = try await api.send(jobId: jobId, sessionId: sessionID, text: question)
-            active = try await api.get(jobId: jobId, sessionId: sessionID)
+            let refreshed = try await api.get(jobId: jobId, sessionId: sessionID)
+            pendingQuestion = nil
+            active = refreshed
             sessions = try await api.sessions(jobId: jobId)
             errorMessage = nil
         } catch {
+            pendingQuestion = nil
             draft = question
             errorMessage = error.localizedDescription
         }
@@ -250,6 +255,7 @@ final class HistoryChatViewModel {
 struct HistoryChatInspector: View {
     @State private var viewModel: HistoryChatViewModel
     let onOpenMedia: (ChatMediaDTO) -> Void
+    let onClose: () -> Void
     let zones: [CustomZone]
 
     @State private var renameCandidate: ChatSessionSummaryDTO?
@@ -257,10 +263,17 @@ struct HistoryChatInspector: View {
     @State private var deleteCandidate: ChatSessionSummaryDTO?
     @State private var contextSyncTask: Task<Void, Never>?
 
-    init(jobId: String, http: HTTPClient, zones: [CustomZone], onOpenMedia: @escaping (ChatMediaDTO) -> Void) {
+    init(
+        jobId: String,
+        http: HTTPClient,
+        zones: [CustomZone],
+        onOpenMedia: @escaping (ChatMediaDTO) -> Void,
+        onClose: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: HistoryChatViewModel(jobId: jobId, http: http))
         self.zones = zones
         self.onOpenMedia = onOpenMedia
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -273,7 +286,7 @@ struct HistoryChatInspector: View {
                 sessionList
             }
         }
-        .frame(minWidth: 360, idealWidth: 420, maxWidth: 520)
+        .background(.regularMaterial)
         .task {
             await viewModel.load()
             while !Task.isCancelled && !viewModel.isReady {
@@ -314,18 +327,50 @@ struct HistoryChatInspector: View {
     private var header: some View {
         HStack(spacing: Space.s) {
             if viewModel.active != nil {
-                Button { viewModel.backToList() } label: { Image(systemName: "chevron.left") }
-                    .buttonStyle(.borderless).help("Daftar chat")
+                headerIconButton(systemImage: "chevron.left", help: "Kembali ke daftar chat") {
+                    viewModel.backToList()
+                }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.active?.title ?? "Tanya Data").font(.headline).lineLimit(1)
-                Text(statusText).font(.caption).foregroundStyle(statusColor)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.active?.title ?? "Tanya Data")
+                    .font(.headline)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 7, height: 7)
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
-            Button("New Chat", systemImage: "square.and.pencil") { Task { await viewModel.newChat() } }
-                .labelStyle(.iconOnly).help("New Chat")
+
+            if viewModel.active != nil {
+                headerIconButton(systemImage: "square.and.pencil", help: "Buat chat baru") {
+                    Task { await viewModel.newChat() }
+                }
+            }
+            headerIconButton(systemImage: "sidebar.right", help: "Tutup Tanya Data", action: onClose)
         }
         .padding(Space.m)
+    }
+
+    private func headerIconButton(
+        systemImage: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.callout.weight(.medium))
+                .frame(width: 30, height: 30)
+                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: Radius.s))
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private var statusText: String {
@@ -344,35 +389,129 @@ struct HistoryChatInspector: View {
     private var statusColor: Color { viewModel.isReady ? .green : (viewModel.status?.state == "error" ? .red : .secondary) }
 
     private var sessionList: some View {
-        Group {
+        VStack(spacing: 0) {
             if viewModel.isLoading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.sessions.isEmpty {
-                ContentUnavailableView("Belum ada chat", systemImage: "bubble.left.and.bubble.right",
-                                       description: Text("Buat New Chat untuk bertanya tentang riwayat ini."))
+                emptySessionState
             } else {
-                List(viewModel.sessions) { session in
-                    Button { Task { await viewModel.open(session) } } label: {
-                        HStack(spacing: Space.s) {
-                            Image(systemName: "bubble.left")
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(session.title).lineLimit(1)
-                                Text("\(session.messageCount) pesan · revisi \(session.contextRevision)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Percakapan")
+                            .font(.callout.weight(.semibold))
+                        Text("Pilih chat untuk melanjutkan konteks sebelumnya.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Chat Baru", systemImage: "plus") {
+                        Task { await viewModel.newChat() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(Theme.accent)
+                }
+                .padding(.horizontal, Space.m)
+                .padding(.vertical, Space.s)
+
+                ScrollView {
+                    LazyVStack(spacing: Space.s) {
+                        ForEach(viewModel.sessions) { session in
+                            sessionRow(session)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Ubah Nama") { renameCandidate = session; renameText = session.title }
-                        Button("Hapus", role: .destructive) { deleteCandidate = session }
-                    }
+                    .padding(.horizontal, Space.m)
+                    .padding(.bottom, Space.m)
                 }
-                .listStyle(.sidebar)
             }
         }
         .overlay(alignment: .top) { errorNote }
+    }
+
+    private var emptySessionState: some View {
+        VStack(spacing: Space.m) {
+            Spacer()
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 64, height: 64)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: Radius.m))
+            VStack(spacing: 6) {
+                Text("Belum ada chat")
+                    .font(.title3.weight(.semibold))
+                Text("Mulai percakapan baru untuk bertanya tentang hasil analisis pada riwayat ini.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button("Buat Chat Baru", systemImage: "square.and.pencil") {
+                Task { await viewModel.newChat() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(Theme.accent)
+            Spacer()
+        }
+        .padding(Space.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func sessionRow(_ session: ChatSessionSummaryDTO) -> some View {
+        HStack(alignment: .top, spacing: Space.s) {
+            Button {
+                Task { await viewModel.open(session) }
+            } label: {
+                HStack(alignment: .top, spacing: Space.s) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.callout)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Radius.s))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(session.title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    HStack(spacing: 5) {
+                        Text("\(session.messageCount) pesan")
+                        Text("•")
+                        Text(relativeDate(session.updatedAt))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Text("Konteks revisi \(session.contextRevision)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                    Spacer(minLength: 4)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Menu {
+                Button("Ubah Nama", systemImage: "pencil") {
+                    renameCandidate = session
+                    renameText = session.title
+                }
+                Divider()
+                Button("Hapus", systemImage: "trash", role: .destructive) {
+                    deleteCandidate = session
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .padding(Space.s)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: Radius.m))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.m)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+        }
     }
 
     private func conversation(_ session: ChatSessionDTO) -> some View {
@@ -380,8 +519,8 @@ struct HistoryChatInspector: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Space.m) {
-                        if session.messages.isEmpty {
-                            suggestions
+                        if session.messages.isEmpty && viewModel.pendingQuestion == nil {
+                            conversationEmptyState
                         }
                         ForEach(session.messages) { exchange in
                             UserBubble(text: exchange.question)
@@ -395,13 +534,20 @@ struct HistoryChatInspector: View {
                                 LimitationBubble(items: exchange.limitations)
                             }
                         }
-                        if viewModel.isAnswering {
-                            HStack { ProgressView().controlSize(.small); Text("Qwen3 14B menyusun jawaban…") }
-                                .font(.callout).foregroundStyle(.secondary)
+                        if let pendingQuestion = viewModel.pendingQuestion {
+                            UserBubble(text: pendingQuestion)
+                            HStack(spacing: Space.s) {
+                                ProgressView().controlSize(.small)
+                                Text("Qwen3 14B sedang menganalisis…")
+                            }
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
                         }
                     }
                     .padding(Space.m)
                 }
+                .background(Color.primary.opacity(0.018))
                 .onChange(of: session.messages.count) {
                     if let last = session.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
@@ -412,22 +558,38 @@ struct HistoryChatInspector: View {
         }
     }
 
-    private var suggestions: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Text("Coba tanyakan:").font(.caption).foregroundStyle(.secondary)
-            ForEach(["Area mana yang paling ramai?", "Meja mana yang paling efektif?", "Area mana yang jarang dilewati?"], id: \.self) { value in
-                Button(value) { viewModel.draft = value; Task { await viewModel.send() } }.buttonStyle(.link)
-            }
+    private var conversationEmptyState: some View {
+        VStack(spacing: Space.s) {
+            Image(systemName: "sparkles")
+                .font(.title2)
+                .foregroundStyle(Theme.accent)
+            Text("Tanyakan tentang riwayat ini")
+                .font(.callout.weight(.semibold))
+            Text("Jawaban memakai data analisis dan konteks sesi chat ini saja.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.xl)
     }
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: Space.s) {
             TextField("Tanya data riwayat ini…", text: $viewModel.draft, axis: .vertical)
-                .textFieldStyle(.roundedBorder).lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .padding(.horizontal, Space.s)
+                .padding(.vertical, 9)
+                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: Radius.m))
                 .onSubmit { Task { await viewModel.send() } }
-            Button { Task { await viewModel.send() } } label: { Image(systemName: "paperplane.fill") }
+            Button { Task { await viewModel.send() } } label: {
+                Image(systemName: "paperplane.fill")
+                    .frame(width: 22, height: 22)
+            }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(Theme.accent)
                 .disabled(!viewModel.isReady || viewModel.isAnswering || viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(Space.m)
@@ -442,29 +604,62 @@ struct HistoryChatInspector: View {
     private func mediaURL(_ path: String) -> URL? {
         URL(string: path, relativeTo: viewModel.baseURL)?.absoluteURL
     }
+
+    private func relativeDate(_ value: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        guard let date else { return "Baru diperbarui" }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
 }
 
 private struct UserBubble: View {
     let text: String
     var body: some View {
-        HStack { Spacer(minLength: 60); Text(text).textSelection(.enabled).padding(10).background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 10)) }
+        HStack {
+            Spacer(minLength: 72)
+            Text(text)
+                .textSelection(.enabled)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+        }
     }
 }
 
 private struct AssistantBubble: View {
     let exchange: ChatExchangeDTO
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(exchange.text).textSelection(.enabled)
-            HStack(spacing: 6) {
-                if let area = exchange.selectedAreaId { Text(area).font(.caption.monospaced()).foregroundStyle(.secondary) }
-                if let support = exchange.supportLevel {
-                    Text(support).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+        HStack(alignment: .top, spacing: Space.s) {
+            Image(systemName: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28, height: 28)
+                .background(Theme.accentSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 7) {
+                Text(exchange.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    if let area = exchange.selectedAreaId {
+                        Text(area)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    if let support = exchange.supportLevel {
+                        Text(support)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.10), in: Capsule())
+                    }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
         }
-        .padding(10).background(Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
