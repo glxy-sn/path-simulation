@@ -235,6 +235,22 @@ def test_general_knowledge_answer_has_no_area_or_overlay(tmp_path: Path) -> None
     assert result["artifacts"]["floorplanOverlay"] is None
 
 
+def test_overlay_failure_keeps_completed_text_answer(tmp_path: Path) -> None:
+    rag = service(tmp_path)
+    rag.plan_question = lambda question: (quiet_flow_plan(), "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
+    rag.retrieve = lambda question, execution=None: [dict(rag.package.cards[1])]
+    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area terpilih adalah flow-05.", limitations=[], requiredData=[]), {})
+    rag._render_overlay = lambda run_dir, final: (_ for _ in ()).throw(RuntimeError("renderer unavailable"))
+
+    result = rag.ask("Area mana yang jarang dilewati?", show=False)
+
+    assert result["answer"] == "Area terpilih adalah flow-05."
+    assert result["artifacts"]["floorplanOverlay"] is None
+    assert "Overlay floorplan tidak dapat dibuat: renderer unavailable" in result["limitations"]
+    saved = json.loads((Path(result["artifacts"]["runDirectory"]) / "response.json").read_text())
+    assert saved["answer"] == result["answer"]
+
+
 def test_session_context_is_limited_to_six_turns(tmp_path: Path) -> None:
     rag = service(tmp_path)
     rag.history = [{"question": f"q{i}", "answer": f"a{i}", "selectedAreaId": "flow-01", "queryPlan": {"interpretation": f"i{i}"}, "artifacts": {"runId": f"run-{i}"}} for i in range(8)]

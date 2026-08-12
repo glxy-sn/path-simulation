@@ -15,6 +15,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import matplotlib
+matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -639,7 +641,16 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
             "queryPlan": str(run_dir / "query_plan.json"),
             "executionResult": str(run_dir / "execution_result.json"),
         }
-        overlay = self._render_overlay(run_dir, final)
+        overlay = None
+        try:
+            overlay = self._render_overlay(run_dir, final)
+        except Exception as error:
+            # Rendering adalah artefak tambahan. Jawaban teks yang sudah selesai
+            # tidak boleh berubah menjadi HTTP 503 hanya karena renderer gagal.
+            final["limitations"] = list(dict.fromkeys([
+                *final["limitations"],
+                f"Overlay floorplan tidak dapat dibuat: {error}",
+            ]))
         final["artifacts"]["floorplanOverlay"] = str(overlay) if overlay else None
         _write_json(run_dir / "response.json", final)
         (run_dir / "answer.md").write_text(final["answer"] + "\n", encoding="utf-8")
