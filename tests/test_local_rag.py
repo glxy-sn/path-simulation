@@ -13,6 +13,7 @@ def package(tmp_path: Path) -> Package:
     areas = [
         {
             "areaId": "flow-01",
+            "label": "Area Arus Ramai",
             "kind": "flow_hotspot",
             "geometryM": {"type": "circle", "center": [2.0, 3.0], "radiusM": 0.5},
             "metrics": {"relativeIntensity": 1.0, "visitCount": 52, "uniqueVisitors": 18},
@@ -21,6 +22,7 @@ def package(tmp_path: Path) -> Package:
         },
         {
             "areaId": "flow-05",
+            "label": "Area Arus Sepi",
             "kind": "flow_hotspot",
             "geometryM": {"type": "circle", "center": [8.0, 5.0], "radiusM": 0.4},
             "metrics": {"relativeIntensity": 0.1, "visitCount": 10, "uniqueVisitors": 6},
@@ -183,7 +185,7 @@ def test_executor_area_cannot_be_replaced_by_narrator(tmp_path: Path) -> None:
     rag = service(tmp_path)
     rag.plan_question = lambda question: (quiet_flow_plan(), "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
     rag.retrieve = lambda question, execution=None: [dict(rag.package.cards[1])]
-    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Flow-01 menurut narasi yang salah.", limitations=[], requiredData=[]), {})
+    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area Arus Ramai menurut narasi yang salah.", limitations=[], requiredData=[]), {})
     result = rag.ask("Area mana yang jarang dilewati?", show=False)
     assert result["selectedAreaId"] == "flow-05"
     assert result["selectedArea"] == rag.area_by_id["flow-05"]
@@ -195,16 +197,16 @@ def test_executor_area_cannot_be_replaced_by_narrator(tmp_path: Path) -> None:
     assert "usageAndLatency" in manifest
 
 
-def test_narrator_retries_when_official_selected_area_is_missing(tmp_path: Path) -> None:
+def test_narrator_retries_when_internal_area_id_is_exposed(tmp_path: Path) -> None:
     rag = service(tmp_path)
     execution = rag.executor.execute(quiet_flow_plan())
     responses = iter([
-        {"message": {"content": NarratedAnswer(answer="Flow-01 paling tinggi.", limitations=[], requiredData=[]).model_dump_json()}},
-        {"message": {"content": NarratedAnswer(answer="Area terpilih adalah flow-05 dengan intensitas paling rendah.", limitations=[], requiredData=[]).model_dump_json()}},
+        {"message": {"content": NarratedAnswer(answer="Area Arus Sepi (flow-05) memiliki intensitas paling rendah.", limitations=[], requiredData=[]).model_dump_json()}},
+        {"message": {"content": NarratedAnswer(answer="Area Arus Sepi memiliki intensitas paling rendah.", limitations=[], requiredData=[]).model_dump_json()}},
     ])
     rag.client.chat = lambda payload: next(responses)
     narrated, usage = rag.narrate("Area mana yang jarang dilewati?", quiet_flow_plan(), execution, rag.package.cards)
-    assert narrated.answer == "Area terpilih adalah flow-05 dengan intensitas paling rendah."
+    assert narrated.answer == "Area Arus Sepi memiliki intensitas paling rendah."
     assert usage["attempts"] == 2
 
 
@@ -212,11 +214,12 @@ def test_short_narration_uses_deterministic_executor_summary(tmp_path: Path) -> 
     rag = service(tmp_path)
     execution = rag.executor.execute(quiet_flow_plan())
     rag.client.chat = lambda payload: {
-        "message": {"content": NarratedAnswer(answer="flow-05", limitations=[], requiredData=[]).model_dump_json()},
+        "message": {"content": NarratedAnswer(answer="Area Arus Sepi", limitations=[], requiredData=[]).model_dump_json()},
         "total_duration": 1_000_000,
     }
     narrated, usage = rag.narrate("Area mana yang jarang dilewati?", quiet_flow_plan(), execution, rag.package.cards)
-    assert "Area terpilih adalah flow-05" in narrated.answer
+    assert "Area terpilih adalah Area Arus Sepi" in narrated.answer
+    assert "flow-05" not in narrated.answer
     assert "relativeIntensity 0.1" in narrated.answer
     assert "2 flow_hotspot" in narrated.answer
     assert usage["deterministicShortAnswerFallback"] is True
@@ -239,12 +242,12 @@ def test_overlay_failure_keeps_completed_text_answer(tmp_path: Path) -> None:
     rag = service(tmp_path)
     rag.plan_question = lambda question: (quiet_flow_plan(), "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
     rag.retrieve = lambda question, execution=None: [dict(rag.package.cards[1])]
-    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area terpilih adalah flow-05.", limitations=[], requiredData=[]), {})
+    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area terpilih adalah Area Arus Sepi.", limitations=[], requiredData=[]), {})
     rag._render_overlay = lambda run_dir, final: (_ for _ in ()).throw(RuntimeError("renderer unavailable"))
 
     result = rag.ask("Area mana yang jarang dilewati?", show=False)
 
-    assert result["answer"] == "Area terpilih adalah flow-05."
+    assert result["answer"] == "Area terpilih adalah Area Arus Sepi."
     assert result["artifacts"]["floorplanOverlay"] is None
     assert "Overlay floorplan tidak dapat dibuat: renderer unavailable" in result["limitations"]
     saved = json.loads((Path(result["artifacts"]["runDirectory"]) / "response.json").read_text())

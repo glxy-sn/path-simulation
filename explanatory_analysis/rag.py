@@ -461,29 +461,32 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
         if selected_area_id and plan.operation in {"rank", "recommend"}:
             evidence = [card for card in evidence if card.get("areaId") == selected_area_id]
         clean_evidence = [
-            {key: value for key, value in card.items() if key not in {"geometryM"}}
+            {key: value for key, value in card.items() if key not in {"geometryM", "areaId"}}
             for card in evidence[:3]
         ]
         compact_execution = {
             key: execution.get(key)
             for key in (
                 "status", "dataGrounding", "dataset", "operation",
-                "selectedAreaId", "populationCount", "metrics",
+                "populationCount", "metrics",
                 "limitations", "requiredData",
             )
             if key in execution
         }
         row_limit = 1 if plan.operation in {"rank", "recommend"} else 10
-        compact_execution["rows"] = list(execution.get("rows") or [])[:row_limit]
+        compact_execution["rows"] = [
+            {key: value for key, value in row.items() if key != "areaId"}
+            for row in list(execution.get("rows") or [])[:row_limit]
+        ]
         context = {
             "question": question,
             "queryPlan": plan.model_dump(),
             "executionResult": compact_execution,
-            "selectedAreaIdReadOnly": selected_area_id,
+            "selectedAreaLabelReadOnly": self._official_area_label(execution) if selected_area_id else None,
             "evidence": clean_evidence,
         }
         if repair: context["repairInstruction"] = repair
-        system = """Narasi 2-3 kalimat Bahasa Indonesia dari QueryPlan dan executionResult. Jika selectedAreaIdReadOnly tidak null, itulah jawaban resmi: sebut ID, nilai metric utama, populasi pembanding, dan limitation; jangan memilih area lain. Jangan hitung ulang, buat geometry, atau tambah fakta venue. Untuk general_knowledge, tegaskan bukan hasil trajectory; untuk hybrid, pisahkan data dan saran. Keluarkan JSON schema tanpa thinking."""
+        system = """Narasi 2-3 kalimat Bahasa Indonesia dari QueryPlan dan executionResult. Jika selectedAreaLabelReadOnly tidak null, itulah area resmi: sebut label ramah pengguna tersebut, nilai metrik utama, dan populasi pembanding; jangan memilih area lain dan jangan tampilkan ID internal. Simpan keterbatasan hanya di field limitations, jangan masukkan ke answer kecuali pengguna menanyakannya. Jangan hitung ulang, buat geometry, tambah label supported, atau tambah fakta venue. Untuk general_knowledge, tegaskan bukan hasil trajectory; untuk hybrid, pisahkan data dan saran. Keluarkan JSON schema tanpa thinking."""
         return {
             "model": self.config.chat_model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(context, ensure_ascii=False, separators=(",", ":"))}],
@@ -502,10 +505,19 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
                 candidate = self._parse_json_model(str((response.get("message") or {}).get("content") or ""), NarratedAnswer)
                 assert isinstance(candidate, NarratedAnswer)
                 selected_area_id = execution.get("selectedAreaId")
-                if selected_area_id and str(selected_area_id).casefold() not in candidate.answer.casefold():
-                    raise ValueError(
-                        f"Narasi tidak menyebut selectedAreaId resmi {selected_area_id}"
-                    )
+                if selected_area_id:
+                    selected_label = self._official_area_label(execution)
+                    answer_folded = candidate.answer.casefold()
+                    if selected_label.casefold() not in answer_folded:
+                        raise ValueError(f"Narasi tidak menyebut label area resmi {selected_label}")
+                    if str(selected_area_id).casefold() in answer_folded:
+                        raise ValueError("Narasi mengekspos selectedAreaId internal")
+                    foreign_ids = [
+                        area_id for area_id in self.area_by_id
+                        if area_id != str(selected_area_id) and area_id.casefold() in answer_folded
+                    ]
+                    if foreign_ids:
+                        raise ValueError(f"Narasi menyebut area lain: {foreign_ids[0]}")
                 deterministic_fallback = False
                 if selected_area_id and len(candidate.answer.strip()) < 40:
                     candidate = candidate.model_copy(
@@ -522,16 +534,20 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
             except (ConnectionError, RuntimeError, TimeoutError, ValidationError, ValueError, json.JSONDecodeError, AssertionError) as error:
                 last_error = str(error)
         if execution.get("selectedAreaId"):
-            fallback = f"Hasil executor memilih {execution['selectedAreaId']} berdasarkan rencana analitik tervalidasi."
+            fallback = f"Hasil analisis memilih {self._official_area_label(execution)} berdasarkan rencana analitik tervalidasi."
         elif execution.get("status") == "no_candidates":
             fallback = "Tidak ada kandidat yang memenuhi rencana analitik pada data aktif."
         else:
             fallback = "Model narrator tidak menghasilkan jawaban terstruktur yang valid."
         return NarratedAnswer(answer=fallback, limitations=[last_error], requiredData=list(execution.get("requiredData") or [])), {"attempts": 2, "error": last_error}
 
-    @staticmethod
-    def _official_area_summary(execution: dict[str, Any]) -> str:
-        area_id = str(execution.get("selectedAreaId") or "area terpilih")
+    def _official_area_label(self, execution: dict[str, Any]) -> str:
+        area_id = str(execution.get("selectedAreaId") or "")
+        area = self.area_by_id.get(area_id) or {}
+        return str(area.get("label") or "area terpilih")
+
+    def _official_area_summary(self, execution: dict[str, Any]) -> str:
+        area_label = self._official_area_label(execution)
         rows = list(execution.get("rows") or [])
         row = rows[0] if rows else {}
         metric_spec = next(iter(execution.get("metrics") or []), {})
@@ -543,13 +559,10 @@ general_knowledge wajib tanpa dataset, metric, filter, area, timeRange, dan spat
             metric_text = metric_field
         population = int(execution.get("populationCount") or 0)
         kind = str(row.get("kind") or "area kandidat")
-        limitation = next(iter(execution.get("limitations") or []), "")
         answer = (
-            f"Area terpilih adalah {area_id}. Di antara {population} {kind} yang dibandingkan, "
+            f"Area terpilih adalah {area_label}. Di antara {population} {kind} yang dibandingkan, "
             f"area ini menjadi hasil ranking berdasarkan {metric_text}."
         )
-        if limitation:
-            answer += f" Keterbatasan: {limitation}"
         return answer
 
     def ask(self, question: str, show: bool = True) -> dict[str, Any]:
