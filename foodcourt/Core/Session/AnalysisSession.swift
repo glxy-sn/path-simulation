@@ -60,6 +60,15 @@ struct AnalysisResult {
     var paths: [PathTrace]
     var identityQuality: IdentityQualitySummary?
     var fusionDiagnosticsURL: URL?
+    var observations: [TrackObservation] = []
+}
+
+/// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
+struct CustomZone: Identifiable, Hashable {
+    let id = UUID()
+    var name: String
+    var rect: CGRect          // ternormalisasi 0–1
+    var colorHex: UInt
 }
 
 @Observable
@@ -90,6 +99,11 @@ final class AnalysisSession {
     var isProcessing = false
     var errorMessage: String?
     var result: AnalysisResult?
+    var customZones: [CustomZone] = []
+    /// Folder riwayat untuk sesi ini (agar edit zona ikut tersimpan). nil = belum tersimpan.
+    var historyFolder: String? = nil
+    /// Jumlah kamera untuk ditampilkan saat melihat riwayat (kamera asli tak dimuat ulang).
+    var overrideCameraCount: Int? = nil
 
     // Turunan
     var venueWidthM: Double { Double(widthM) ?? 0 }
@@ -137,5 +151,8 @@ final class AnalysisSession {
         floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
+        customZones = []
+        historyFolder = nil
+        overrideCameraCount = nil
     }
 }

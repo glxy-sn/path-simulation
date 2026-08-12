@@ -4,7 +4,6 @@
 //
 //  Created by Shafa Tiara on 04/08/26.
 //
-
 import Foundation
 import CoreGraphics
 
@@ -94,7 +93,8 @@ struct EngineProcessingService: ProcessingService {
                      rect: CGRect(x: z.rect.x, y: z.rect.y, width: z.rect.w, height: z.rect.h),
                      colorHex: palette[i % palette.count])
         }
-        let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds) }
+        let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds,
+                                                   point: CGPoint(x: $0.x, y: $0.y)) }
         let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) }
         let summary = VenueSummary(
             totalVisitors: dto.summary.totalVisitors,
@@ -127,6 +127,9 @@ struct EngineProcessingService: ProcessingService {
                 calibrationWarnings: $0.calibrationWarnings
             )
         }
+        let observations = (dto.observations ?? []).compactMap { a -> TrackObservation? in
+            a.count >= 4 ? TrackObservation(trackId: Int(a[0]), point: CGPoint(x: a[1], y: a[2]), t: a[3]) : nil
+        }
         return AnalysisResult(
             summary: summary, zones: zones, stops: stops, occupancy: occ,
             heatmapURL: artifactURL(dto.artifacts.heatmapImage),
@@ -135,7 +138,8 @@ struct EngineProcessingService: ProcessingService {
             overlayVideos: overlays,
             blobs: blobs, paths: paths,
             identityQuality: quality,
-            fusionDiagnosticsURL: artifactURL(dto.artifacts.fusionDiagnostics)
+            fusionDiagnosticsURL: artifactURL(dto.artifacts.fusionDiagnostics),
+            observations: observations
         )
     }
 }

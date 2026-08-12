@@ -159,18 +159,6 @@ private struct ImportInspector: View {
                 InfoNote(text: "Dimensi venue jadi referensi skala. Tanpa ini, dwell & jarak tidak bermakna.")
             }
             .card()
-
-            VStack(alignment: .leading, spacing: Space.m) {
-                FieldLabel(text: "Mode Analisis")
-                Picker("", selection: $session.mode) {
-                    ForEach(AnalysisMode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
-                Text(session.mode.detail)
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .card()
         }
     }
 
