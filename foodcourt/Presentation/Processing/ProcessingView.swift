@@ -35,7 +35,7 @@ struct ProcessingView: View {
 
             Spacer(minLength: 0)
 
-            WizardFooter(onBack: { router.back() }) {
+            WizardFooter(onBack: done ? { router.back() } : nil) {
                 PrimaryButton(title: "Lihat Hasil", systemImage: "arrow.right", enabled: done) {
                     router.next()
                 }

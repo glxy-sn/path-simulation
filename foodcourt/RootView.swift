@@ -58,12 +58,17 @@ struct RootView: View {
 /// Wizard: stepper horizontal di atas, layar aktif di bawah.
 private struct WizardContainer: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AnalysisSession.self) private var session
 
     var body: some View {
         VStack(spacing: 0) {
             HorizontalStepper(steps: FlowStep.allCases,
                               current: router.step,
-                              onSelect: { router.go(to: $0) })
+                              isLocked: router.step == .processing && session.result == nil,
+                              onSelect: { step in
+                                  guard !(router.step == .processing && session.result == nil) else { return }
+                                  router.go(to: step)
+                              })
                 .spad(Space.xl, [.horizontal])
                 .padding(.vertical, Space.m)
                 .background(.bar)
