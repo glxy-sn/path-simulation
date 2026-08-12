@@ -2,6 +2,46 @@ import XCTest
 @testable import foodcourt
 
 final class CalibrationSolverTests: XCTestCase {
+    func testCombinedJobResultDecodesObservationsAndIdentityQuality() throws {
+        let data = try JSONSerialization.data(withJSONObject: jobResultPayload(
+            observations: [[7, 0.25, 0.75, 12.5]],
+            identityQuality: [
+                "globalIds": 1, "localStitches": 2, "overlapMerges": 3,
+                "handoverMerges": 4, "unmatchedTracklets": 5, "filteredTracklets": 6,
+                "highConfidence": 7, "mediumConfidence": 8, "lowConfidence": 9,
+                "singleCamera": 10, "calibrationWarnings": ["warning"]
+            ],
+            fusionDiagnostics: "file:///tmp/fusion_diagnostics.json"
+        ))
+
+        let decoded = try JSONDecoder().decode(JobResultDTO.self, from: data)
+        XCTAssertEqual(decoded.observations?.first, [7, 0.25, 0.75, 12.5])
+        XCTAssertEqual(decoded.identityQuality?.globalIds, 1)
+        XCTAssertEqual(decoded.artifacts.fusionDiagnostics, "file:///tmp/fusion_diagnostics.json")
+    }
+
+    func testLegacyJobResultWithoutMergedOptionalFieldsStillDecodes() throws {
+        let data = try JSONSerialization.data(withJSONObject: jobResultPayload())
+        let decoded = try JSONDecoder().decode(JobResultDTO.self, from: data)
+        XCTAssertNil(decoded.observations)
+        XCTAssertNil(decoded.identityQuality)
+        XCTAssertNil(decoded.artifacts.fusionDiagnostics)
+    }
+
+    func testLegacySavedAnalysisWithoutObservationsAndCustomZonesStillDecodes() throws {
+        let payload: [String: Any] = [
+            "venueName": "Legacy", "venueType": "Pujasera", "widthM": 10.0, "heightM": 7.5,
+            "startSec": 0.0, "durationSec": 60.0, "cameraCount": 1, "usesScaledCanvas": true,
+            "totalVisitors": 0, "avgDwellSeconds": 0, "peakOccupancy": 0, "captureRate": 0.0,
+            "zones": [], "stops": [], "occupancy": [], "blobs": [], "paths": [], "overlays": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let decoded = try JSONDecoder().decode(SavedAnalysis.self, from: data)
+        XCTAssertNil(decoded.observations)
+        XCTAssertNil(decoded.customZones)
+        XCTAssertNil(decoded.identityQuality)
+    }
+
     @MainActor
     func testSynchronizedRangeAccountsForPerCameraOffsets() throws {
         let cameras = [
@@ -241,5 +281,23 @@ final class CalibrationSolverTests: XCTestCase {
             timeOffsetSec: 0,
             calibration: nil
         )
+    }
+
+    private func jobResultPayload(
+        observations: [[Double]]? = nil,
+        identityQuality: [String: Any]? = nil,
+        fusionDiagnostics: String? = nil
+    ) -> [String: Any] {
+        var artifacts: [String: Any] = ["overlayVideos": []]
+        if let fusionDiagnostics { artifacts["fusionDiagnostics"] = fusionDiagnostics }
+        var payload: [String: Any] = [
+            "jobId": "job", "venue": ["widthM": 10.0, "heightM": 7.5, "name": "Venue", "type": "Pujasera"],
+            "summary": ["totalVisitors": 0, "avgDwellSeconds": 0, "peakOccupancy": 0, "captureRate": 0.0],
+            "zones": [], "stopPoints": [], "occupancy": [], "blobs": [], "paths": [],
+            "artifacts": artifacts
+        ]
+        if let observations { payload["observations"] = observations }
+        if let identityQuality { payload["identityQuality"] = identityQuality }
+        return payload
     }
 }

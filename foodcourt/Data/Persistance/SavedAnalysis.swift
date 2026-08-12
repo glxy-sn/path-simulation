@@ -29,12 +29,15 @@ struct SavedAnalysis: Codable {
     var occupancy: [SOcc]
     var blobs: [SBlob]
     var paths: [SPath]
-    var observations: [[Double]]
-    var customZones: [SCustomZone]
+    /// Opsional agar riwayat yang dibuat sebelum data observasi/zona custom tetap dapat dibuka.
+    var observations: [[Double]]?
+    var customZones: [SCustomZone]?
+    var identityQuality: SIdentityQuality?
     // artifact (nama file relatif di dalam folder; nil kalau tak ada)
     var heatmapFile: String?
     var pathVideoFile: String?
     var combinedVideoFile: String?
+    var fusionDiagnosticsFile: String?
     var overlays: [SOverlay]
     var floorPlanFile: String?
 
@@ -46,6 +49,12 @@ struct SavedAnalysis: Codable {
     struct SPath: Codable { var hue: Double; var pts: [[Double]] }   // [x,y,t]
     struct SCustomZone: Codable { var name: String; var x: Double; var y: Double
         var w: Double; var h: Double; var color: UInt }
+    struct SIdentityQuality: Codable {
+        var globalIDs: Int; var localStitches: Int; var overlapMerges: Int; var handoverMerges: Int
+        var unmatchedTracklets: Int; var filteredTracklets: Int
+        var highConfidence: Int; var mediumConfidence: Int; var lowConfidence: Int; var singleCamera: Int
+        var calibrationWarnings: [String]
+    }
     struct SOverlay: Codable { var cam: String; var file: String }
 }
 
@@ -78,10 +87,21 @@ extension SavedAnalysis {
         observations = r.observations.map { [Double($0.trackId), Double($0.point.x), Double($0.point.y), $0.t] }
         customZones = s.customZones.map { SCustomZone(name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
                                                       w: $0.rect.width, h: $0.rect.height, color: $0.colorHex) }
+        identityQuality = r.identityQuality.map {
+            SIdentityQuality(
+                globalIDs: $0.globalIDs, localStitches: $0.localStitches,
+                overlapMerges: $0.overlapMerges, handoverMerges: $0.handoverMerges,
+                unmatchedTracklets: $0.unmatchedTracklets, filteredTracklets: $0.filteredTracklets,
+                highConfidence: $0.highConfidence, mediumConfidence: $0.mediumConfidence,
+                lowConfidence: $0.lowConfidence, singleCamera: $0.singleCamera,
+                calibrationWarnings: $0.calibrationWarnings
+            )
+        }
         // nama file artifact (diunduh terpisah)
         heatmapFile = r.heatmapURL != nil ? "heatmap.png" : nil
         pathVideoFile = r.pathVideoURL != nil ? "path.mp4" : nil
         combinedVideoFile = r.combinedVideoURL != nil ? "combined.mp4" : nil
+        fusionDiagnosticsFile = r.fusionDiagnosticsURL != nil ? "fusion_diagnostics.json" : nil
         overlays = r.overlayVideos.enumerated().map { i, ov in SOverlay(cam: ov.cam, file: "overlay_\(i).mp4") }
         floorPlanFile = (!s.usesScaledCanvas && s.floorPlanURL != nil) ? "floorplan\(Self.ext(s.floorPlanURL))" : nil
     }
@@ -178,11 +198,22 @@ enum HistoryStore {
                           hue: p.hue,
                           times: p.pts.map { $0.count > 2 ? $0[2] : 0 })
             },
-            observations: s.observations.compactMap {
+            identityQuality: s.identityQuality.map {
+                IdentityQualitySummary(
+                    globalIDs: $0.globalIDs, localStitches: $0.localStitches,
+                    overlapMerges: $0.overlapMerges, handoverMerges: $0.handoverMerges,
+                    unmatchedTracklets: $0.unmatchedTracklets, filteredTracklets: $0.filteredTracklets,
+                    highConfidence: $0.highConfidence, mediumConfidence: $0.mediumConfidence,
+                    lowConfidence: $0.lowConfidence, singleCamera: $0.singleCamera,
+                    calibrationWarnings: $0.calibrationWarnings
+                )
+            },
+            fusionDiagnosticsURL: fileURL(s.fusionDiagnosticsFile),
+            observations: (s.observations ?? []).compactMap {
                 $0.count >= 4 ? TrackObservation(trackId: Int($0[0]), point: CGPoint(x: $0[1], y: $0[2]), t: $0[3]) : nil
             }
         )
-        let customZones = (loadZones(folder: folder) ?? s.customZones.map {
+        let customZones = (loadZones(folder: folder) ?? (s.customZones ?? []).map {
             CustomZone(name: $0.name, rect: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), colorHex: $0.color)
         })
         func numStr(_ d: Double) -> String { d.rounded() == d ? String(Int(d)) : String(format: "%.2f", d) }
