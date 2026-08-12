@@ -160,7 +160,7 @@ struct CameraCalibration: Codable, Hashable {
 }
 
 struct CalibrationProfile: Codable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var profileID: UUID?
@@ -172,6 +172,8 @@ struct CalibrationProfile: Codable {
     var homographyFloorToWorld: Matrix3x3
     var homographyWorldToFloor: Matrix3x3
     var cameras: [CameraCalibrationProfile]
+    /// Optional menjaga profil schema 1/2 tetap dapat didekode.
+    var tables: [TableAnnotation]?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -184,6 +186,7 @@ struct CalibrationProfile: Codable {
         case homographyFloorToWorld = "H_floor_to_world"
         case homographyWorldToFloor = "H_world_to_floor"
         case cameras
+        case tables
     }
 }
 

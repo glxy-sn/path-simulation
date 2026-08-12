@@ -48,6 +48,7 @@ struct IdentityQualitySummary {
 
 /// Hasil yang sudah dipetakan ke model UI (siap dipakai layar Hasil).
 struct AnalysisResult {
+    var jobId: String? = nil
     var summary: VenueSummary
     var zones: [ZoneRank]
     var stops: [StopPoint]
@@ -63,12 +64,34 @@ struct AnalysisResult {
     var observations: [TrackObservation] = []
 }
 
+/// Rectangle meja terverifikasi dalam koordinat floorplan ternormalisasi.
+struct TableAnnotation: Identifiable, Hashable, Codable {
+    var id: UUID
+    var label: String
+    var rectNormalized: CGRect
+    var verified: Bool
+
+    init(id: UUID = UUID(), label: String, rectNormalized: CGRect, verified: Bool = true) {
+        self.id = id
+        self.label = label
+        self.rectNormalized = rectNormalized
+        self.verified = verified
+    }
+}
+
 /// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
 struct CustomZone: Identifiable, Hashable {
-    let id = UUID()
+    var id: UUID
     var name: String
     var rect: CGRect          // ternormalisasi 0–1
     var colorHex: UInt
+
+    init(id: UUID = UUID(), name: String, rect: CGRect, colorHex: UInt) {
+        self.id = id
+        self.name = name
+        self.rect = rect
+        self.colorHex = colorHex
+    }
 }
 
 @Observable
@@ -87,6 +110,7 @@ final class AnalysisSession {
     var floorPlanPixelSize: PixelSize?
     /// Pilihan sumber yang aktif. Berkas denah tetap disimpan saat pengguna beralih ke canvas.
     var usesScaledCanvas = true
+    var tableAnnotations: [TableAnnotation] = []
 
     // Trim global
     var trimStartSec: Double = 0
@@ -149,6 +173,7 @@ final class AnalysisSession {
     func reset() {
         cameras = []
         floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
+        tableAnnotations = []
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
         customZones = []

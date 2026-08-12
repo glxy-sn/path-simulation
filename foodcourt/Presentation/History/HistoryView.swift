@@ -17,11 +17,12 @@ struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
     @Environment(\.modelContext) private var modelContext
+    @Environment(Sidecar.self) private var sidecar
     @Query(sort: \AnalysisRecord.date, order: .reverse) private var records: [AnalysisRecord]
 
     // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
     @State private var viewerSession = AnalysisSession()
-    @State private var path: [String] = []
+    @State private var path: [HistoryRoute] = []
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -52,18 +53,26 @@ struct HistoryView: View {
                 .spad(Space.xl, [.horizontal, .top])
                 .padding(.bottom, Space.xl)
             }
-            .navigationDestination(for: String.self) { _ in
-                ResultsView(isHistory: true)
-                    .environment(viewerSession)
+            .navigationDestination(for: HistoryRoute.self) { route in
+                switch route {
+                case .detail(let folder):
+                    HistoryDetailView(
+                        jobId: records.first(where: { $0.folder == folder })?.jobId ?? viewerSession.jobId,
+                        viewerSession: viewerSession,
+                        http: sidecar.http,
+                        onOpenMedia: { path.append(.artifact($0)) }
+                    )
                     .environment(router)
-                    .navigationTitle("Detail Riwayat")
+                case .artifact(let media):
+                    ArtifactDetailView(media: media, baseURL: sidecar.baseURL)
+                }
             }
         }
     }
 
     private func open(_ rec: AnalysisRecord) {
         guard load(into: viewerSession, folder: rec.folder) else { return }
-        path.append(rec.folder)
+        path.append(.detail(rec.folder))
     }
 
     @discardableResult
@@ -75,8 +84,10 @@ struct HistoryView: View {
         s.widthM = loaded.widthM
         s.heightM = loaded.heightM
         s.usesScaledCanvas = loaded.usesScaledCanvas
+        s.jobId = loaded.jobId
         s.floorPlanURL = loaded.floorPlanURL
         s.customZones = loaded.customZones
+        s.tableAnnotations = loaded.tables
         s.result = loaded.result
         s.trimStartSec = 0
         s.trimEndSec = loaded.durationSec
@@ -102,6 +113,65 @@ struct HistoryView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 240)
         .card()
+    }
+}
+
+private enum HistoryRoute: Hashable {
+    case detail(String)
+    case artifact(ChatMediaDTO)
+}
+
+private struct HistoryDetailView: View {
+    let jobId: String?
+    let viewerSession: AnalysisSession
+    let http: HTTPClient
+    let onOpenMedia: (ChatMediaDTO) -> Void
+
+    @SceneStorage("history.showsTanyaDataInspector") private var showsInspector = true
+    @State private var restoreInspectorAfterArtifact = false
+
+    var body: some View {
+        ResultsView(isHistory: true)
+            .environment(viewerSession)
+            .navigationTitle("Detail Riwayat")
+            .toolbar {
+                ToolbarItem {
+                    Button {
+                        showsInspector.toggle()
+                    } label: {
+                        Label("Tanya Data", systemImage: "sidebar.right")
+                    }
+                    .help(showsInspector ? "Tutup Tanya Data" : "Buka Tanya Data")
+                }
+            }
+            .inspector(isPresented: $showsInspector) {
+                if let jobId, !jobId.isEmpty {
+                    HistoryChatInspector(
+                        jobId: jobId,
+                        http: http,
+                        zones: viewerSession.customZones,
+                        onOpenMedia: { media in
+                            restoreInspectorAfterArtifact = showsInspector
+                            showsInspector = false
+                            onOpenMedia(media)
+                        }
+                    )
+                    .inspectorColumnWidth(min: 360, ideal: 420, max: 520)
+                } else {
+                    ContentUnavailableView(
+                        "Tanya Data tidak tersedia",
+                        systemImage: "bubble.left.and.exclamationmark.bubble.right",
+                        description: Text("Riwayat lama ini tidak memiliki jobId yang dapat dipetakan secara aman ke backend.")
+                    )
+                    .frame(minWidth: 360, idealWidth: 420)
+                }
+            }
+            .onAppear {
+                if restoreInspectorAfterArtifact {
+                    showsInspector = true
+                    restoreInspectorAfterArtifact = false
+                }
+            }
     }
 }
 

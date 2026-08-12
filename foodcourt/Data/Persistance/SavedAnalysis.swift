@@ -9,6 +9,8 @@ import Foundation
 import CoreGraphics
 
 struct SavedAnalysis: Codable {
+    /// Optional agar riwayat sebelum integrasi explanatory tetap dapat dibuka.
+    var jobId: String?
     // venue
     var venueName: String
     var venueType: String
@@ -40,6 +42,7 @@ struct SavedAnalysis: Codable {
     var fusionDiagnosticsFile: String?
     var overlays: [SOverlay]
     var floorPlanFile: String?
+    var tables: [STable]?
 
     struct SZone: Codable { var code: String; var visits: Int; var share: Double
         var x: Double; var y: Double; var w: Double; var h: Double; var color: UInt }
@@ -47,7 +50,7 @@ struct SavedAnalysis: Codable {
     struct SOcc: Codable { var minute: Int; var count: Int }
     struct SBlob: Codable { var x: Double; var y: Double; var intensity: Double; var radius: Double }
     struct SPath: Codable { var hue: Double; var pts: [[Double]] }   // [x,y,t]
-    struct SCustomZone: Codable { var name: String; var x: Double; var y: Double
+    struct SCustomZone: Codable { var id: UUID? = nil; var name: String; var x: Double; var y: Double
         var w: Double; var h: Double; var color: UInt }
     struct SIdentityQuality: Codable {
         var globalIDs: Int; var localStitches: Int; var overlapMerges: Int; var handoverMerges: Int
@@ -56,12 +59,18 @@ struct SavedAnalysis: Codable {
         var calibrationWarnings: [String]
     }
     struct SOverlay: Codable { var cam: String; var file: String }
+    struct STable: Codable {
+        var id: UUID; var label: String
+        var x: Double; var y: Double; var width: Double; var height: Double
+        var verified: Bool
+    }
 }
 
 // MARK: - Bangun dari sesi + hasil (dipanggil di main)
 
 extension SavedAnalysis {
     init(from s: AnalysisSession, result r: AnalysisResult) {
+        jobId = r.jobId ?? s.jobId
         venueName = s.venueName; venueType = s.venueType.rawValue
         widthM = s.venueWidthM; heightM = s.venueHeightM
         startSec = s.trimStartSec; durationSec = max(0, s.trimEndSec - s.trimStartSec)
@@ -85,7 +94,7 @@ extension SavedAnalysis {
             return SPath(hue: p.hue, pts: pts)
         }
         observations = r.observations.map { [Double($0.trackId), Double($0.point.x), Double($0.point.y), $0.t] }
-        customZones = s.customZones.map { SCustomZone(name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
+        customZones = s.customZones.map { SCustomZone(id: $0.id, name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
                                                       w: $0.rect.width, h: $0.rect.height, color: $0.colorHex) }
         identityQuality = r.identityQuality.map {
             SIdentityQuality(
@@ -104,6 +113,10 @@ extension SavedAnalysis {
         fusionDiagnosticsFile = r.fusionDiagnosticsURL != nil ? "fusion_diagnostics.json" : nil
         overlays = r.overlayVideos.enumerated().map { i, ov in SOverlay(cam: ov.cam, file: "overlay_\(i).mp4") }
         floorPlanFile = (!s.usesScaledCanvas && s.floorPlanURL != nil) ? "floorplan\(Self.ext(s.floorPlanURL))" : nil
+        tables = s.tableAnnotations.map {
+            STable(id: $0.id, label: $0.label, x: $0.rectNormalized.minX, y: $0.rectNormalized.minY,
+                   width: $0.rectNormalized.width, height: $0.rectNormalized.height, verified: $0.verified)
+        }
     }
 
     private static func ext(_ url: URL?) -> String {
@@ -113,6 +126,7 @@ extension SavedAnalysis {
 }
 
 struct LoadedAnalysis {
+    var jobId: String?
     var result: AnalysisResult
     var customZones: [CustomZone]
     var venueName: String
@@ -123,6 +137,7 @@ struct LoadedAnalysis {
     var floorPlanURL: URL?
     var cameraCount: Int
     var durationSec: Double
+    var tables: [TableAnnotation]
 }
 
 // MARK: - Store
@@ -183,6 +198,7 @@ enum HistoryStore {
                      colorHex: z.color == 0 ? palette[i % palette.count] : z.color)
         }
         let result = AnalysisResult(
+            jobId: s.jobId,
             summary: VenueSummary(totalVisitors: s.totalVisitors, avgDwellSeconds: s.avgDwellSeconds,
                                   peakOccupancy: s.peakOccupancy, captureRate: s.captureRate),
             zones: zones,
@@ -214,24 +230,32 @@ enum HistoryStore {
             }
         )
         let customZones = (loadZones(folder: folder) ?? (s.customZones ?? []).map {
-            CustomZone(name: $0.name, rect: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), colorHex: $0.color)
+            CustomZone(id: $0.id ?? UUID(), name: $0.name,
+                       rect: CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h), colorHex: $0.color)
         })
         func numStr(_ d: Double) -> String { d.rounded() == d ? String(Int(d)) : String(format: "%.2f", d) }
         return LoadedAnalysis(
+            jobId: s.jobId,
             result: result, customZones: customZones,
             venueName: s.venueName, venueType: s.venueType,
             widthM: numStr(s.widthM), heightM: numStr(s.heightM),
             usesScaledCanvas: s.usesScaledCanvas,
             floorPlanURL: fileURL(s.floorPlanFile),
             cameraCount: s.cameraCount,
-            durationSec: s.durationSec
+            durationSec: s.durationSec,
+            tables: (s.tables ?? []).map {
+                TableAnnotation(id: $0.id, label: $0.label,
+                                rectNormalized: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height),
+                                verified: $0.verified)
+            }
         )
     }
 
     // Zona disimpan di file terpisah (kecil) agar edit real-time cepat & tetap persist.
     static func saveZones(folder: String, _ zones: [CustomZone]) {
         guard !folder.isEmpty else { return }
-        let arr = zones.map { ["name": $0.name, "x": $0.rect.minX, "y": $0.rect.minY,
+        let arr = zones.map { ["id": $0.id.uuidString, "name": $0.name,
+                               "x": $0.rect.minX, "y": $0.rect.minY,
                                "w": $0.rect.width, "h": $0.rect.height, "color": $0.colorHex] as [String: Any] }
         if let data = try? JSONSerialization.data(withJSONObject: arr) {
             try? data.write(to: folderURL(folder).appendingPathComponent("zones.json"))
@@ -247,7 +271,9 @@ enum HistoryStore {
                   let x = d["x"] as? Double, let y = d["y"] as? Double,
                   let w = d["w"] as? Double, let h = d["h"] as? Double else { return nil }
             let color = (d["color"] as? UInt) ?? UInt((d["color"] as? Int) ?? 0xB46A72)
-            return CustomZone(name: name, rect: CGRect(x: x, y: y, width: w, height: h), colorHex: color)
+            let id = (d["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID()
+            return CustomZone(id: id, name: name,
+                              rect: CGRect(x: x, y: y, width: w, height: h), colorHex: color)
         }
     }
 

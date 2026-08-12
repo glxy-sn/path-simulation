@@ -24,13 +24,14 @@ final class AnalysisRecord {
     var peakOccupancy: Int
     var captureRate: Double
     var folder: String        // subfolder artifact+json di Application Support
+    var jobId: String?
 
     init(id: UUID = UUID(), date: Date = .now,
          venueName: String, venueType: String,
          widthM: Double, heightM: Double, durationSec: Double,
          cameraCount: Int, mode: String,
          totalVisitors: Int, avgDwellSeconds: Int, peakOccupancy: Int, captureRate: Double,
-         folder: String = "") {
+         folder: String = "", jobId: String? = nil) {
         self.id = id
         self.date = date
         self.venueName = venueName
@@ -45,6 +46,7 @@ final class AnalysisRecord {
         self.peakOccupancy = peakOccupancy
         self.captureRate = captureRate
         self.folder = folder
+        self.jobId = jobId
     }
 }
 
@@ -60,7 +62,8 @@ extension AnalysisRecord {
             totalVisitors: r.summary.totalVisitors,
             avgDwellSeconds: r.summary.avgDwellSeconds,
             peakOccupancy: r.summary.peakOccupancy,
-            captureRate: r.summary.captureRate
+            captureRate: r.summary.captureRate,
+            jobId: r.jobId ?? s.jobId
         )
     }
 

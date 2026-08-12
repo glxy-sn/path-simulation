@@ -65,6 +65,7 @@ struct ProcessingView: View {
                 case .progress(let stage, let frac):
                     applyStage(stage, frac)
                 case .finished(let result):
+                    session.jobId = result.jobId
                     session.result = result
                     saveToHistory(result)
                     progress = 1

@@ -25,7 +25,7 @@ struct SideMenu: View {
                 .padding(.horizontal, Space.l)
                 .padding(.bottom, Space.xs)
  
-            ForEach([AppSection.newAnalysis, .history, .chat], id: \.self) { section in
+            ForEach([AppSection.newAnalysis, .history], id: \.self) { section in
                 MenuRow(section: section, isActive: section == current)
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(section) }

@@ -101,6 +101,14 @@ struct CalibrationView: View {
                         .frame(height: 360 * scale)
 
                     inspector
+
+                    if session.allCalibrated {
+                        TableAnnotationEditor(
+                            image: session.usesScaledCanvas ? nil : floorPlanImage,
+                            sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize
+                        )
+                        .frame(minHeight: 390 * scale)
+                    }
                 }
                 .spad(Space.xl, [.horizontal, .top])
                 .padding(.bottom, Space.xl)

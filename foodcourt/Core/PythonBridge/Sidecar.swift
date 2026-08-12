@@ -15,6 +15,8 @@ final class Sidecar {
     nonisolated let http: HTTPClient
     var device: String = ""
     var isReady = false
+    var launchError: String?
+    @ObservationIgnored private var process: Process?
 
     init(baseURL: URL = URL(string: "http://127.0.0.1:8765")!) {
         self.baseURL = baseURL
@@ -46,10 +48,59 @@ final class Sidecar {
         return false
     }
 
-    // TODO(bundling): spawn engine.
-    //   let p = Process()
-    //   p.executableURL = <python bundled>
-    //   p.arguments = [<server.py>]
-    //   try p.run()
-    // lalu waitUntilReady(), dan terminate() saat app quit.
+    /// Development runtime: gunakan backend lokal terpadu jika server belum hidup.
+    @discardableResult
+    func ensureRunning(timeout: TimeInterval = 20) async -> Bool {
+        if await checkHealth() { return true }
+        guard process?.isRunning != true else { return await waitUntilReady(timeout: timeout) }
+        guard let root = backendRoot(),
+              let python = runtimePython(in: root) else {
+            launchError = "Runtime backend belum tersedia. Jalankan scripts/setup_runtime.zsh di be/path-simulation."
+            return false
+        }
+        let candidate = Process()
+        candidate.executableURL = python
+        candidate.arguments = [root.appendingPathComponent("server.py").path]
+        candidate.currentDirectoryURL = root
+        var environment = ProcessInfo.processInfo.environment
+        environment["MPLBACKEND"] = "Agg"
+        let cacheRoot = FileManager.default.temporaryDirectory.appendingPathComponent("foodcourt-runtime-cache", isDirectory: true)
+        let matplotlibCache = cacheRoot.appendingPathComponent("matplotlib", isDirectory: true)
+        let ultralyticsCache = cacheRoot.appendingPathComponent("ultralytics", isDirectory: true)
+        try? FileManager.default.createDirectory(at: matplotlibCache, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: ultralyticsCache, withIntermediateDirectories: true)
+        environment["MPLCONFIGDIR"] = matplotlibCache.path
+        environment["YOLO_CONFIG_DIR"] = ultralyticsCache.path
+        environment["PYTHONUNBUFFERED"] = "1"
+        candidate.environment = environment
+        do {
+            try candidate.run()
+            process = candidate
+            launchError = nil
+            return await waitUntilReady(timeout: timeout)
+        } catch {
+            launchError = "Backend gagal dijalankan: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func backendRoot() -> URL? {
+        if let configured = ProcessInfo.processInfo.environment["FOODCOURT_BACKEND_ROOT"], !configured.isEmpty {
+            let url = URL(fileURLWithPath: configured, isDirectory: true)
+            return FileManager.default.fileExists(atPath: url.appendingPathComponent("server.py").path) ? url : nil
+        }
+        // #filePath sengaja dipakai sebagai fallback development build saja.
+        let uiRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let candidate = uiRoot.deletingLastPathComponent().appendingPathComponent("be/path-simulation", isDirectory: true)
+        return FileManager.default.fileExists(atPath: candidate.appendingPathComponent("server.py").path) ? candidate : nil
+    }
+
+    private func runtimePython(in root: URL) -> URL? {
+        let candidates = [".venv-runtime/bin/python", ".venv/bin/python"]
+        return candidates.map { root.appendingPathComponent($0) }
+            .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+
 }
