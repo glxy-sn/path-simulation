@@ -15,6 +15,9 @@ notebooks/output/
 *.pth
 *.onnx
 *.mlpackage
+*.gguf
+models/
+.download-cache/
 
 # Logs
 *.log

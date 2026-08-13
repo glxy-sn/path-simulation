@@ -6,8 +6,10 @@ Environment dan model lokal disiapkan dengan:
 ./scripts/setup_analysis_llm.zsh
 ```
 
-Setup bersifat idempotent. Default model adalah `qwen3:14b` dan
-`qwen3-embedding:0.6b`; kernel Jupyter bernama `foodcourt-analysis`.
+Setup bersifat idempotent. Default model adalah GGUF resmi
+`Qwen3-8B-Q4_K_M` yang dijalankan langsung melalui llama.cpp; kernel Jupyter
+bernama `foodcourt-analysis`. Model diunduh otomatis ke Application Support
+pada penggunaan pertama dan tidak disimpan di repository.
 
 ## Urutan penggunaan
 
@@ -27,11 +29,8 @@ membaca pointer tersebut otomatis. Output analysis berada di
 `notebooks/output/<jobId>/explanatory-v2/`, sedangkan setiap pertanyaan tersimpan
 di `notebooks/output/<jobId>/llm-rag-v2/runs/<runId>/`.
 
-Qwen3 menghasilkan `QueryPlan` terstruktur yang langsung dipakai executor untuk
-menghitung seluruh populasi kandidat dan menetapkan `areaId`. Planner memakai
-mode adaptif: attempt pertama compact tanpa raw thinking; deep thinking hanya
-aktif otomatis bila plan awal invalid. Override tersedia melalui
-`FOODCOURT_PLANNER_THINKING_MODE=always|adaptive|off` (default `adaptive`).
-Geometry dan floorplan overlay selalu diambil dan dirender oleh post-processor
-dari package analysis, bukan dibuat model. Run causal baru berada di
-`llm-rag-v2/`; run `llm-rag-v1/` tetap terbaca sebagai legacy.
+Resolver deterministik memilih evidence, metrik, dan `areaId` langsung dari
+package analysis. Qwen dipanggil satu kali dalam mode non-thinking hanya untuk
+merangkai penjelasan teks. Geometry dan floorplan overlay selalu diambil dan
+dirender oleh post-processor, bukan dibuat model. Run baru berada di
+`llm-rag-v2/`; run lama tetap dapat dibaca sebagai legacy.

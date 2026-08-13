@@ -17,10 +17,11 @@ if [[ ! -d "$RUNTIME_PATH" ]]; then
 fi
 
 "$RUNTIME_PATH/bin/python" -m pip install --upgrade pip wheel
+export CMAKE_ARGS="-DGGML_METAL=on"
 "$RUNTIME_PATH/bin/python" -m pip install -r "$BACKEND_ROOT/requirements.txt"
 
 "$RUNTIME_PATH/bin/python" - <<'PY'
-import fastapi, cv2, torch, shapely, skimage, matplotlib, PIL
+import fastapi, cv2, torch, shapely, skimage, matplotlib, PIL, huggingface_hub, llama_cpp
 print("Foodcourt runtime siap.")
 PY
 

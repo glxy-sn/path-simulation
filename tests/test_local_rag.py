@@ -4,292 +4,228 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
-from explanatory_analysis.query_engine import DataCatalog, NarratedAnswer, QueryExecutor, QueryPlan
+from explanatory_analysis.local_model import LocalModelRuntime
 from explanatory_analysis.rag import LocalRAG, Package, RAGConfig
+
+
+class FakeGenerator:
+    def __init__(self, text: str = "Ringkasan data tersedia. [[SUPPORT:supported]] [[AREA_ID:none]]") -> None:
+        self.text = text
+        self.calls: list[list[dict[str, str]]] = []
+
+    def generate(self, messages: list[dict[str, str]], max_tokens: int = 256) -> dict:
+        self.calls.append(messages)
+        return {"text": self.text, "thinking": "Saya membandingkan kandidat yang relevan.", "promptTokens": 100, "completionTokens": 20}
 
 
 def package(tmp_path: Path) -> Package:
     areas = [
         {
-            "areaId": "flow-01",
-            "label": "Area Arus Ramai",
-            "kind": "flow_hotspot",
+            "areaId": "flow-01", "label": "Area Arus Ramai", "kind": "flow_hotspot",
             "geometryM": {"type": "circle", "center": [2.0, 3.0], "radiusM": 0.5},
-            "metrics": {"relativeIntensity": 1.0, "visitCount": 52, "uniqueVisitors": 18},
-            "confidence": 0.9,
-            "limitation": "di antara hotspot terdeteksi",
+            "metrics": {"relativeIntensity": 1.0, "totalPathLengthM": 100.0, "uniqueVisitors": 18},
+            "confidence": 0.9, "limitation": "Area arus bersifat observasional.",
         },
         {
-            "areaId": "flow-05",
-            "label": "Area Arus Sepi",
-            "kind": "flow_hotspot",
+            "areaId": "flow-05", "label": "Area Arus Sepi", "kind": "flow_hotspot",
             "geometryM": {"type": "circle", "center": [8.0, 5.0], "radiusM": 0.4},
-            "metrics": {"relativeIntensity": 0.1, "visitCount": 10, "uniqueVisitors": 6},
-            "confidence": 0.8,
-            "limitation": "di antara hotspot terdeteksi",
+            "metrics": {"relativeIntensity": 0.1, "totalPathLengthM": 10.0, "uniqueVisitors": 6},
+            "confidence": 0.8, "limitation": "Area arus bersifat observasional.",
+        },
+        {
+            "areaId": "table-01", "label": "Meja 1", "kind": "table",
+            "geometryM": {"type": "polygon", "points": [[1, 1], [2, 1], [2, 2], [1, 2]]},
+            "interactionGeometryM": {"type": "polygon", "points": [[0.5, 0.5], [2.5, 0.5], [2.5, 2.5], [0.5, 2.5]]},
+            "metrics": {"tableAreaM2": 1.0, "interactionAreaM2": 3.0, "meanVisitDurationSec": 10.0, "uniqueVisitors": 12, "visitCount": 20},
+            "confidence": 1.0,
+        },
+        {
+            "areaId": "table-02", "label": "Meja 2", "kind": "table",
+            "geometryM": {"type": "polygon", "points": [[4, 1], [6, 1], [6, 2], [4, 2]]},
+            "interactionGeometryM": {"type": "polygon", "points": [[3.5, 0.5], [6.5, 0.5], [6.5, 2.5], [3.5, 2.5]]},
+            "metrics": {"tableAreaM2": 2.0, "interactionAreaM2": 5.0, "meanVisitDurationSec": 45.0, "uniqueVisitors": 4, "visitCount": 8},
+            "confidence": 1.0,
         },
     ]
     cards = [
-        {"cardId": "card-01", "questionTypes": ["most_traversed_area"], "statement": "Arus tertinggi.", "areaId": "flow-01", "geometryM": areas[0]["geometryM"], "metrics": areas[0]["metrics"], "confidence": 0.9},
-        {"cardId": "card-05", "questionTypes": ["least_traversed_area"], "statement": "Arus terendah di antara hotspot.", "areaId": "flow-05", "geometryM": areas[1]["geometryM"], "metrics": areas[1]["metrics"], "confidence": 0.8},
+        {"cardId": "flow-high", "questionTypes": ["most_traversed_area", "layout"], "statement": "Arus tertinggi berada di Area Arus Ramai.", "areaId": "flow-01", "metrics": areas[0]["metrics"], "limitation": areas[0]["limitation"]},
+        {"cardId": "flow-low", "questionTypes": ["least_traversed_area", "layout"], "statement": "Arus terendah berada di Area Arus Sepi.", "areaId": "flow-05", "metrics": areas[1]["metrics"], "limitation": areas[1]["limitation"]},
+        {"cardId": "table-01-card", "questionTypes": ["table_analysis", "table_usage"], "statement": "Meja 1 teranotasi.", "areaId": "table-01", "metrics": areas[2]["metrics"]},
+        {"cardId": "table-02-card", "questionTypes": ["table_analysis", "table_usage"], "statement": "Meja 2 teranotasi.", "areaId": "table-02", "metrics": areas[3]["metrics"]},
     ]
-    manifest = {"schemaVersion": "2.0", "coordinateSystem": {"widthM": 10, "heightM": 7.5}, "floorplan": {}}
-    return Package(tmp_path, "job", manifest, {"trackCount": 2}, areas, cards, {"capabilities": {}})
+    manifest = {
+        "schemaVersion": "2.0", "jobId": "job", "coordinateSystem": {"widthM": 10, "heightM": 7.5}, "floorplan": {},
+    }
+    return Package(tmp_path, "job", manifest, {"trackCount": 18}, areas, cards, {"capabilities": {}})
 
 
-def service(tmp_path: Path) -> LocalRAG:
-    return LocalRAG(RAGConfig(tmp_path, tmp_path / "out"), package(tmp_path))
-
-
-def quiet_flow_plan() -> QueryPlan:
-    return QueryPlan(
-        mode="analytical",
-        interpretation="Cari flow hotspot dengan intensitas relatif terendah.",
-        assumption="Sepi ditafsirkan sebagai jarang dilewati.",
-        alternativeInterpretations=["Kehadiran rendah"],
-        dataset="spatial_areas",
-        operation="rank",
-        entityKinds=["flow_hotspot"],
-        metrics=[{"field": "relativeIntensity", "aggregation": "value", "direction": "min", "weight": 1.0}],
-        spatialAnswer=True,
-        confidence=0.9,
-    )
-
-
-def test_query_plan_is_generic_and_rejects_extra_fields() -> None:
-    plan = quiet_flow_plan()
-    assert plan.metrics[0].direction == "min"
-    with pytest.raises(Exception):
-        QueryPlan.model_validate(plan.model_dump() | {"intent": "least_traversed"})
-    with pytest.raises(Exception):
-        QueryPlan(mode="general_knowledge", interpretation="x", assumption="x", dataset="spatial_areas", operation="lookup", entityKinds=[], spatialAnswer=True, confidence=0.5)
-
-
-def test_complete_population_executor_selects_flow_05(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    result = rag.executor.execute(quiet_flow_plan())
-    assert result["populationCount"] == 2
-    assert result["selectedAreaId"] == "flow-05"
-    assert result["rows"][0]["relativeIntensity"] == 0.1
-
-
-def test_catalog_rejects_unknown_field_and_area(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    invalid_field_payload = quiet_flow_plan().model_dump()
-    invalid_field_payload["metrics"] = [{"field": "invented", "aggregation": "value", "direction": "min", "weight": 1.0}]
-    invalid_field = QueryPlan.model_validate(invalid_field_payload)
-    with pytest.raises(ValueError):
-        rag.catalog.validate_plan(invalid_field, rag.area_by_id)
-    invalid_area = quiet_flow_plan().model_copy(update={"areaIds": ["hallucinated-area"]})
-    with pytest.raises(ValueError):
-        rag.catalog.validate_plan(invalid_area, rag.area_by_id)
-
-
-def test_catalog_rejects_relative_intensity_across_area_kinds(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    mixed_plan = quiet_flow_plan().model_copy(
-        update={"entityKinds": ["low_flow_area", "low_presence_area"]}
-    )
-    with pytest.raises(ValueError, match="tepat satu area kind"):
-        rag.catalog.validate_plan(mixed_plan, rag.area_by_id)
-
-
-def test_catalog_normalizes_explicit_kind_filter_without_language_router(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    payload = quiet_flow_plan().model_dump()
-    payload["entityKinds"] = []
-    payload["filters"] = [{"field": "kind", "operator": "eq", "value": "flow_hotspot"}]
-    payload["metrics"].append(
-        {"field": "flow_hotspot", "aggregation": "value", "direction": "min", "weight": 1.0}
-    )
-    normalized = rag.catalog.normalize_plan(QueryPlan.model_validate(payload))
-    assert normalized.entityKinds == ["flow_hotspot"]
-    assert [metric.field for metric in normalized.metrics] == ["relativeIntensity"]
-    rag.catalog.validate_plan(normalized, rag.area_by_id)
-
-
-def test_catalog_selects_first_structured_kind_and_records_other_as_alternative(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    mixed = quiet_flow_plan().model_copy(
-        update={"entityKinds": ["flow_hotspot", "presence_hotspot"]}
-    )
-    normalized = rag.catalog.normalize_plan(mixed)
-    assert normalized.entityKinds == ["flow_hotspot"]
-    assert normalized.alternativeInterpretations == [
-        "Kehadiran rendah",
-        "Ranking alternatif untuk area kind presence_hotspot (tidak dieksekusi)",
-    ]
-    rag.catalog.validate_plan(normalized, rag.area_by_id)
-
-
-def test_planner_payload_uses_thinking_and_structured_schema(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    payload = rag._planner_payload("Area mana yang jarang dilewati?", [], rag.config.thinking_num_predict)
-    assert payload["think"] is False
-    assert payload["options"]["num_predict"] == 512
-    assert payload["options"]["num_ctx"] == 4096
-    assert payload["format"]["title"] == "QueryPlan"
+def service(tmp_path: Path, generator: FakeGenerator | None = None) -> tuple[LocalRAG, FakeGenerator]:
+    fake = generator or FakeGenerator()
+    config = RAGConfig(tmp_path, tmp_path / "out")
+    return LocalRAG(config, package(tmp_path), run_root=tmp_path / "runs", generator=fake), fake
 
 
 @pytest.mark.parametrize(
-    ("question", "expected"),
+    ("question", "model_text", "expected_area"),
     [
-        ("Area mana yang paling ramai?", "max"),
-        ("Area mana yang paling sepi atau jarang dilewati?", "min"),
+        ("area paling jarang dilewati", "Area Arus Sepi memiliki intensitas terendah. [[SUPPORT:supported]] [[AREA_ID:flow-05]]", "flow-05"),
+        ("meja mana yang paling ramai", "Meja 1 paling ramai berdasarkan 20 kunjungan dan 12 track unik. [[SUPPORT:supported]] [[AREA_ID:table-01]]", "table-01"),
+        ("meja mana yang cocok buat main catur", "Meja 2 memberi area dan dwell lebih besar, tetapi kenyamanan tidak diukur CCTV. [[SUPPORT:partially_supported]] [[AREA_ID:table-02]]", "table-02"),
     ],
 )
-def test_planner_repairs_only_missing_ranking_direction(question: str, expected: str) -> None:
-    payload = quiet_flow_plan().model_dump()
-    payload["metrics"][0]["direction"] = "none"
-    parsed = LocalRAG._parse_query_plan(json.dumps(payload), question)
-    assert parsed.metrics[0].direction == expected
+def test_general_qwen_reasoning_owns_answer_and_area_selection(
+    tmp_path: Path,
+    question: str,
+    model_text: str,
+    expected_area: str,
+) -> None:
+    rag, generator = service(tmp_path, FakeGenerator(model_text))
+    result = rag.ask(question, show=False)
 
-
-def test_truncated_planner_is_retried_and_second_plan_is_used(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    rag.semantic_hints = lambda question: []
-    thinking_modes = []
-    responses = iter([
-        {"message": {"thinking": "belum selesai", "content": ""}, "done_reason": "length", "eval_count": 1024},
-        {"message": {"thinking": "selesai", "content": quiet_flow_plan().model_dump_json()}, "done_reason": "stop", "eval_count": 300},
-    ])
-    def chat(payload):
-        thinking_modes.append(payload["think"])
-        return next(responses)
-
-    rag.client.chat = chat
-    plan, thinking, audit, _ = rag.plan_question("Area mana yang jarang dilewati?")
-    assert plan.metrics[0].direction == "min"
-    assert audit["status"] == "retry_succeeded"
-    assert audit["usedAttempt"] == 2
-    assert "belum selesai" in thinking and "selesai" in thinking
-    assert thinking_modes == [False, True]
-
-
-def test_valid_compact_plan_has_no_fake_raw_thinking(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    rag.semantic_hints = lambda question: []
-    rag.client.chat = lambda payload: {
-        "message": {"content": quiet_flow_plan().model_dump_json()},
-        "done_reason": "stop",
-        "eval_count": 120,
+    assert result["selectedAreaId"] == expected_area
+    assert result["provenance"]["areaSelectionAuthority"] == "qwen_reasoning_validated"
+    assert result["usage"]["generation"]["modelCallCount"] == 1
+    assert len(generator.calls) == 1
+    assert "[[AREA_ID:" not in result["answer"]
+    assert generator.calls[0][0]["content"].startswith("/think")
+    prompt_context = json.loads(generator.calls[0][1]["content"])
+    catalog_ids = {line.split("|", 1)[0] for line in prompt_context["areaCatalog"].splitlines()}
+    assert catalog_ids == {
+        "flow-01", "flow-05", "table-01", "table-02",
     }
-    _, thinking, audit, _ = rag.plan_question("Area mana yang jarang dilewati?")
-    assert thinking == ""
-    assert audit["thinkingMode"] == "adaptive"
-    assert audit["attempts"][0]["thinkingEnabled"] is False
+    run_dir = Path(result["artifacts"]["runDirectory"])
+    assert (run_dir / "grounding.json").is_file()
+    assert (run_dir / "reasoning.txt").is_file()
+    assert not (run_dir / "query_plan.json").exists()
+    assert not (run_dir / "thinking.txt").exists()
+    manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["configuration"]["maximumModelCalls"] == 1
+    assert manifest["configuration"]["thinking"] is True
 
 
-def test_executor_area_cannot_be_replaced_by_narrator(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    rag.plan_question = lambda question: (quiet_flow_plan(), "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
-    rag.retrieve = lambda question, execution=None: [dict(rag.package.cards[1])]
-    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area Arus Ramai menurut narasi yang salah.", limitations=[], requiredData=[]), {})
-    result = rag.ask("Area mana yang jarang dilewati?", show=False)
-    assert result["selectedAreaId"] == "flow-05"
-    assert result["selectedArea"] == rag.area_by_id["flow-05"]
-    assert result["provenance"]["areaSelectionAuthority"] == "query_executor"
-    manifest_path = Path(result["artifacts"]["runDirectory"]) / "run_manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    assert manifest["models"]["planner"] == "qwen3:14b"
-    assert manifest["configuration"]["maximumPlannerRetries"] == 1
-    assert "usageAndLatency" in manifest
+def test_layout_question_is_answered_without_structured_output(tmp_path: Path) -> None:
+    rag, generator = service(tmp_path)
+    result = rag.ask("analisis layoutnya", show=False)
+
+    assert result["grounding"]["mode"] == "qwen_general_reasoning"
+    assert result["answer"]
+    assert len(generator.calls) == 1
+    assert result["selectedAreaId"] is None
 
 
-def test_narrator_retries_when_internal_area_id_is_exposed(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    execution = rag.executor.execute(quiet_flow_plan())
-    responses = iter([
-        {"message": {"content": NarratedAnswer(answer="Area Arus Sepi (flow-05) memiliki intensitas paling rendah.", limitations=[], requiredData=[]).model_dump_json()}},
-        {"message": {"content": NarratedAnswer(answer="Area Arus Sepi memiliki intensitas paling rendah.", limitations=[], requiredData=[]).model_dump_json()}},
-    ])
-    rag.client.chat = lambda payload: next(responses)
-    narrated, usage = rag.narrate("Area mana yang jarang dilewati?", quiet_flow_plan(), execution, rag.package.cards)
-    assert narrated.answer == "Area Arus Sepi memiliki intensitas paling rendah."
-    assert usage["attempts"] == 2
+def test_model_failure_is_reported_instead_of_inventing_a_backend_answer(tmp_path: Path) -> None:
+    class FailingGenerator(FakeGenerator):
+        def generate(self, messages: list[dict[str, str]], max_tokens: int = 256) -> dict:
+            self.calls.append(messages)
+            raise RuntimeError("runtime unavailable")
+
+    generator = FailingGenerator()
+    rag, _ = service(tmp_path, generator)
+    with pytest.raises(RuntimeError, match="runtime unavailable"):
+        rag.ask("area paling jarang dilewati", show=False)
+    assert len(generator.calls) == 1
 
 
-def test_short_narration_uses_deterministic_executor_summary(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    execution = rag.executor.execute(quiet_flow_plan())
-    rag.client.chat = lambda payload: {
-        "message": {"content": NarratedAnswer(answer="Area Arus Sepi", limitations=[], requiredData=[]).model_dump_json()},
-        "total_duration": 1_000_000,
-    }
-    narrated, usage = rag.narrate("Area mana yang jarang dilewati?", quiet_flow_plan(), execution, rag.package.cards)
-    assert "Area terpilih adalah Area Arus Sepi" in narrated.answer
-    assert "flow-05" not in narrated.answer
-    assert "relativeIntensity 0.1" in narrated.answer
-    assert "2 flow_hotspot" in narrated.answer
-    assert usage["deterministicShortAnswerFallback"] is True
-
-
-def test_general_knowledge_answer_has_no_area_or_overlay(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    plan = QueryPlan(mode="general_knowledge", interpretation="Pertanyaan pengetahuan umum.", assumption="Tidak memakai data job.", operation="describe", entityKinds=[], confidence=0.8)
-    rag.plan_question = lambda question: (plan, "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
-    rag.retrieve = lambda question, execution=None: []
-    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Pengetahuan umum, bukan hasil trajectory.", limitations=[], requiredData=[]), {})
-    result = rag.ask("Bagaimana meningkatkan kepuasan pengunjung?", show=False)
-    assert result["dataGrounding"] == "general_knowledge"
+def test_invalid_area_marker_keeps_model_answer_but_does_not_create_overlay(tmp_path: Path) -> None:
+    rag, _ = service(tmp_path, FakeGenerator("Data belum cukup untuk memilih satu area. [[SUPPORT:unsupported]] [[AREA_ID:made-up]]"))
+    result = rag.ask("bagaimana kondisi pencahayaannya?", show=False)
+    assert result["answer"] == "Data belum cukup untuk memilih satu area."
+    assert result["selectedAreaId"] is None
     assert result["supportLevel"] == "unsupported"
-    assert result["selectedArea"] is None
+    assert result["usage"]["generation"]["areaMarkerValid"] is False
     assert result["artifacts"]["floorplanOverlay"] is None
 
 
-def test_overlay_failure_keeps_completed_text_answer(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    rag.plan_question = lambda question: (quiet_flow_plan(), "thinking", {"status": "complete", "attempts": [], "truncated": False}, [])
-    rag.retrieve = lambda question, execution=None: [dict(rag.package.cards[1])]
-    rag.narrate = lambda question, plan, execution, evidence: (NarratedAnswer(answer="Area terpilih adalah Area Arus Sepi.", limitations=[], requiredData=[]), {})
-    rag._render_overlay = lambda run_dir, final: (_ for _ in ()).throw(RuntimeError("renderer unavailable"))
-
-    result = rag.ask("Area mana yang jarang dilewati?", show=False)
-
-    assert result["answer"] == "Area terpilih adalah Area Arus Sepi."
-    assert result["artifacts"]["floorplanOverlay"] is None
-    assert "Overlay floorplan tidak dapat dibuat: renderer unavailable" in result["limitations"]
-    saved = json.loads((Path(result["artifacts"]["runDirectory"]) / "response.json").read_text())
-    assert saved["answer"] == result["answer"]
+def test_incomplete_control_marker_is_never_shown_to_user(tmp_path: Path) -> None:
+    rag, _ = service(
+        tmp_path,
+        FakeGenerator("Meja 1 paling ramai. [[SUPPORT:supported]] [[AREA_ID:table-01"),
+    )
+    result = rag.ask("meja paling ramai", show=False)
+    assert result["answer"] == "Meja 1 paling ramai."
+    assert "[[" not in result["answer"]
 
 
-def test_session_context_is_limited_to_six_turns(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    rag.history = [{"question": f"q{i}", "answer": f"a{i}", "selectedAreaId": "flow-01", "queryPlan": {"interpretation": f"i{i}"}, "artifacts": {"runId": f"run-{i}"}} for i in range(8)]
-    context = rag._session_context()
-    assert len(context) == 6
-    assert context[0]["question"] == "q2"
-    assert "thinking" not in context[0]
+def test_length_limited_completion_is_not_saved_as_a_partial_answer(tmp_path: Path) -> None:
+    class TruncatedGenerator(FakeGenerator):
+        def generate(self, messages: list[dict[str, str]], max_tokens: int = 256) -> dict:
+            self.calls.append(messages)
+            return {
+                "text": "Jawaban ini masih terpotong karena",
+                "finishReason": "length",
+                "completionTokens": max_tokens,
+            }
+
+    rag, _ = service(tmp_path, TruncatedGenerator())
+    with pytest.raises(RuntimeError, match="mencapai batas generasi"):
+        rag.ask("jelaskan semua meja", show=False)
+    assert not (tmp_path / "runs").exists()
 
 
-def test_saved_new_and_legacy_runs_are_loadable(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    new_dir = tmp_path / "out" / "job" / "llm-rag-v2" / "runs" / "20260811T130000.000000Z-new"
-    old_dir = tmp_path / "out" / "job" / "llm-rag-v1" / "runs" / "20260811T120000.000000Z-old"
-    for run_dir in (new_dir, old_dir):
-        run_dir.mkdir(parents=True)
-        (run_dir / "response.json").write_text(json.dumps({"question": run_dir.name, "supportLevel": "supported", "answer": "x", "artifacts": {}}), encoding="utf-8")
-        (run_dir / "retrieved_evidence.json").write_text(json.dumps({"cards": []}), encoding="utf-8")
-        (run_dir / "thinking.txt").write_text("audit", encoding="utf-8")
-    (new_dir / "query_plan.json").write_text(quiet_flow_plan().model_dump_json(), encoding="utf-8")
-    (new_dir / "execution_result.json").write_text(json.dumps({"selectedAreaId": "flow-05"}), encoding="utf-8")
-    entries = rag.saved_runs()
-    assert {entry["legacy"] for entry in entries} == {False, True}
-    bundle = rag.load_saved_bundle(new_dir)
-    assert bundle["legacy"] is False
-    assert bundle["execution"]["selectedAreaId"] == "flow-05"
+def test_internal_area_ids_are_replaced_with_user_facing_labels(tmp_path: Path) -> None:
+    rag, _ = service(
+        tmp_path,
+        FakeGenerator("table-01 lebih ramai daripada table-02. [[SUPPORT:supported]] [[AREA_ID:table-01]]"),
+    )
+    result = rag.ask("bandingkan meja", show=False)
+    assert result["answer"] == "Meja 1 lebih ramai daripada Meja 2."
 
 
-def test_scaled_canvas_still_renders_floorplan_overlay(tmp_path: Path) -> None:
-    rag = service(tmp_path)
-    run_dir = tmp_path / "rendered-run"
-    run_dir.mkdir()
-    overlay = rag._render_overlay(run_dir, {
-        "selectedArea": rag.area_by_id["flow-05"],
-        "selectedAreaId": "flow-05",
-        "dataGrounding": "grounded",
-        "supportLevel": "supported",
-    })
-    assert overlay == run_dir / "floorplan_overlay.png"
-    assert overlay.is_file()
+def test_unclosed_thinking_block_is_not_treated_as_visible_answer() -> None:
+    answer, thinking = LocalModelRuntime._split_thinking("<think>analisis yang belum selesai")
+    assert answer == ""
+    assert thinking == "analisis yang belum selesai"
+
+
+def test_overlay_contains_only_floorplan_canvas_without_side_metadata(tmp_path: Path) -> None:
+    rag, _ = service(tmp_path, FakeGenerator("Area Arus Sepi memiliki arus terendah. [[SUPPORT:supported]] [[AREA_ID:flow-05]]"))
+    result = rag.ask("area paling jarang dilewati", show=False)
+    overlay = Path(result["artifacts"]["floorplanOverlay"])
+    with Image.open(overlay) as image:
+        ratio = image.width / image.height
+    assert ratio == pytest.approx(10 / 7.5, rel=0.03)
+
+
+def test_existing_model_is_not_downloaded_again(tmp_path: Path) -> None:
+    target = tmp_path / "Qwen3-8B-Q4_K_M.gguf"
+    target.write_bytes(b"valid-model")
+    calls = 0
+
+    def download(_: str, __: str, ___: Path) -> Path:
+        nonlocal calls
+        calls += 1
+        return target
+
+    runtime = LocalModelRuntime(target, download=download, minimum_model_bytes=4)
+    assert runtime.ensure_model() == target
+    assert calls == 0
+
+
+def test_failed_download_leaves_no_valid_or_partial_model(tmp_path: Path) -> None:
+    target = tmp_path / "Qwen3-8B-Q4_K_M.gguf"
+
+    def download(_: str, __: str, cache: Path) -> Path:
+        cache.mkdir(parents=True, exist_ok=True)
+        broken = cache / "broken.gguf"
+        broken.write_bytes(b"x")
+        return broken
+
+    runtime = LocalModelRuntime(target, download=download, minimum_model_bytes=4)
+    with pytest.raises(RuntimeError, match="tidak lengkap"):
+        runtime.ensure_model()
+    assert not target.exists()
+    assert list(tmp_path.glob("*.partial")) == []
+
+
+def test_saved_legacy_session_run_remains_loadable(tmp_path: Path) -> None:
+    rag, _ = service(tmp_path)
+    old_dir = tmp_path / "runs" / "20260811T120000.000000Z-old"
+    old_dir.mkdir(parents=True)
+    (old_dir / "response.json").write_text(json.dumps({"question": "lama", "supportLevel": "supported", "answer": "x", "artifacts": {}}), encoding="utf-8")
+    (old_dir / "retrieved_evidence.json").write_text(json.dumps({"cards": []}), encoding="utf-8")
+    (old_dir / "thinking.txt").write_text("audit lama", encoding="utf-8")
+    bundle = rag.load_saved_bundle(old_dir)
+    assert bundle["legacy"] is True
+    assert bundle["response"]["answer"] == "x"
