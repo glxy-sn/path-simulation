@@ -36,7 +36,7 @@ struct HorizontalStepper: View {
 
                 if idx < steps.count - 1 {
                     Rectangle()
-                        .fill(step.rawValue < current.rawValue ? Theme.accent : Color.primary.opacity(0.12))
+                        .fill(step.rawValue < current.rawValue ? Theme.accentFill : Color.primary.opacity(0.12))
                         .frame(height: 2)
                         .frame(maxWidth: .infinity)
                 }
@@ -71,7 +71,7 @@ private struct StepNode: View {
                 }
                 .font(.caption.weight(.bold))
                 // FIX: paksa Color di kedua sisi ternary (‘.white’ tak ada di HierarchicalShapeStyle)
-                .foregroundStyle(state == .pending ? Color.secondary : Color.white)
+                .foregroundStyle(state == .pending ? Color.secondary : Theme.onAccent)
             }
             Text(step.title)
                 .font(.callout.weight(state == .active ? .semibold : .regular))
@@ -81,6 +81,6 @@ private struct StepNode: View {
     }
 
     private var circleFill: Color {
-        state == .pending ? Color.primary.opacity(0.1) : Theme.accent
+        state == .pending ? Color.primary.opacity(0.1) : Theme.accentFill
     }
 }

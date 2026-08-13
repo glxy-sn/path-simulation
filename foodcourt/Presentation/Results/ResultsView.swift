@@ -138,7 +138,7 @@ struct ResultsView: View {
             }
             Button("Export", systemImage: "square.and.arrow.up") { showExport = true }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-                .tint(Theme.accent)
+                .tint(Theme.accentFill)
                 .disabled(session.result == nil)
             if !isChatVisible, let onOpenChat {
                 Button("Tanya Data", systemImage: "bubble.left.and.text.bubble.right") {
@@ -231,9 +231,9 @@ struct ResultsView: View {
             let name = session.venueName.isEmpty ? "Venue" : session.venueName
             let dur = timecode(session.trimEndSec - session.trimStartSec)
             let cams = session.overrideCameraCount ?? session.cameras.count
-            return "\(name) Â· \(cams) kamera Â· durasi \(dur)"
+            return "\(name) · \(cams) kamera · durasi \(dur)"
         }
-        return "Contoh data â jalankan analisis untuk hasil nyata."
+        return "Contoh data jalankan analisis untuk hasil nyata."
     }
 
     private var metrics: some View {
@@ -680,7 +680,7 @@ private struct ZonaEditor: View {
                     Image(nsImage: background).resizable().allowsHitTesting(false)
                     Color.white.opacity(0.06).allowsHitTesting(false)
                 } else {
-                    Color(hex: 0xF7F8FA)
+                    Theme.canvasBackground
                 }
 
                 // area kosong -> deselect
@@ -764,8 +764,8 @@ private struct ZonaEditor: View {
                 Label("Add Zone", systemImage: "plus")
                     .font(.callout.weight(.semibold))
                     .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(Theme.accent, in: Capsule())
-                    .foregroundStyle(.white)
+                    .background(Theme.accentFill, in: Capsule())
+                    .foregroundStyle(Theme.onAccent)
             }
             .buttonStyle(.plain)
 
@@ -845,7 +845,7 @@ private struct ZoneMapView: View {
                     Image(nsImage: background).resizable().allowsHitTesting(false)
                     Color.white.opacity(0.08).allowsHitTesting(false)
                 } else {
-                    Color(hex: 0xF7F8FA)
+                    Theme.canvasBackground
 
                     // grid halus sebagai konteks lantai
                     Canvas { ctx, size in
@@ -855,7 +855,7 @@ private struct ZoneMapView: View {
                             grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
                         for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
                             grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
-                        ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.07)), lineWidth: 1)
+                        ctx.stroke(grid, with: .color(Theme.canvasGrid), lineWidth: 1)
                     }
                 }
 
@@ -910,7 +910,7 @@ private struct BoundingBoxContent: View {
                             .frame(width: r.width, height: r.height)
                         Text("ID \(box.id)").font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Theme.accent).foregroundStyle(.white).offset(y: -14)
+                            .background(Theme.accentFill).foregroundStyle(Theme.onAccent).offset(y: -14)
                         Circle().fill(.orange).frame(width: 5, height: 5)
                             .offset(x: r.width / 2 - 2.5, y: r.height - 2.5)
                     }
@@ -944,7 +944,7 @@ private struct PathContent: View {
                 if let background {
                     Image(nsImage: background).resizable().allowsHitTesting(false)
                 } else {
-                    Color(hex: 0xF7F8FA)
+                    Theme.canvasBackground
                     Canvas { ctx, size in
                         var grid = Path()
                         let cols = 10, rows = 6
@@ -952,7 +952,7 @@ private struct PathContent: View {
                             grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
                         for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
                             grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
-                        ctx.stroke(grid, with: .color(Color(hex: 0x1E293B, alpha: 0.08)), lineWidth: 1)
+                        ctx.stroke(grid, with: .color(Theme.canvasGrid), lineWidth: 1)
                     }
                 }
 

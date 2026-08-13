@@ -21,8 +21,8 @@ struct PrimaryButton: View {
             }
             .padding(.horizontal, Space.l)
             .padding(.vertical, Space.s + 2)
-            .foregroundStyle(.white)
-            .background(enabled ? Theme.accent : Color.gray.opacity(0.4),
+            .foregroundStyle(Theme.onAccent)
+            .background(enabled ? Theme.accentFill : Color.gray.opacity(0.4),
                         in: RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
         }
         .buttonStyle(.plain)

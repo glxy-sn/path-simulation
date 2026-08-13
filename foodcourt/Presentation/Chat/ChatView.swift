@@ -479,7 +479,7 @@ struct HistoryChatInspector: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .tint(Theme.accent)
+                    .tint(Theme.accentFill)
                 }
                 .padding(.horizontal, Space.m)
                 .padding(.vertical, Space.s)
@@ -520,7 +520,7 @@ struct HistoryChatInspector: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .tint(Theme.accent)
+            .tint(Theme.accentFill)
             Spacer()
         }
         .padding(Space.xl)
@@ -634,7 +634,7 @@ struct HistoryChatInspector: View {
             }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .tint(Theme.accent)
+                .tint(Theme.accentFill)
                 .disabled(!viewModel.isReady || viewModel.isAnswering || viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(Space.m)
@@ -676,7 +676,7 @@ private struct AssistantBubble: View {
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 7) {
-                Text(displayText)
+                Text(displayAttributedText)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -696,6 +696,16 @@ private struct AssistantBubble: View {
             .replacingOccurrences(of: "Area dengan ID \(areaId)", with: label, options: .caseInsensitive)
             .replacingOccurrences(of: "ID \(areaId)", with: label, options: .caseInsensitive)
             .replacingOccurrences(of: areaId, with: label, options: .caseInsensitive)
+    }
+
+    private var displayAttributedText: AttributedString {
+        (try? AttributedString(
+            markdown: displayText,
+            options: .init(
+                interpretedSyntax: .full,
+                failurePolicy: .returnPartiallyParsedIfPossible
+            )
+        )) ?? AttributedString(displayText)
     }
 }
 

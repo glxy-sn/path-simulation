@@ -219,7 +219,7 @@ private struct StageRow: View {
     }
     private var fill: Color {
         switch stage.state {
-        case .done, .active: return Theme.accent
+        case .done, .active: return Theme.accentFill
         case .pending:       return Color.primary.opacity(0.08)
         }
     }
@@ -249,7 +249,7 @@ private struct BoundingBoxPreview: View {
                             .frame(width: r.width, height: r.height)
                         Text("ID \(box.id)").font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Theme.accent).foregroundStyle(.white).offset(y: -14)
+                            .background(Theme.accentFill).foregroundStyle(Theme.onAccent).offset(y: -14)
                         Circle().fill(.orange).frame(width: 5, height: 5)
                             .offset(x: r.width / 2 - 2.5, y: r.height - 2.5)
                     }

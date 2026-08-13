@@ -5,6 +5,7 @@
 //  Created by Shafa Tiara on 03/08/26.
 //
 
+import AppKit
 import SwiftUI
 
 // MARK: - Warna
@@ -20,12 +21,35 @@ extension Color {
             opacity: alpha
         )
     }
+
+    /// Warna dengan pasangan eksplisit untuk light/dark appearance macOS.
+    init(lightHex: UInt, darkHex: UInt, alpha: Double = 1) {
+        let light = NSColor(
+            srgbRed: Double((lightHex >> 16) & 0xff) / 255,
+            green: Double((lightHex >> 8) & 0xff) / 255,
+            blue: Double(lightHex & 0xff) / 255,
+            alpha: alpha
+        )
+        let dark = NSColor(
+            srgbRed: Double((darkHex >> 16) & 0xff) / 255,
+            green: Double((darkHex >> 8) & 0xff) / 255,
+            blue: Double(darkHex & 0xff) / 255,
+            alpha: alpha
+        )
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
 }
 
 enum Theme {
     // Palet: Vanilla Cream / Blush Petal / Rosewood / Sage Leaf / Misty Sky / Midnight Lagoon
-    static let accent      = Color(hex: 0x2D3A47)              // Midnight Lagoon
-    static let accentSoft  = Color(hex: 0x2D3A47, alpha: 0.12)
+    /// Untuk teks, ikon, garis, dan progress; dibuat lebih terang pada dark mode.
+    static let accent      = Color(lightHex: 0x2D3A47, darkHex: 0x9FC7EB)
+    /// Untuk tombol/circle terisi yang memakai foreground putih.
+    static let accentFill  = Color(lightHex: 0x2D3A47, darkHex: 0x436887)
+    static let onAccent    = Color.white
+    static let accentSoft  = accent.opacity(0.16)
 
     static let cream       = Color(hex: 0xFFF7E6)
     static let blush       = Color(hex: 0xF7C8D3)
@@ -39,6 +63,8 @@ enum Theme {
 
     /// Garis pemisah / border halus.
     static let hairline    = Color.primary.opacity(0.08)
+    static let canvasBackground = Color(nsColor: .controlBackgroundColor)
+    static let canvasGrid  = Color.primary.opacity(0.08)
 
     /// Gradien untuk heatmap (rendah → tinggi) — warna fungsional standar, bukan palet app.
     static let heatStops: [Gradient.Stop] = [

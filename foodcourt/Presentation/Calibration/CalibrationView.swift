@@ -147,8 +147,8 @@ struct CalibrationView: View {
                         }
                         .padding(.horizontal, Space.m)
                         .padding(.vertical, Space.s)
-                        .foregroundStyle(index == selectedIndex ? Color.white : Color.primary)
-                        .background(index == selectedIndex ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
+                        .foregroundStyle(index == selectedIndex ? Theme.onAccent : Color.primary)
+                        .background(index == selectedIndex ? Theme.accentFill : Color.primary.opacity(0.06), in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Pilih \(camera.label)")
