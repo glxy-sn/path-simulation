@@ -8,11 +8,6 @@
 import SwiftUI
 import SwiftData
 
-// ============================================================
-//  Layar Riwayat — daftar analisis yang tersimpan (SwiftData).
-//  Taruh di: Foodcourt/Sources/Presentation/History/HistoryView.swift
-// ============================================================
-
 struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
@@ -45,10 +40,10 @@ struct HistoryView: View {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 HStack(alignment: .top) {
                     SectionHeader(
-                        title: "Riwayat Analisis",
-                        subtitle: "\(records.count) analisis tersimpan."
+                        title: "Analysis History",
+                        subtitle: "\(records.count) saved analyses."
                     )
-                    PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
+                    PrimaryButton(title: "New Analysis", systemImage: "plus") {
                         router.startNew()
                     }
                 }
@@ -106,8 +101,8 @@ struct HistoryView: View {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("Belum ada analisis").font(.headline)
-            Text("Mulai dari “Analisis Baru”. Hasil akan otomatis tersimpan di sini.")
+            Text("No analyses yet").font(.headline)
+            Text("Start from New Analysis. Results are saved here automatically.")
                 .font(.callout).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -210,7 +205,7 @@ private struct LegacyChatUnavailable: View {
             ContentUnavailableView(
                 "Tanya Data tidak tersedia",
                 systemImage: "bubble.left.and.exclamationmark.bubble.right",
-                description: Text("Riwayat lama ini tidak memiliki jobId yang dapat dipetakan secara aman ke backend.")
+                description: Text("This old history entry has no jobId that can be safely mapped to the backend.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -221,27 +216,33 @@ private struct LegacyChatUnavailable: View {
 private struct HistoryRow: View {
     let record: AnalysisRecord
     var onDelete: () -> Void
+    @State private var thumb: NSImage? = nil
 
     var body: some View {
         HStack(spacing: Space.l) {
-            RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-                .fill(Theme.accentSoft)
-                .frame(width: 64, height: 64)
-                .overlay(
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.title2)
-                        .foregroundStyle(Theme.accent)
-                )
+            Group {
+                if let thumb {
+                    Image(nsImage: thumb).resizable().scaledToFill()
+                } else {
+                    Theme.accentSoft.overlay(
+                        Image(systemName: "chart.bar.doc.horizontal")
+                            .font(.title2).foregroundStyle(Theme.accent)
+                    )
+                }
+            }
+            .frame(width: 104, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).strokeBorder(Theme.hairline))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(record.venueName).font(.headline).lineLimit(1)
                 Text("\(record.venueType) · \(record.dateText)")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.l) {
-                    stat("person.2", "\(record.totalVisitors) pengunjung")
+                    stat("person.2", "\(record.totalVisitors) visitors")
                     stat("clock", record.avgDwellText)
-                    stat("chart.line.uptrend.xyaxis", "puncak \(record.peakOccupancy)")
-                    stat("camera", "\(record.cameraCount) kamera")
+                    stat("chart.line.uptrend.xyaxis", "peak \(record.peakOccupancy)")
+                    stat("camera", "\(record.cameraCount) cameras")
                     stat("timer", timecode(record.durationSec))
                 }
                 .padding(.top, 2)
@@ -254,9 +255,10 @@ private struct HistoryRow: View {
                 Image(systemName: "trash").foregroundStyle(.secondary).padding(6).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help("Hapus dari riwayat")
+            .help("Remove from history")
         }
         .card(padding: Space.m)
+        .task(id: record.folder) { thumb = await HistoryStore.thumbnail(folder: record.folder) }
     }
 
     private func stat(_ symbol: String, _ text: String) -> some View {

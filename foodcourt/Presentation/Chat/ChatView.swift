@@ -333,7 +333,7 @@ struct HistoryChatInspector: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.active?.title ?? "Tanya Data")
+                Text(viewModel.active?.title ?? "Ask Data")
                     .font(.headline)
                     .lineLimit(1)
             }
@@ -344,7 +344,7 @@ struct HistoryChatInspector: View {
                     Task { await viewModel.newChat() }
                 }
             }
-            headerIconButton(systemImage: "sidebar.right", help: "Tutup Tanya Data", action: onClose)
+            headerIconButton(systemImage: "sidebar.right", help: "Close Ask Data", action: onClose)
         }
         .padding(Space.m)
     }
@@ -373,14 +373,14 @@ struct HistoryChatInspector: View {
             } else {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Percakapan")
+                        Text("Conversations")
                             .font(.callout.weight(.semibold))
-                        Text("Pilih chat untuk melanjutkan konteks sebelumnya.")
+                        Text("Pick a chat to continue its previous context.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Chat Baru", systemImage: "plus") {
+                    Button("New Chat", systemImage: "plus") {
                         Task { await viewModel.newChat() }
                     }
                     .buttonStyle(.borderedProminent)
@@ -413,15 +413,15 @@ struct HistoryChatInspector: View {
                 .frame(width: 64, height: 64)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: Radius.m))
             VStack(spacing: 6) {
-                Text("Belum ada chat")
+                Text("No chats yet")
                     .font(.title3.weight(.semibold))
-                Text("Mulai percakapan baru untuk bertanya tentang hasil analisis pada riwayat ini.")
+                Text("Start a new conversation to ask about this analysis.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Button("Buat Chat Baru", systemImage: "square.and.pencil") {
+            Button("New Chat", systemImage: "square.and.pencil") {
                 Task { await viewModel.newChat() }
             }
             .buttonStyle(.borderedProminent)
@@ -489,7 +489,7 @@ struct HistoryChatInspector: View {
                             UserBubble(text: pendingQuestion)
                             HStack(spacing: Space.s) {
                                 ProgressView().controlSize(.small)
-                                Text("Qwen3 14B sedang menganalisis…")
+                                Text("Analyzing…")
                             }
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -514,9 +514,9 @@ struct HistoryChatInspector: View {
             Image(systemName: "sparkles")
                 .font(.title2)
                 .foregroundStyle(Theme.accent)
-            Text("Tanyakan tentang riwayat ini")
+            Text("Ask about this analysis")
                 .font(.callout.weight(.semibold))
-            Text("Jawaban memakai data analisis dan konteks sesi chat ini saja.")
+            Text("Answers use this analysis data and this chat session context only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -527,7 +527,7 @@ struct HistoryChatInspector: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: Space.s) {
-            TextField("Tanya data riwayat ini…", text: $viewModel.draft, axis: .vertical)
+            TextField("Ask about this analysis…", text: $viewModel.draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...5)
                 .padding(.horizontal, Space.s)

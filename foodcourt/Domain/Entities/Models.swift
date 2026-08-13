@@ -83,10 +83,10 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Deteksi",         systemImage: "person.crop.rectangle"),
+        .init(name: "Detection",         systemImage: "person.crop.rectangle"),
         .init(name: "Tracking",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
-        .init(name: "Fusion multi-kamera",             systemImage: "camera.metering.multispot"),
-        .init(name: "Analisis", systemImage: "chart.dots.scatter")
+        .init(name: "Multi-camera Fusion",             systemImage: "camera.metering.multispot"),
+        .init(name: "Analytics", systemImage: "chart.dots.scatter")
     ]
 }
 
@@ -178,9 +178,9 @@ enum SampleResult {
     ]
 
     static let stops: [StopPoint] = [
-        .init(name: "Meja promo tengah", dwellSeconds: 240),
-        .init(name: "Antrian kasir",     dwellSeconds: 186),
-        .init(name: "Rak minuman",       dwellSeconds: 132)
+        .init(name: "Center Promo Table", dwellSeconds: 240),
+        .init(name: "Cashier Queue", dwellSeconds: 186),
+        .init(name: "Drink Shelf", dwellSeconds: 132)
     ]
 
     static let occupancy: [OccupancyPoint] = (0..<24).map {

@@ -13,7 +13,7 @@ struct WizardFooter<Trailing: View>: View {
     var body: some View {
         HStack {
             if let onBack {
-                GhostButton(title: "Kembali", systemImage: "chevron.left", action: onBack)
+                GhostButton(title: "Back", systemImage: "chevron.left", action: onBack)
             }
             Spacer()
             trailing()
