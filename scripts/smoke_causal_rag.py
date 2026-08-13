@@ -14,28 +14,23 @@ from explanatory_analysis.rag import LocalRAG
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Live smoke test untuk causal QueryPlan RAG.")
-    parser.add_argument("question", nargs="?", default="area mana yang paling sepi atau yang jarang dilewati")
-    parser.add_argument("--plan-only", action="store_true")
+    parser = argparse.ArgumentParser(description="Live smoke test untuk general retrieval + Qwen3-8B reasoning.")
+    parser.add_argument("question", nargs="?", default="meja mana yang paling ramai dan apa dasar datanya?")
     args = parser.parse_args()
     rag = LocalRAG()
-    if args.plan_only:
-        plan, thinking, audit, _ = rag.plan_question(args.question)
-        payload = {"queryPlan": plan.model_dump(), "thinkingChars": len(thinking), "thinkingAudit": audit}
-    else:
-        result = rag.ask(args.question, show=False)
-        payload = {
-            "interpretation": result["interpretation"],
-            "assumption": result["assumption"],
-            "queryPlan": result["queryPlan"],
-            "selectedAreaId": result["selectedAreaId"],
-            "dataGrounding": result["dataGrounding"],
-            "supportLevel": result["supportLevel"],
-            "answer": result["answer"],
-            "thinkingStatus": result["thinkingAudit"]["status"],
-            "runId": result["artifacts"]["runId"],
-            "overlay": result["artifacts"]["floorplanOverlay"],
-        }
+    result = rag.ask(args.question, show=False)
+    payload = {
+        "interpretation": result["interpretation"],
+        "reasoningMode": result["grounding"]["mode"],
+        "selectedAreaId": result["selectedAreaId"],
+        "dataGrounding": result["dataGrounding"],
+        "supportLevel": result["supportLevel"],
+        "answer": result["answer"],
+        "modelCallCount": result["usage"]["generation"]["modelCallCount"],
+        "thinkingAvailable": result["usage"]["generation"]["thinkingAvailable"],
+        "runId": result["artifacts"]["runId"],
+        "overlay": result["artifacts"]["floorplanOverlay"],
+    }
     print(json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
 
 

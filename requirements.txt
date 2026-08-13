@@ -22,8 +22,10 @@ lap>=0.4
 pandas>=2.2,<3
 pyarrow>=15
 
-# Runtime explanatory analysis + local structured RAG (notebook UI packages stay separate).
+# Runtime explanatory analysis + local retrieval/Qwen reasoning (notebook UI packages stay separate).
 scikit-image>=0.23
 shapely>=2.0
 matplotlib>=3.8
 pillow>=10
+huggingface_hub>=0.27,<2
+llama-cpp-python>=0.3.16,<0.4

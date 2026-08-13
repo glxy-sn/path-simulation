@@ -7,16 +7,15 @@ import shutil
 import subprocess
 import sys
 import threading
-import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.request import urlopen
 
 from pydantic import BaseModel, Field
 
 from config import Config
+from explanatory_analysis.local_model import MODEL_DISPLAY_NAME, get_model_runtime
 
 
 _ROOT = Path(__file__).resolve().parent
@@ -70,7 +69,6 @@ class ExplanatoryManager:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen] = {}
-        self._model_cache: tuple[float, dict[str, Any]] | None = None
 
     @staticmethod
     def job_dir(job_id: str) -> Path:
@@ -156,27 +154,13 @@ class ExplanatoryManager:
             "contextRevision": int(context.get("contextRevision") or 1),
             "packageSchemaVersion": "2.0" if (self._package_path(directory) / "manifest.json").is_file() else None,
             "capabilities": capabilities,
-            "chatModel": "qwen3:14b",
-            "embeddingModel": "qwen3-embedding:0.6b",
             **self._model_status(),
         }
 
     def _model_status(self) -> dict[str, Any]:
-        now = time.monotonic()
-        if self._model_cache and now - self._model_cache[0] < 10:
-            return self._model_cache[1]
-        required = ["qwen3:14b", "qwen3-embedding:0.6b"]
-        try:
-            with urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            installed = [str(item.get("name") or "") for item in payload.get("models") or []]
-            normalized = {item.removesuffix(":latest") for item in installed}
-            missing = [model for model in required if model not in installed and model.removesuffix(":latest") not in normalized]
-            result = {"ollamaReady": True, "modelReady": not missing, "missingModels": missing}
-        except Exception:
-            result = {"ollamaReady": False, "modelReady": False, "missingModels": required}
-        self._model_cache = (now, result)
-        return result
+        status = get_model_runtime().status()
+        status.pop("modelPath", None)
+        return status
 
     def build(self, job_id: str, force: bool = False) -> dict[str, Any]:
         directory = self._assert_job(job_id)
@@ -299,7 +283,7 @@ class ChatSessionManager:
         if status["state"] != "ready":
             raise RuntimeError(f"explanatory package belum siap: {status['state']}")
         if not status.get("modelReady"):
-            raise ConnectionError("Ollama atau model qwen3:14b/qwen3-embedding:0.6b belum siap")
+            raise ConnectionError("Runtime llama.cpp atau Qwen3-8B belum siap")
         with self._lock:
             session = self._load(job_id, session_id)
             package_path = self.explanatory.job_dir(job_id) / "explanatory-v2"
@@ -308,8 +292,7 @@ class ChatSessionManager:
             config = RAGConfig(
                 backend_root=_ROOT,
                 output_root=Path(Config.WORKDIR),
-                chat_model="qwen3:14b",
-                embed_model="qwen3-embedding:0.6b",
+                chat_model=MODEL_DISPLAY_NAME,
             )
             runs = self._session_dir(job_id, session_id) / "runs"
             rag = LocalRAG(config, load_package(package_path), run_root=runs, session_id=session_id)

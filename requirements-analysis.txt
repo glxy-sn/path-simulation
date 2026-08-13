@@ -17,3 +17,5 @@ jupyterlab>=4
 nbconvert>=7
 ipykernel>=6.29
 pytest>=8
+huggingface_hub>=0.27,<2
+llama-cpp-python>=0.3.16,<0.4

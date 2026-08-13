@@ -959,8 +959,7 @@ def build_capability_catalog(has_tables: bool, has_routes: bool, has_cross_job_r
             "group_behavior": item("partially_supported" if has_groups else "unsupported", [], "Co-moving proxy tidak membuktikan hubungan sosial."),
             "usual_route": item("supported" if has_cross_job_routes else ("partially_supported" if has_routes else "unsupported"), ["minimal dua job venue-compatible"] if not has_cross_job_routes else [], "Route adalah pola anonim, bukan kebiasaan individu."),
             "favorite_area": item("partially_supported", [], "Hanya most-used/longest-dwell; preferensi tidak dapat disimpulkan."),
-            "table_effectiveness": item("supported" if has_tables else "unsupported", [] if has_tables else ["polygon meja manual"], "Kapasitas kursi tidak tersedia."),
-            "board_game_table": item("partially_supported" if has_tables else "unsupported", [] if has_tables else ["polygon meja manual"], "Kandidat berdasarkan area meja, crowd, flow, dan dwell; bukan kapasitas kursi."),
+            "table_analysis": item("supported" if has_tables else "unsupported", [] if has_tables else ["polygon meja manual"], "Pemakaian meja dapat dibandingkan dari visit, pengunjung anonim, dwell, dan ukuran; kapasitas kursi tidak tersedia."),
             "display_area": item("partially_supported", ["visibility/line-of-sight untuk validasi penuh"], "Kandidat hanya berdasarkan exposure flow."),
             "chair_capacity": item("unsupported", ["jumlah dan kapasitas kursi"], "Peak occupancy tersedia, kecukupan kursi tidak dapat dinilai."),
             "queue_facility": item("partially_supported", ["facility anchor untuk identifikasi fasilitas"], "Hanya queue-like/bottleneck observasional."),
@@ -987,7 +986,7 @@ def build_evidence_cards(job_id: str, summary: dict[str, Any], areas: list[dict[
         elif area["kind"] == "stop_cluster": types, label = ["dwell_area", "longest_stop_area", "favorite_area"], "Akumulasi berhenti"
         elif area["kind"] == "bottleneck_area": types, label = ["bottleneck", "queue_facility"], "Bottleneck observasional"
         elif area["kind"] == "route_archetype": types, label = ["usual_route", "movement_pattern"], "Route archetype"
-        elif area["kind"] == "table": types, label = ["table_effectiveness", "board_game_table"], "Meja teranotasi"
+        elif area["kind"] == "table": types, label = ["table_analysis", "table_usage", "visit", "dwell"], "Meja teranotasi"
         elif area["kind"] == "custom_zone": types, label = ["named_area", "custom_zone", "dwell_area", "most_occupied_area"], f"Zona {area.get('label') or area['areaId']}"
         else: continue
         coordinate_text = f" di sekitar ({center[0]:.2f} m, {center[1]:.2f} m)" if center else ""

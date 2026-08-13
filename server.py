@@ -10,7 +10,9 @@ Endpoint:
 
 Jalankan: python server.py   (atau: uvicorn server:app --host 127.0.0.1 --port 8765)
 """
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Response as FastAPIResponse
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -27,8 +29,18 @@ from explanatory_service import (
     ChatSessionPatch,
     ExplanatoryManager,
 )
+from explanatory_analysis.local_model import get_model_runtime
 
-app = FastAPI(title="Foodcourt Engine", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Startup sengaja menunggu download + load agar /health baru tersedia saat
+    # Qwen3-8B benar-benar siap menerima pertanyaan.
+    await asyncio.to_thread(get_model_runtime().ensure_ready)
+    yield
+
+
+app = FastAPI(title="Foodcourt Engine", version="0.2.0", lifespan=lifespan)
 manager = JobManager()
 preview_manager = CalibrationPreviewManager()
 explanatory_manager = ExplanatoryManager()
@@ -37,10 +49,12 @@ chat_manager = ChatSessionManager(explanatory_manager)
 
 @app.get("/health")
 def health():
+    model = get_model_runtime().status()
+    model.pop("modelPath", None)
     return {
-        "status": "ok",
+        "status": "ok" if model.get("modelReady") else "starting",
         "device": Config.DEVICE,
-        "explanatory": {"available": True, "chatModel": "qwen3:14b", "embeddingModel": "qwen3-embedding:0.6b"},
+        "explanatory": {"available": True, **model},
     }
 
 
