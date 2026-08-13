@@ -8,11 +8,11 @@ struct ExplanatoryStatusDTO: Decodable {
     let error: String?
     let contextRevision: Int
     let packageSchemaVersion: String?
+    let runtime: String
     let chatModel: String
-    let embeddingModel: String
-    let ollamaReady: Bool
     let modelReady: Bool
-    let missingModels: [String]
+    let modelState: String
+    let modelError: String?
 }
 
 struct ChatSessionSummaryDTO: Decodable, Identifiable, Hashable {
@@ -24,6 +24,100 @@ struct ChatSessionSummaryDTO: Decodable, Identifiable, Hashable {
     let updatedAt: String
     let contextRevision: Int
     let messageCount: Int
+}
+
+// MARK: - Shared Results + Tanya Data layout
+
+struct ResultsChatContainer: View {
+    let jobId: String?
+    let http: HTTPClient
+    let isHistory: Bool
+    let onClose: (() -> Void)?
+    @Binding var showsChat: Bool
+
+    @Environment(AnalysisSession.self) private var session
+    @State private var selectedMedia: ChatMediaDTO?
+    @State private var restoreChatAfterArtifact = false
+
+    var body: some View {
+        Group {
+            if let selectedMedia {
+                ArtifactDetailView(
+                    media: selectedMedia,
+                    baseURL: http.baseURL,
+                    onBack: closeArtifact
+                )
+            } else {
+                detailLayout
+            }
+        }
+    }
+
+    private var validJobId: String? {
+        guard let jobId, !jobId.isEmpty else { return nil }
+        return jobId
+    }
+
+    private var detailLayout: some View {
+        HStack(spacing: 0) {
+            ResultsView(
+                isHistory: isHistory,
+                onClose: onClose,
+                onOpenChat: openChatAction,
+                isChatVisible: showsChat
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if showsChat {
+                Divider()
+                chatPanel
+            }
+        }
+    }
+
+    private var openChatAction: (() -> Void)? {
+        guard validJobId != nil else { return nil }
+        return { openChat() }
+    }
+
+    @ViewBuilder
+    private var chatPanel: some View {
+        if let jobId = validJobId {
+            HistoryChatInspector(
+                jobId: jobId,
+                http: http,
+                zones: session.customZones,
+                onOpenMedia: openMedia,
+                onClose: closeChat
+            )
+            .frame(width: 420)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        } else {
+            LegacyChatUnavailable(onClose: closeChat)
+                .frame(width: 420)
+        }
+    }
+
+    private func openMedia(_ media: ChatMediaDTO) {
+        restoreChatAfterArtifact = true
+        selectedMedia = media
+    }
+
+    private func openChat() {
+        withAnimation(.easeInOut(duration: 0.2)) { showsChat = true }
+    }
+
+    private func closeChat() {
+        withAnimation(.easeInOut(duration: 0.2)) { showsChat = false }
+    }
+
+    private func closeArtifact() {
+        selectedMedia = nil
+        if restoreChatAfterArtifact {
+            showsChat = true
+            restoreChatAfterArtifact = false
+        }
+    }
 }
 
 struct ChatMediaDTO: Decodable, Identifiable, Hashable {

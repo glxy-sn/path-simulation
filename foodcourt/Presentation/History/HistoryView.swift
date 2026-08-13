@@ -118,69 +118,20 @@ private struct HistoryDetailView: View {
     let onClose: () -> Void
 
     @SceneStorage("history.showsTanyaDataPanel") private var showsChat = true
-    @State private var selectedMedia: ChatMediaDTO?
-    @State private var restoreChatAfterArtifact = false
 
     var body: some View {
-        Group {
-            if let selectedMedia {
-                ArtifactDetailView(
-                    media: selectedMedia,
-                    baseURL: http.baseURL,
-                    onBack: closeArtifact
-                )
-            } else {
-                detailLayout
-            }
-        }
+        ResultsChatContainer(
+            jobId: jobId,
+            http: http,
+            isHistory: true,
+            onClose: onClose,
+            showsChat: $showsChat
+        )
         .environment(viewerSession)
-    }
-
-    private var detailLayout: some View {
-        HStack(spacing: 0) {
-            ResultsView(
-                isHistory: true,
-                onClose: onClose,
-                onOpenChat: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = true } },
-                isChatVisible: showsChat
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if showsChat {
-                Divider()
-                if let jobId, !jobId.isEmpty {
-                    HistoryChatInspector(
-                        jobId: jobId,
-                        http: http,
-                        zones: viewerSession.customZones,
-                        onOpenMedia: { media in
-                            restoreChatAfterArtifact = showsChat
-                            selectedMedia = media
-                        },
-                        onClose: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = false } }
-                    )
-                    .frame(width: 420)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    LegacyChatUnavailable(
-                        onClose: { withAnimation(.easeInOut(duration: 0.2)) { showsChat = false } }
-                    )
-                    .frame(width: 420)
-                }
-            }
-        }
-    }
-
-    private func closeArtifact() {
-        selectedMedia = nil
-        if restoreChatAfterArtifact {
-            showsChat = true
-            restoreChatAfterArtifact = false
-        }
     }
 }
 
-private struct LegacyChatUnavailable: View {
+struct LegacyChatUnavailable: View {
     let onClose: () -> Void
 
     var body: some View {

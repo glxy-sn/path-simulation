@@ -140,7 +140,7 @@ struct ResultsView: View {
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .tint(Theme.accent)
                 .disabled(session.result == nil)
-            if isHistory, !isChatVisible, let onOpenChat {
+            if !isChatVisible, let onOpenChat {
                 Button("Tanya Data", systemImage: "bubble.left.and.text.bubble.right") {
                     onOpenChat()
                 }

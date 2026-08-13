@@ -85,8 +85,24 @@ private struct WizardContainer: View {
         case .importFootage: ImportView()
         case .calibration:   CalibrationView()
         case .processing:    ProcessingView()
-        case .results:       ResultsView()
+        case .results:       ActiveResultsView()
         }
+    }
+}
+
+private struct ActiveResultsView: View {
+    @Environment(AnalysisSession.self) private var session
+    @Environment(Sidecar.self) private var sidecar
+    @State private var showsChat = false
+
+    var body: some View {
+        ResultsChatContainer(
+            jobId: session.result?.jobId ?? session.jobId,
+            http: sidecar.http,
+            isHistory: false,
+            onClose: nil,
+            showsChat: $showsChat
+        )
     }
 }
 

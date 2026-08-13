@@ -50,7 +50,7 @@ final class Sidecar {
 
     /// Development runtime: gunakan backend lokal terpadu jika server belum hidup.
     @discardableResult
-    func ensureRunning(timeout: TimeInterval = 20) async -> Bool {
+    func ensureRunning(timeout: TimeInterval = 7_200) async -> Bool {
         if await checkHealth() { return true }
         guard process?.isRunning != true else { return await waitUntilReady(timeout: timeout) }
         guard let root = backendRoot(),
