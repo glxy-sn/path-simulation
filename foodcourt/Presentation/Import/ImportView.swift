@@ -21,7 +21,7 @@ struct ImportView: View {
                 VStack(alignment: .leading, spacing: Space.l * scale) {
                     SectionHeader(
                         title: "Import Footage",
-                        subtitle: "Upload rekaman CCTV dari tiap sudut, lalu beri label kameranya."
+                        subtitle: "Upload CCTV footage from each angle, then label the cameras."
                     )
                     HStack(alignment: .top, spacing: Space.l * scale) {
                         ImportMainColumn(session: session) { addFiles(into: session) }
@@ -35,7 +35,7 @@ struct ImportView: View {
             }
 
             WizardFooter {
-                PrimaryButton(title: "Lanjut ke Kalibrasi",
+                PrimaryButton(title: "Continue to Calibration",
                               systemImage: "arrow.right",
                               enabled: !session.cameras.isEmpty) {
                     router.next()
@@ -94,9 +94,9 @@ private struct ImportMainColumn: View {
                 DropZone(onTap: onAdd)
             } else {
                 HStack {
-                    FieldLabel(text: "Video terimpor (\(session.cameras.count))")
+                    FieldLabel(text: "Imported videos (\(session.cameras.count))")
                     Spacer()
-                    GhostButton(title: "Tambah File", systemImage: "plus") { onAdd() }
+                    GhostButton(title: "Add File", systemImage: "plus") { onAdd() }
                 }
 
                 VStack(spacing: Space.s) {
@@ -143,20 +143,20 @@ private struct ImportInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l * scale) {
             VStack(alignment: .leading, spacing: Space.m) {
-                FieldLabel(text: "Detail Venue")
-                field("Nama venue") {
-                    TextField("mis. Pujasera Kampus", text: $session.venueName).textFieldStyle(.roundedBorder)
+                FieldLabel(text: "Venue Details")
+                field("Venue name") {
+                    TextField("e.g. Campus Food Court", text: $session.venueName).textFieldStyle(.roundedBorder)
                 }
-                field("Tipe") {
+                field("Type") {
                     Picker("", selection: $session.venueType) {
                         ForEach(VenueType.allCases) { Text($0.rawValue).tag($0) }
                     }.labelsHidden()
                 }
                 HStack(spacing: Space.s) {
-                    field("Lebar (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
-                    field("Panjang (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
+                    field("Width (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
+                    field("Length (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
                 }
-                InfoNote(text: "Dimensi venue jadi referensi skala. Tanpa ini, dwell & jarak tidak bermakna.")
+                InfoNote(text: "Venue size sets the scale. Without it, dwell time and distance are meaningless.")
             }
             .card()
         }
@@ -187,7 +187,7 @@ private struct CameraRow: View {
                 .overlay(Image(systemName: "film").foregroundStyle(.secondary))
 
             VStack(alignment: .leading, spacing: 2) {
-                TextField("Label kamera",
+                TextField("Camera label",
                           text: Binding(get: { camera.label }, set: { onLabelChange($0) }))
                     .textFieldStyle(.plain).font(.headline)
                 Text(camera.url?.lastPathComponent ?? "—").font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -238,7 +238,7 @@ private struct CameraRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help("Hapus video")
+            .help("Remove video")
         }
         .card(padding: Space.m)
     }
@@ -254,9 +254,9 @@ private struct DropZone: View {
         VStack(spacing: Space.s) {
             Image(systemName: "square.and.arrow.down.on.square")
                 .font(.system(size: 34)).foregroundStyle(Theme.accent)
-            Text("Drag & drop video CCTV di sini").font(.headline)
-            Text("atau").font(.caption).foregroundStyle(.secondary)
-            GhostButton(title: "Pilih File", systemImage: "folder") { onTap() }
+            Text("Drag & drop CCTV video here").font(.headline)
+            Text("or").font(.caption).foregroundStyle(.secondary)
+            GhostButton(title: "Choose File", systemImage: "folder") { onTap() }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Space.xl * scale)

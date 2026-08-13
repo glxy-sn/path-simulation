@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import AVFoundation
+import AppKit
 import CoreGraphics
 
 struct SavedAnalysis: Codable {
@@ -279,5 +281,23 @@ enum HistoryStore {
 
     static func delete(folder: String) {
         try? FileManager.default.removeItem(at: folderURL(folder))
+    }
+
+    /// Ambil 1 frame dari video hasil (untuk preview di daftar riwayat).
+    static func thumbnail(folder: String) async -> NSImage? {
+        guard !folder.isEmpty else { return nil }
+        let dir = folderURL(folder)
+        for name in ["combined.mp4", "overlay_0.mp4", "path.mp4"] {
+            let u = dir.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: u.path) else { continue }
+            let gen = AVAssetImageGenerator(asset: AVURLAsset(url: u))
+            gen.appliesPreferredTrackTransform = true
+            gen.maximumSize = CGSize(width: 400, height: 300)
+            let time = CMTime(seconds: 1.0, preferredTimescale: 600)
+            if let cg = try? await gen.image(at: time).image {
+                return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }
+        }
+        return nil
     }
 }

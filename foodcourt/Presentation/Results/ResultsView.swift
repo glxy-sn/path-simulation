@@ -12,10 +12,10 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum ResultVisual: String, CaseIterable, Identifiable {
-    case boundingBox = "Deteksi"
+    case boundingBox = "Detection"
     case path = "Path Simulation"
     case heatmap = "Heatmap"
-    case zona = "Zona"
+    case zona = "Zones"
     var id: String { rawValue }
 }
 
@@ -60,7 +60,7 @@ struct ResultsView: View {
     }
     private var observations: [TrackObservation] { session.result?.observations ?? [] }
 
-    /// Lintasan per orang (rekonstruksi dari observasi ber-track) — untuk ringkasan path.
+    /// Lintasan per orang (rekonstruksi dari observasi ber-track) â untuk ringkasan path.
     private var trajectories: [[CGPoint]] {
         let byTrack = Dictionary(grouping: observations, by: { $0.trackId })
         return byTrack.values
@@ -103,7 +103,6 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 header
                 metrics
-                if identityQuality != nil { identityQualityCard }
                 mediaCard
                 HStack(alignment: .top, spacing: Space.l * scale) {
                     rankingCard.relativeWidth(0.40)
@@ -130,9 +129,9 @@ struct ResultsView: View {
                 .buttonStyle(.plain)
                 .help("Kembali ke daftar riwayat")
             }
-            SectionHeader(title: isHistory ? "Riwayat Analisis" : "Hasil Analisis", subtitle: subtitle)
+            SectionHeader(title: isHistory ? "Analysis History" : "Analysis Results", subtitle: subtitle)
             if !isHistory {
-                Button("Analisis Baru", systemImage: "plus") {
+                Button("New Analysis", systemImage: "plus") {
                     session.reset(); router.startNew()
                 }
                 .buttonStyle(.bordered).controlSize(.large)
@@ -147,12 +146,12 @@ struct ResultsView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
-                .help("Buka panel Tanya Data")
+                .help("Open Ask Data panel")
             }
         }
         .confirmationDialog("Export Laporan", isPresented: $showExport, titleVisibility: .visible) {
-            Button("JSON — lengkap (untuk analisis / LLM)") { exportJSON() }
-            Button("CSV — ringkasan (untuk Excel)") { exportCSV() }
+            Button("JSON â lengkap (untuk analisis / LLM)") { exportJSON() }
+            Button("CSV â ringkasan (untuk Excel)") { exportCSV() }
             Button("Batal", role: .cancel) {}
         }
     }
@@ -187,7 +186,7 @@ struct ResultsView: View {
             "summary": ["totalVisitors": r.summary.totalVisitors,
                         "avgDwellSeconds": r.summary.avgDwellSeconds,
                         "peakOccupancy": r.summary.peakOccupancy,
-                        "captureRate": r.summary.captureRate],
+                        ],
             "zones": r.zones.map { ["code": $0.code, "visits": $0.visits, "share": $0.share,
                                     "rect": ["x": $0.rect.minX, "y": $0.rect.minY,
                                              "w": $0.rect.width, "h": $0.rect.height]] },
@@ -210,19 +209,18 @@ struct ResultsView: View {
 
     private func exportCSV() {
         guard let r = session.result else { return }
-        var s = "Laporan Analisis Food Court\n"
+        var s = "Food Court Analysis Report\n"
         s += "Venue,\(session.venueName)\n"
-        s += "Dimensi (m),\(session.venueWidthM) x \(session.venueHeightM)\n\n"
-        s += "Metrik,Nilai\n"
-        s += "Total Pengunjung,\(r.summary.totalVisitors)\n"
-        s += "Rata-rata Dwell (detik),\(r.summary.avgDwellSeconds)\n"
-        s += "Puncak Okupansi,\(r.summary.peakOccupancy)\n"
-        s += "Capture Rate,\(r.summary.captureRate)\n\n"
-        s += "Zona,Visits,Share\n"
+        s += "Size (m),\(session.venueWidthM) x \(session.venueHeightM)\n\n"
+        s += "Metric,Value\n"
+        s += "Total Visitors,\(r.summary.totalVisitors)\n"
+        s += "Avg. Time Spent (sec),\(r.summary.avgDwellSeconds)\n"
+        s += "Busiest Moment,\(r.summary.peakOccupancy)\n\n"
+        s += "Zone,Visits,Share\n"
         for z in r.zones { s += "\(z.code),\(z.visits),\(z.share)\n" }
-        s += "\nStop Point,Dwell (detik),x,y\n"
+        s += "\nStop Point,Dwell (sec),x,y\n"
         for st in r.stops { s += "\(st.name),\(st.dwellSeconds),\(st.point.x),\(st.point.y)\n" }
-        s += "\nMenit,Okupansi\n"
+        s += "\nMinute,Occupancy\n"
         for o in r.occupancy { s += "\(o.minute),\(o.count)\n" }
         guard let data = s.data(using: .utf8) else { return }
         save(name: defaultName() + ".csv", type: .commaSeparatedText, data: data)
@@ -233,73 +231,23 @@ struct ResultsView: View {
             let name = session.venueName.isEmpty ? "Venue" : session.venueName
             let dur = timecode(session.trimEndSec - session.trimStartSec)
             let cams = session.overrideCameraCount ?? session.cameras.count
-            return "\(name) · \(cams) kamera · durasi \(dur)"
+            return "\(name) Â· \(cams) kamera Â· durasi \(dur)"
         }
-        return "Contoh data — jalankan analisis untuk hasil nyata."
+        return "Contoh data â jalankan analisis untuk hasil nyata."
     }
 
     private var metrics: some View {
         HStack(spacing: Space.m * scale) {
-            MetricTile(title: "Total Pengunjung", value: "\(summary.totalVisitors)", systemImage: "person.2.fill")
-            MetricTile(title: "Rata-rata Dwell", value: summary.avgDwellText, systemImage: "clock.fill", tint: .orange)
-            MetricTile(title: "Puncak Okupansi", value: "\(summary.peakOccupancy)", systemImage: "chart.line.uptrend.xyaxis", tint: .pink)
-            MetricTile(title: "Capture Rate", value: summary.captureRateText, systemImage: "arrow.down.right.circle.fill", tint: .green)
+            MetricTile(title: "Total Visitors", value: "\(summary.totalVisitors)", systemImage: "person.2.fill")
+            MetricTile(title: "Avg. Time Spent", value: summary.avgDwellText, systemImage: "clock.fill", tint: .orange)
+            MetricTile(title: "Busiest Moment", value: "\(summary.peakOccupancy) people", systemImage: "chart.line.uptrend.xyaxis", tint: .pink)
         }
     }
-
-    private var identityQualityCard: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Kualitas Identitas").font(.headline)
-                    Text("Confidence asosiasi global yang sama dipakai pada video dan trajectory.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let url = session.result?.fusionDiagnosticsURL {
-                    Button("Buka Diagnostics", systemImage: "doc.text.magnifyingglass") {
-                        NSWorkspace.shared.open(url)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-            if let quality = identityQuality {
-                HStack(spacing: Space.s) {
-                    identityQualityTile("High", quality.highConfidence, .green, "≥ 0,80")
-                    identityQualityTile("Medium", quality.mediumConfidence, .orange, "0,70–0,79")
-                    identityQualityTile("Low", quality.lowConfidence, .red, "< 0,70")
-                    identityQualityTile("Single Camera", quality.singleCamera, .secondary, "Belum lintas kamera")
-                }
-                Divider()
-                Text("\(quality.globalIDs) global ID · \(quality.localStitches) local stitch · \(quality.overlapMerges) overlap merge · \(quality.handoverMerges) handover merge · \(quality.unmatchedTracklets) unmatched · \(quality.filteredTracklets) filtered")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                if !quality.calibrationWarnings.isEmpty {
-                    Label("\(quality.calibrationWarnings.count) warning kalibrasi tercatat", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                }
-            }
-        }
-        .card()
-    }
-
-    private func identityQualityTile(_ title: String, _ count: Int, _ color: Color, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("\(count)").font(.title3.monospacedDigit().bold()).foregroundStyle(color)
-            Text(title).font(.caption.weight(.semibold))
-            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-        }
-        .padding(Space.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
-    }
-
+    
     private var mediaCard: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack {
-                Text("Visualisasi").font(.headline)
+                Text("Visualization").font(.headline)
                 Spacer()
                 Picker("", selection: $visual) {
                     ForEach(ResultVisual.allCases) { Text($0.rawValue).tag($0) }
@@ -349,25 +297,25 @@ struct ResultsView: View {
         case .boundingBox:
             return boundingVideoURL != nil
                 ? "Video deteksi + ID global antar-kamera (grid + BEV bila multi-kamera)."
-                : "Contoh — jalankan analisis untuk video nyata."
-        case .path:    return "Simulasi jalur pergerakan pengunjung di bidang lantai."
-        case .heatmap: return "Kepadatan pergerakan diproyeksikan ke denah lantai."
-        case .zona:    return "Pembagian zona di denah. Warna sama dengan daftar ranking di bawah."
+                : "Contoh â jalankan analisis untuk video nyata."
+        case .path:    return "Visitor movement paths projected on the floor plan."
+        case .heatmap: return "Movement density projected on the floor plan."
+        case .zona:    return "Zones on the floor plan. Colors match the ranking list below."
         }
     }
 
     private var rankingCard: some View {
         VStack(alignment: .leading, spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.s) {
-                Text("Zona Paling Sering Dilewati").font(.headline)
+                Text("Most Visited Zones").font(.headline)
                 if session.customZones.isEmpty {
                     VStack(alignment: .leading, spacing: Space.s) {
-                        Text("Belum ada zona.")
+                        Text("No zones yet.")
                             .font(.callout.weight(.medium))
-                        Text("Buka tab Zona untuk menggambar area yang ingin dianalisis (mis. kasir, tempat duduk). Jumlah orang & rata-rata durasi dihitung otomatis.")
+                        Text("Go to the Zones tab to draw the areas you want to analyze (e.g. cashier, seating). People count and average duration are computed automatically.")
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        GhostButton(title: "Ke tab Zona", systemImage: "square.dashed") {
+                        GhostButton(title: "Go to Zones", systemImage: "square.dashed") {
                             visual = .zona
                         }
                         .padding(.top, 2)
@@ -383,21 +331,21 @@ struct ResultsView: View {
                                 HStack(spacing: 5) {
                                     Text(item.zone.name).font(.callout).lineLimit(1)
                                     if i == 0 && item.people > 0 {
-                                        Text("★ Favorit").font(.caption2.weight(.bold)).foregroundStyle(.orange)
+                                        Text("★ Favorite").font(.caption2.weight(.bold)).foregroundStyle(.orange)
                                     }
                                 }
                                 Text("rata-rata \(timecode(item.avgDur))")
                                     .font(.caption2).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text("\(item.people) orang").font(.callout.monospacedDigit().weight(.semibold))
+                            Text("\(item.people) people").font(.callout.monospacedDigit().weight(.semibold))
                         }
                     }
                 }
             }
             Divider()
             VStack(alignment: .leading, spacing: Space.s) {
-                Text("Stop Point Terlama").font(.headline)
+                Text("Longest Stops").font(.headline)
                 ForEach(stops) { stop in
                     HStack {
                         Image(systemName: "mappin.circle.fill").foregroundStyle(.orange)
@@ -413,18 +361,18 @@ struct ResultsView: View {
 
     private var occupancyCard: some View {
         VStack(alignment: .leading, spacing: Space.m) {
-            Text("Okupansi dari Waktu ke Waktu").font(.headline)
+            Text("Occupancy Over Time").font(.headline)
             Chart(occupancy) { point in
-                AreaMark(x: .value("Menit", point.minute), y: .value("Orang", point.count))
+                AreaMark(x: .value("Minute", point.minute), y: .value("People", point.count))
                     .foregroundStyle(LinearGradient(
                         colors: [Theme.accent.opacity(0.35), Theme.accent.opacity(0.02)],
                         startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Menit", point.minute), y: .value("Orang", point.count))
+                LineMark(x: .value("Minute", point.minute), y: .value("People", point.count))
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.catmullRom)
             }
             .chartXAxisLabel("menit ke-")
-            .chartYAxisLabel("orang")
+            .chartYAxisLabel("people")
             .frame(minHeight: 220)
         }
         .card()
@@ -433,7 +381,7 @@ struct ResultsView: View {
 
 // MARK: - Player & gambar dari file (artifact engine)
 
-/// AVPlayerView (AppKit) → punya tombol full-screen + Picture-in-Picture bawaan.
+/// AVPlayerView (AppKit) â punya tombol full-screen + Picture-in-Picture bawaan.
 private struct PlayerView: NSViewRepresentable {
     let player: AVPlayer
     func makeNSView(context: Context) -> AVPlayerView {
@@ -482,7 +430,7 @@ private struct FileImage: View {
 // MARK: - Heatmap 2 opsi (jumlah orang vs lama singgah)
 
 /// Bangun blob heatmap dari observasi.
-/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (∝ waktu); 2 = GABUNGAN (keduanya dinormalisasi).
+/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (â waktu); 2 = GABUNGAN (keduanya dinormalisasi).
 func Foodcourt_heatBlobs(_ obs: [TrackObservation], mode: Int, top: Int = 40) -> [HeatBlob] {
     guard !obs.isEmpty else { return [] }
     let GW = 56, GH = 42
@@ -526,7 +474,7 @@ private struct HeatmapTab: View {
     let observations: [TrackObservation]
     let fallbackBlobs: [HeatBlob]
     var background: NSImage? = nil
-    @State private var mode = 0   // 0 orang, 1 singgah, 2 gabungan
+    @State private var mode = 2   // default: gabungan (Activity)
 
     var body: some View {
         let blobs = observations.isEmpty ? fallbackBlobs
@@ -536,9 +484,9 @@ private struct HeatmapTab: View {
                 .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
 
             Picker("", selection: $mode) {
-                Text("Jumlah Orang").tag(0)
-                Text("Lama Singgah").tag(1)
-                Text("Gabungan").tag(2)
+                Text("Activity").tag(2)
+                Text("Foot Traffic").tag(0)
+                Text("Time Spent").tag(1)
             }
             .pickerStyle(.segmented)
             .frame(width: 340)
@@ -599,7 +547,7 @@ private struct StopPinsLayer: View {
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill").font(.title3).foregroundStyle(.orange)
                         .background(Circle().fill(.white).padding(3))
-                    Text("\(i + 1) · \(s.dwellText)").font(.system(size: 8, weight: .bold))
+                    Text("\(i + 1) Â· \(s.dwellText)").font(.system(size: 8, weight: .bold))
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
@@ -686,7 +634,7 @@ private struct PathTab: View {
 
             Picker("", selection: $mode) {
                 Text("Detail").tag(0)
-                Text("Ringkasan").tag(1)
+                Text("Summary").tag(1)
             }
             .pickerStyle(.segmented)
             .frame(width: 220)
@@ -734,15 +682,6 @@ private struct ZonaEditor: View {
                 } else {
                     Color(hex: 0xF7F8FA)
                 }
-                // titik observasi (samar)
-                Canvas { ctx, size in
-                    for o in observations {
-                        ctx.fill(Path(ellipseIn: CGRect(x: o.point.x * size.width - 1.2, y: o.point.y * size.height - 1.2,
-                                                        width: 2.4, height: 2.4)),
-                                 with: .color(.orange.opacity(0.30)))
-                    }
-                }
-                .allowsHitTesting(false)
 
                 // area kosong -> deselect
                 Color.clear.contentShape(Rectangle()).onTapGesture { selected = nil }
@@ -770,7 +709,7 @@ private struct ZonaEditor: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(color, lineWidth: isSel ? 3 : 1.5))
             VStack(alignment: .leading, spacing: 1) {
                 Text(zone.name).font(.caption.bold()).foregroundStyle(color).lineLimit(1)
-                Text("\(m.people) orang").font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.primary)
+                Text("\(m.people) people").font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.primary)
                 Text("~\(timecode(m.avgDurSec))").font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
             }
             .padding(5)
@@ -822,9 +761,9 @@ private struct ZonaEditor: View {
     private var controls: some View {
         HStack(alignment: .top, spacing: Space.s) {
             Button { addZone() } label: {
-                Label("Zona", systemImage: "plus")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 6)
+                Label("Add Zone", systemImage: "plus")
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 16).padding(.vertical, 10)
                     .background(Theme.accent, in: Capsule())
                     .foregroundStyle(.white)
             }
@@ -832,7 +771,7 @@ private struct ZonaEditor: View {
 
             if let sid = selected, session.customZones.contains(where: { $0.id == sid }) {
                 HStack(spacing: 6) {
-                    TextField("Nama zona", text: Binding(
+                    TextField("Zone name", text: Binding(
                         get: { session.customZones.first(where: { $0.id == sid })?.name ?? "" },
                         set: { newVal in
                             if let i = session.customZones.firstIndex(where: { $0.id == sid }) {
@@ -857,7 +796,7 @@ private struct ZonaEditor: View {
     private func addZone() {
         let n = session.customZones.count
         let letter = Character(UnicodeScalar(65 + (n % 26))!)
-        let z = CustomZone(name: "Zona \(letter)",
+        let z = CustomZone(name: "Zone \(letter)",
                            rect: CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2),
                            colorHex: palette[n % palette.count])
         session.customZones.append(z)
@@ -1078,10 +1017,10 @@ private struct HeatmapLegend: View {
             HStack {
                 Spacer()
                 HStack(spacing: Space.s) {
-                    Text("Rendah").font(.caption2).foregroundStyle(.white.opacity(0.8))
+                    Text("Low").font(.caption2).foregroundStyle(.white.opacity(0.8))
                     LinearGradient(stops: Theme.heatStops, startPoint: .leading, endPoint: .trailing)
                         .frame(width: 80, height: 8).clipShape(Capsule())
-                    Text("Tinggi").font(.caption2).foregroundStyle(.white.opacity(0.8))
+                    Text("High").font(.caption2).foregroundStyle(.white.opacity(0.8))
                 }
                 .padding(.horizontal, Space.m).padding(.vertical, Space.s)
                 .background(.black.opacity(0.3), in: Capsule())

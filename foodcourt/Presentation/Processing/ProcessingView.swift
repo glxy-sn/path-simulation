@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+internal import Combine
 
 struct ProcessingView: View {
     @Environment(\.uiScale) private var scale
@@ -17,6 +18,7 @@ struct ProcessingView: View {
 
     @State private var stages = ProcessingStage.pipeline
     @State private var progress = 0.0
+    @State private var shown = 0.0
     @State private var done = false
     @State private var errorMsg: String? = nil
 
@@ -24,9 +26,9 @@ struct ProcessingView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 SectionHeader(
-                    title: "Memproses",
-                    subtitle: done ? "Analisis selesai."
-                        : (errorMsg == nil ? "Menjalankan pipeline pada footage kamu…" : "Terjadi masalah.")
+                    title: "Processing",
+                    subtitle: done ? "Analysis complete."
+                        : (errorMsg == nil ? "Running the pipeline on your footage…" : "Something went wrong.")
                 )
                 stagesPanel.frame(maxWidth: .infinity)
             }
@@ -36,12 +38,26 @@ struct ProcessingView: View {
             Spacer(minLength: 0)
 
             WizardFooter(onBack: done ? { router.back() } : nil) {
-                PrimaryButton(title: "Lihat Hasil", systemImage: "arrow.right", enabled: done) {
-                    router.next()
+                HStack(spacing: Space.s) {
+                    if !done && errorMsg == nil {
+                        GhostButton(title: "Cancel", systemImage: "xmark") { router.back() }
+                    }
+                    PrimaryButton(title: "View Results", systemImage: "arrow.right", enabled: done) {
+                        router.next()
+                    }
                 }
             }
         }
         .task { await runIfNeeded() }
+        .onChange(of: progress) { _, p in
+            if p > shown { withAnimation(.easeOut(duration: 0.3)) { shown = p } }
+            if p >= 1 { withAnimation(.easeOut(duration: 0.3)) { shown = 1 } }
+        }
+        .onReceive(Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()) { _ in
+            guard !done, errorMsg == nil else { return }
+            let ceiling = min(0.99, progress + 0.14)   // merayap pelan biar tak terlihat macet
+            if shown < ceiling { shown = min(ceiling, shown + max(0.004, (ceiling - shown) * 0.06)) }
+        }
     }
 
     // MARK: run engine
@@ -124,13 +140,13 @@ struct ProcessingView: View {
         VStack(alignment: .leading, spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.s) {
                 HStack {
-                    Text("Progress keseluruhan").font(.headline)
+                    Text("Overall Progress").font(.headline)
                     Spacer()
-                    Text("\(Int((progress * 100).rounded()))%")
+                    Text("\(Int((shown * 100).rounded()))%")
                         .font(.headline.monospacedDigit())
                         .foregroundStyle(Theme.accent)
                 }
-                ProgressView(value: progress).tint(Theme.accent)
+                ProgressView(value: shown).tint(Theme.accent)
                 Text(currentStageName).font(.callout).foregroundStyle(.secondary)
             }
 
@@ -146,7 +162,7 @@ struct ProcessingView: View {
                     Label(errorMsg, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout).foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
-                    GhostButton(title: "Coba lagi", systemImage: "arrow.clockwise") {
+                    GhostButton(title: "Retry", systemImage: "arrow.clockwise") {
                         Task { await retry() }
                     }
                 }
@@ -156,9 +172,9 @@ struct ProcessingView: View {
     }
 
     private var currentStageName: String {
-        if done { return "Selesai" }
-        if errorMsg != nil { return "Berhenti" }
-        return stages.first { $0.state == .active }?.name ?? "Menyiapkan…"
+        if done { return "Complete" }
+        if errorMsg != nil { return "Stopped" }
+        return stages.first { $0.state == .active }?.name ?? "Preparing…"
     }
 
     private var previewPanel: some View {
