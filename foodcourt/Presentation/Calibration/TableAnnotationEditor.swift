@@ -19,12 +19,12 @@ struct TableAnnotationEditor: View {
         return VStack(alignment: .leading, spacing: Space.m) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Anotasi Meja").font(.headline)
-                    Text("Klik Tambah Meja, lalu drag dari satu sudut ke sudut berlawanan. Anotasi tersimpan bersama profil kalibrasi.")
+                    Text("Table Annotations").font(.headline)
+                    Text("Click Add Table, then drag from one corner to the opposite one. Annotations are saved with the calibration profile.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(adding ? "Batalkan" : "Tambah Meja", systemImage: adding ? "xmark" : "rectangle.badge.plus") {
+                Button(adding ? "Cancel" : "Add Table", systemImage: adding ? "xmark" : "rectangle.badge.plus") {
                     adding.toggle()
                     draftRect = nil
                     draftStart = nil
@@ -38,9 +38,9 @@ struct TableAnnotationEditor: View {
                     .frame(minHeight: 300)
 
                 VStack(alignment: .leading, spacing: Space.s) {
-                    Text("Meja").font(.headline)
+                    Text("Tables").font(.headline)
                     if session.tableAnnotations.isEmpty {
-                        Text("Belum ada meja.").font(.callout).foregroundStyle(.secondary)
+                        Text("No tables yet.").font(.callout).foregroundStyle(.secondary)
                     } else {
                         List(selection: $selectedID) {
                             ForEach(session.tableAnnotations) { table in
@@ -50,9 +50,9 @@ struct TableAnnotationEditor: View {
                         .frame(minHeight: 150)
                     }
                     if let index = selectedIndex {
-                        TextField("Nama meja", text: $session.tableAnnotations[index].label)
+                        TextField("Table name", text: $session.tableAnnotations[index].label)
                             .textFieldStyle(.roundedBorder)
-                        Button("Hapus Meja", systemImage: "trash", role: .destructive) {
+                        Button("Delete Table", systemImage: "trash", role: .destructive) {
                             session.tableAnnotations.remove(at: index)
                             selectedID = nil
                         }
@@ -61,7 +61,7 @@ struct TableAnnotationEditor: View {
                         Text(message).font(.caption).foregroundStyle(.orange)
                     }
                     Spacer()
-                    Text("Kapasitas kursi tidak dihitung karena tidak tersedia pada data.")
+                    Text("Seat capacity is not computed because it is not present in the data.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(width: 230)
@@ -168,11 +168,11 @@ struct TableAnnotationEditor: View {
                 defer { draftStart = nil; draftRect = nil }
                 let distance = hypot(value.translation.width, value.translation.height)
                 guard distance >= 12, let candidate = draftRect else {
-                    message = "Drag minimal 12 pt untuk membuat meja."
+                    message = "Drag at least 12 pt to create a table."
                     return
                 }
                 guard validate(candidate, excluding: nil) else { return }
-                let table = TableAnnotation(label: "Meja \(session.tableAnnotations.count + 1)", rectNormalized: candidate)
+                let table = TableAnnotation(label: "Table \(session.tableAnnotations.count + 1)", rectNormalized: candidate)
                 session.tableAnnotations.append(table)
                 selectedID = table.id
                 adding = false
@@ -220,11 +220,11 @@ struct TableAnnotationEditor: View {
     private func validate(_ rect: CGRect, excluding id: UUID?, report: Bool = true) -> Bool {
         let area = rect.width * session.venueWidthM * rect.height * session.venueHeightM
         if rect.width <= 0 || rect.height <= 0 || area < 0.1 {
-            if report { message = "Ukuran meja minimal 0,1 m²." }
+            if report { message = "Tables must be at least 0.1 m²." }
             return false
         }
         if session.tableAnnotations.contains(where: { $0.id != id && $0.rectNormalized.intersection(rect).area > 0.000001 }) {
-            if report { message = "Meja tidak boleh bertumpang tindih." }
+            if report { message = "Tables must not overlap." }
             return false
         }
         return true

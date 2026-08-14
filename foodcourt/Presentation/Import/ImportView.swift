@@ -53,7 +53,7 @@ struct ImportView: View {
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video]
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
-            let cam = SessionCamera(label: "Kamera \(session.cameras.count + 1)", url: url)
+            let cam = SessionCamera(label: "Camera \(session.cameras.count + 1)", url: url)
             session.cameras.append(cam)
             loadMeta(cam.id, url: url, into: session)
         }
@@ -149,7 +149,7 @@ private struct ImportInspector: View {
                 }
                 field("Type") {
                     Picker("", selection: $session.venueType) {
-                        ForEach(VenueType.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(VenueType.allCases) { Text($0.displayName).tag($0) }
                     }.labelsHidden()
                 }
                 HStack(spacing: Space.s) {
@@ -203,7 +203,7 @@ private struct CameraRow: View {
             Divider().frame(height: 42)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Offset waktu").font(.caption).foregroundStyle(.secondary)
+                Text("Time offset").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.xs) {
                     TextField(
                         "0,0",
@@ -228,7 +228,7 @@ private struct CameraRow: View {
                     Text("s").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .help("Waktu sumber = waktu global + offset. Positif membaca frame lebih akhir.")
+            .help("Source time = global time + offset. Positive reads later frames.")
 
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "xmark.circle.fill")

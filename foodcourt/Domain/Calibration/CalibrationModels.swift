@@ -107,7 +107,7 @@ struct CalibrationMetrics: Codable, Hashable {
 }
 
 enum CalibrationQuality: String {
-    case good = "Baik"
+    case good = "Good"
     case warning = "Warning"
     case invalid = "Invalid"
 }
@@ -127,17 +127,17 @@ struct CameraCalibration: Codable, Hashable {
     }
 
     var qualityWarnings: [String] {
-        guard isValid else { return ["Matriks atau jumlah inlier tidak valid."] }
+        guard isValid else { return ["Invalid matrix or inlier count."] }
         var warnings: [String] = []
         let ratio = metrics.points > 0 ? Double(metrics.inliers) / Double(metrics.points) : 0
-        if ratio < 0.75 { warnings.append("Rasio inlier di bawah 75%.") }
-        if metrics.medianErrorM > 0.15 { warnings.append("Median error di atas 0,15 m.") }
-        if metrics.p95ErrorM > 0.40 { warnings.append("P95 error di atas 0,40 m.") }
+        if ratio < 0.75 { warnings.append("Inlier ratio is below 75%.") }
+        if metrics.medianErrorM > 0.15 { warnings.append("Median error is above 0.15 m.") }
+        if metrics.p95ErrorM > 0.40 { warnings.append("P95 error is above 0.40 m.") }
         if let coverage = metrics.cameraCoverage, coverage < 0.10 {
-            warnings.append("Sebaran titik CCTV di bawah 10% frame.")
+            warnings.append("CCTV point spread is below 10% of the frame.")
         }
         if let coverage = metrics.floorCoverage, coverage < 0.15 {
-            warnings.append("Sebaran titik denah di bawah 15% area.")
+            warnings.append("Floor plan point spread is below 15% of the area.")
         }
         return warnings
     }
@@ -239,17 +239,17 @@ enum CalibrationError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .invalidVenueSize: return "Lebar dan panjang venue harus lebih dari 0 meter."
-        case .invalidImageSize: return "Ukuran gambar atau frame tidak valid."
-        case .unequalPointCounts: return "Jumlah titik CCTV dan denah harus sama."
-        case .tooFewPoints: return "Setiap kamera membutuhkan minimal 4 pasangan titik."
-        case .tooManyPoints: return "Maksimum 8 pasangan titik untuk setiap kamera."
-        case .duplicatePoints: return "Ada titik yang terlalu berdekatan atau duplikat."
-        case .degeneratePoints: return "Susunan titik tidak dapat membentuk homografi. Sebarkan titik pada area lantai."
-        case .noValidModel: return "Homografi gagal ditemukan. Periksa pasangan titik dan coba lagi."
-        case .invalidProfile: return "Profil kalibrasi tidak cocok dengan sesi saat ini."
-        case .missingFloorPlan: return "Profil membutuhkan file floor plan yang tersimpan."
-        case .cameraMismatch(let detail): return "Kamera pada profil tidak cocok: \(detail)"
+        case .invalidVenueSize: return "Venue width and length must be greater than 0 meters."
+        case .invalidImageSize: return "Invalid image or frame size."
+        case .unequalPointCounts: return "The number of CCTV and floor plan points must match."
+        case .tooFewPoints: return "Each camera needs at least 4 point pairs."
+        case .tooManyPoints: return "Maximum of 8 point pairs per camera."
+        case .duplicatePoints: return "Some points are too close together or duplicated."
+        case .degeneratePoints: return "These points cannot form a homography. Spread them across the floor area."
+        case .noValidModel: return "Homography could not be found. Check the point pairs and try again."
+        case .invalidProfile: return "The calibration profile does not match the current session."
+        case .missingFloorPlan: return "The profile requires its saved floor plan file."
+        case .cameraMismatch(let detail): return "Profile cameras do not match: \(detail)"
         }
     }
 }

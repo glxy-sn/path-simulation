@@ -55,7 +55,7 @@ final class Sidecar {
         guard process?.isRunning != true else { return await waitUntilReady(timeout: timeout) }
         guard let root = backendRoot(),
               let python = runtimePython(in: root) else {
-            launchError = "Runtime backend belum tersedia. Jalankan scripts/setup_runtime.zsh di be/path-simulation."
+            launchError = "Backend runtime is not available. Run scripts/setup_runtime.zsh in be/path-simulation."
             return false
         }
         let candidate = Process()
@@ -79,7 +79,7 @@ final class Sidecar {
             launchError = nil
             return await waitUntilReady(timeout: timeout)
         } catch {
-            launchError = "Backend gagal dijalankan: \(error.localizedDescription)"
+            launchError = "Backend failed to start: \(error.localizedDescription)"
             return false
         }
     }

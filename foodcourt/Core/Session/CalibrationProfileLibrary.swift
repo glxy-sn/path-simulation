@@ -28,9 +28,9 @@ enum CalibrationProfileLibraryError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unavailableStorage: return "Penyimpanan riwayat kalibrasi tidak tersedia."
-        case .invalidPackage: return "Paket profil kalibrasi tidak valid atau rusak."
-        case .missingFloorPlan: return "Pilih file floor plan yang digunakan oleh profil lama ini."
+        case .unavailableStorage: return "Calibration history storage is unavailable."
+        case .invalidPackage: return "The calibration profile package is invalid or corrupted."
+        case .missingFloorPlan: return "Select the floor plan file used by this saved profile."
         }
     }
 }
@@ -86,7 +86,7 @@ enum CalibrationProfileLibrary {
         let directory = try writeSnapshot(profile, floorPlanURL: session.floorPlanURL)
         return SavedCalibrationProfile(
             id: id,
-            displayName: profile.displayName ?? "Profil Kalibrasi",
+            displayName: profile.displayName ?? "Calibration Profile",
             savedAt: now,
             cameraCount: profile.cameras.count,
             usesCanvas: profile.floorplan.usesCanvas,
@@ -143,7 +143,7 @@ enum CalibrationProfileLibrary {
         let directory = try writeSnapshot(profile, floorPlanURL: sourceFloorPlan)
         return SavedCalibrationProfile(
             id: id,
-            displayName: profile.displayName ?? "Profil Kalibrasi",
+            displayName: profile.displayName ?? "Calibration Profile",
             savedAt: now,
             cameraCount: profile.cameras.count,
             usesCanvas: profile.floorplan.usesCanvas,
@@ -244,7 +244,7 @@ enum CalibrationProfileLibrary {
 
     private static func defaultDisplayName(venueName: String?, at date: Date) -> String {
         let venue = venueName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = venue?.isEmpty == false ? venue! : "Kalibrasi"
+        let base = venue?.isEmpty == false ? venue! : "Calibration"
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "id_ID")
         formatter.dateFormat = "d MMM yyyy, HH.mm.ss"

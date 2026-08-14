@@ -65,8 +65,10 @@ private struct WizardContainer: View {
             HorizontalStepper(steps: FlowStep.allCases,
                               current: router.step,
                               isLocked: router.step == .processing && session.result == nil,
+                              isEnabled: { isReachable($0) },
                               onSelect: { step in
                                   guard !(router.step == .processing && session.result == nil) else { return }
+                                  guard isReachable(step) else { return }
                                   router.go(to: step)
                               })
                 .spad(Space.xl, [.horizontal])
@@ -77,6 +79,13 @@ private struct WizardContainer: View {
             stepView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// No footage imported yet means nothing downstream can run, so every step
+    /// past Import stays unreachable until at least one video is loaded.
+    private func isReachable(_ step: FlowStep) -> Bool {
+        guard step != .importFootage else { return true }
+        return session.cameras.contains { $0.url != nil }
     }
 
     @ViewBuilder

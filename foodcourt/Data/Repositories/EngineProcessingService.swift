@@ -33,7 +33,7 @@ struct EngineProcessingService: ProcessingService {
                     while true {
                         try Task.checkCancellation()
                         let p = try await api.progress(jobId)
-                        if p.status == "error" { throw EngineError.job(p.error ?? "job gagal") }
+                        if p.status == "error" { throw EngineError.job(p.error ?? "job failed") }
                         continuation.yield(.progress(stage: p.stage, fraction: p.fraction))
                         if p.status == "done" { break }
                         try await Task.sleep(for: .milliseconds(500))
@@ -53,13 +53,13 @@ struct EngineProcessingService: ProcessingService {
     // MARK: build request
 
     private func buildRequest(_ s: AnalysisSession) throws -> JobRequestDTO {
-        guard !s.cameras.isEmpty else { throw EngineError.job("Belum ada kamera.") }
+        guard !s.cameras.isEmpty else { throw EngineError.job("No cameras yet.") }
         guard let range = EngineRequestBuilder.synchronizedRange(
             cameras: s.cameras,
             requestedStart: s.trimStartSec,
             requestedEnd: s.trimEndSec
         ) else {
-            throw EngineError.job("Offset kamera tidak menyisakan rentang waktu bersama yang valid.")
+            throw EngineError.job("Camera offsets leave no valid shared time range.")
         }
         let duration = range.end - range.start
         let cams = try s.cameras.map {

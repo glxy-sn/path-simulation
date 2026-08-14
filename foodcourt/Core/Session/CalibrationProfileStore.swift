@@ -38,7 +38,7 @@ enum CalibrationProfileStore {
             venueName: session.venueName.isEmpty ? nil : session.venueName,
             worldBoundsM: PixelSize(width: session.venueWidthM, height: session.venueHeightM),
             floorplan: FloorplanProfile(
-                sourceName: session.usesScaledCanvas ? "Canvas berskala" : (session.floorPlanName ?? "Floor plan"),
+                sourceName: session.usesScaledCanvas ? "Scaled canvas" : (session.floorPlanName ?? "Floor plan"),
                 pixelSize: floorSize,
                 usesCanvas: session.usesScaledCanvas,
                 assetFileName: nil
@@ -56,7 +56,7 @@ enum CalibrationProfileStore {
         guard profile.worldBoundsM.width > 0, profile.worldBoundsM.height > 0 else { throw CalibrationError.invalidProfile }
         guard profile.floorplan.pixelSize.isValid else { throw CalibrationError.invalidProfile }
         guard profile.cameras.count == session.cameras.count, !session.cameras.isEmpty else {
-            throw CalibrationError.cameraMismatch("jumlah kamera berbeda")
+            throw CalibrationError.cameraMismatch("camera count differs")
         }
         if !profile.floorplan.usesCanvas {
             guard let floorPlanURL, FileManager.default.fileExists(atPath: floorPlanURL.path) else {
@@ -75,7 +75,7 @@ enum CalibrationProfileStore {
             }
             let frameSize = current.framePixelSize?.isValid == true ? current.framePixelSize! : saved.imageSize
             guard compatibleAspectRatio(frameSize, saved.imageSize) else {
-                throw CalibrationError.cameraMismatch("rasio resolusi \(current.label) berbeda")
+                throw CalibrationError.cameraMismatch("resolution ratio of \(current.label) differs")
             }
 
             let imagePoints = saved.calibration.cameraPointsPx.map {
@@ -160,7 +160,7 @@ enum CalibrationProfileStore {
             unused.remove(matched)
             result.append((index, matched))
         }
-        guard unused.isEmpty else { throw CalibrationError.cameraMismatch("ada kamera profil yang tidak terpakai") }
+        guard unused.isEmpty else { throw CalibrationError.cameraMismatch("some profile cameras are unused") }
         return result
     }
 

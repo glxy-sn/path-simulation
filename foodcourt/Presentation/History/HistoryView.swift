@@ -138,8 +138,8 @@ struct LegacyChatUnavailable: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Tanya Data").font(.headline)
-                    Text("Tidak tersedia untuk riwayat ini")
+                    Text("Ask Data").font(.headline)
+                    Text("Not available for this record")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -149,12 +149,12 @@ struct LegacyChatUnavailable: View {
                         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
                 }
                 .buttonStyle(.plain)
-                .help("Tutup Tanya Data")
+                .help("Close Ask Data")
             }
             .padding(Space.m)
             Divider()
             ContentUnavailableView(
-                "Tanya Data tidak tersedia",
+                "Ask Data is unavailable",
                 systemImage: "bubble.left.and.exclamationmark.bubble.right",
                 description: Text("This old history entry has no jobId that can be safely mapped to the backend.")
             )

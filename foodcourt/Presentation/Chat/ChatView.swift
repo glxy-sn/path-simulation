@@ -15,6 +15,13 @@ struct ExplanatoryStatusDTO: Decodable {
     let modelError: String?
 }
 
+/// The backend stores "Chat Baru" as the default session title *and* keys its
+/// auto-rename on that exact string, so it must stay as-is on the wire. Translate
+/// only where it is shown; this also covers sessions saved before the rename.
+func chatDisplayTitle(_ raw: String) -> String {
+    raw == "Chat Baru" ? "New Chat" : raw
+}
+
 struct ChatSessionSummaryDTO: Decodable, Identifiable, Hashable {
     var id: String { sessionId }
     let sessionId: String
@@ -396,22 +403,22 @@ struct HistoryChatInspector: View {
                 await viewModel.synchronize(zones: zones)
             }
         }
-        .alert("Ubah Nama Chat", isPresented: Binding(
+        .alert("Rename Chat", isPresented: Binding(
             get: { renameCandidate != nil },
             set: { if !$0 { renameCandidate = nil } }
         )) {
-            TextField("Judul", text: $renameText)
-            Button("Simpan") {
+            TextField("Title", text: $renameText)
+            Button("Save") {
                 if let candidate = renameCandidate { Task { await viewModel.rename(candidate, to: renameText) } }
                 renameCandidate = nil
             }
-            Button("Batal", role: .cancel) { renameCandidate = nil }
+            Button("Cancel", role: .cancel) { renameCandidate = nil }
         }
-        .confirmationDialog("Hapus sesi chat ini?", isPresented: Binding(
+        .confirmationDialog("Delete this chat session?", isPresented: Binding(
             get: { deleteCandidate != nil },
             set: { if !$0 { deleteCandidate = nil } }
         )) {
-            Button("Hapus", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 if let candidate = deleteCandidate { Task { await viewModel.delete(candidate) } }
                 deleteCandidate = nil
             }
@@ -421,20 +428,20 @@ struct HistoryChatInspector: View {
     private var header: some View {
         HStack(spacing: Space.s) {
             if viewModel.active != nil {
-                headerIconButton(systemImage: "chevron.left", help: "Kembali ke daftar chat") {
+                headerIconButton(systemImage: "chevron.left", help: "Back to chat list") {
                     viewModel.backToList()
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.active?.title ?? "Ask Data")
+                Text(viewModel.active.map { chatDisplayTitle($0.title) } ?? "Ask Data")
                     .font(.headline)
                     .lineLimit(1)
             }
             Spacer()
 
             if viewModel.active != nil {
-                headerIconButton(systemImage: "square.and.pencil", help: "Buat chat baru") {
+                headerIconButton(systemImage: "square.and.pencil", help: "New chat") {
                     Task { await viewModel.newChat() }
                 }
             }
@@ -532,7 +539,7 @@ struct HistoryChatInspector: View {
             Task { await viewModel.open(session) }
         } label: {
             HStack {
-                Text(session.title)
+                Text(chatDisplayTitle(session.title))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
@@ -551,11 +558,11 @@ struct HistoryChatInspector: View {
                 .stroke(Color.primary.opacity(0.07), lineWidth: 1)
         }
         .contextMenu {
-            Button("Ubah Nama", systemImage: "pencil") {
+            Button("Rename", systemImage: "pencil") {
                 renameCandidate = session
-                renameText = session.title
+                renameText = chatDisplayTitle(session.title)
             }
-            Button("Hapus", systemImage: "trash", role: .destructive) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
                 deleteCandidate = session
             }
         }
@@ -692,8 +699,8 @@ private struct AssistantBubble: View {
               let label = exchange.selectedAreaLabel,
               !label.isEmpty else { return exchange.text }
         return exchange.text
-            .replacingOccurrences(of: "Meja dengan ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: "Area dengan ID \(areaId)", with: label, options: .caseInsensitive)
+            .replacingOccurrences(of: "Table with ID \(areaId)", with: label, options: .caseInsensitive)
+            .replacingOccurrences(of: "Area with ID \(areaId)", with: label, options: .caseInsensitive)
             .replacingOccurrences(of: "ID \(areaId)", with: label, options: .caseInsensitive)
             .replacingOccurrences(of: areaId, with: label, options: .caseInsensitive)
     }
@@ -719,7 +726,7 @@ private struct ImageBubble: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image): image.resizable().scaledToFit()
-                    case .failure: ContentUnavailableView("Gambar gagal dimuat", systemImage: "photo.badge.exclamationmark")
+                    case .failure: ContentUnavailableView("Image failed to load", systemImage: "photo.badge.exclamationmark")
                     default: ProgressView().frame(maxWidth: .infinity, minHeight: 140)
                     }
                 }
