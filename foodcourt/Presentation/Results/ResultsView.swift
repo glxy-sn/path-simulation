@@ -28,7 +28,6 @@ struct ResultsView: View {
     @Environment(AnalysisSession.self) private var session
     @Environment(AppRouter.self) private var router
     @State private var visual: ResultVisual = .boundingBox
-    @State private var showExport = false
 
     // Data: hasil engine bila ada, kalau tidak pakai contoh.
     private var summary: VenueSummary { session.result?.summary ?? SampleResult.summary }
@@ -60,7 +59,7 @@ struct ResultsView: View {
     }
     private var observations: [TrackObservation] { session.result?.observations ?? [] }
 
-    /// Lintasan per orang (rekonstruksi dari observasi ber-track) â untuk ringkasan path.
+    /// Lintasan per orang (rekonstruksi dari observasi ber-track) — untuk ringkasan path.
     private var trajectories: [[CGPoint]] {
         let byTrack = Dictionary(grouping: observations, by: { $0.trackId })
         return byTrack.values
@@ -127,7 +126,7 @@ struct ResultsView: View {
                         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
                 }
                 .buttonStyle(.plain)
-                .help("Kembali ke daftar riwayat")
+                .help("Back to history list")
             }
             SectionHeader(title: isHistory ? "Analysis History" : "Analysis Results", subtitle: subtitle)
             if !isHistory {
@@ -136,23 +135,19 @@ struct ResultsView: View {
                 }
                 .buttonStyle(.bordered).controlSize(.large)
             }
-            Button("Export", systemImage: "square.and.arrow.up") { showExport = true }
+            Button("Export", systemImage: "square.and.arrow.up") { exportBundle() }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .tint(Theme.accentFill)
                 .disabled(session.result == nil)
+                .help("Save a .zip containing the JSON and CSV report")
             if !isChatVisible, let onOpenChat {
-                Button("Tanya Data", systemImage: "bubble.left.and.text.bubble.right") {
+                Button("Ask Data", systemImage: "bubble.left.and.text.bubble.right") {
                     onOpenChat()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .help("Open Ask Data panel")
             }
-        }
-        .confirmationDialog("Export Laporan", isPresented: $showExport, titleVisibility: .visible) {
-            Button("JSON â lengkap (untuk analisis / LLM)") { exportJSON() }
-            Button("CSV â ringkasan (untuk Excel)") { exportCSV() }
-            Button("Batal", role: .cancel) {}
         }
     }
 
@@ -175,25 +170,83 @@ struct ResultsView: View {
         }
     }
 
-    private func exportJSON() {
-        guard let r = session.result else { return }
+    /// One button, one file: a .zip holding the full JSON and the spreadsheet CSV.
+    private func exportBundle() {
+        guard session.result != nil,
+              let json = buildJSON(),
+              let csv = buildCSV().data(using: .utf8) else { return }
+
+        let name = defaultName()
+        let fm = FileManager.default
+        let staging = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let folder = staging.appendingPathComponent(name)
+        defer { try? fm.removeItem(at: staging) }
+
+        do {
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            try json.write(to: folder.appendingPathComponent("analysis.json"))
+            try csv.write(to: folder.appendingPathComponent("summary.csv"))
+        } catch { return }
+
+        // NSFileCoordinator's .forUploading hands back a zipped copy of the folder,
+        // so no third-party archiver is needed.
+        var archive: Data?
+        var coordinationError: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: folder,
+                                       options: [.forUploading],
+                                       error: &coordinationError) { zipped in
+            archive = try? Data(contentsOf: zipped)
+        }
+        guard let data = archive else { return }
+        save(name: name + ".zip", type: .zip, data: data)
+    }
+
+    private func buildJSON() -> Data? {
+        guard let r = session.result else { return nil }
         var dict: [String: Any] = [
             "generatedAt": ISO8601DateFormatter().string(from: Date()),
+            "jobId": r.jobId ?? session.jobId ?? "",
             "venue": ["name": session.venueName, "type": session.venueType.rawValue,
                       "widthM": session.venueWidthM, "heightM": session.venueHeightM],
             "window": ["startSec": session.trimStartSec,
                        "durationSec": max(0, session.trimEndSec - session.trimStartSec)],
+            "cameras": session.cameras.map { cam in
+                ["label": cam.label,
+                 "resolution": cam.resolution,
+                 "durationSec": cam.durationSec,
+                 "timeOffsetSec": cam.timeOffsetSec,
+                 "isCalibrated": cam.isCalibrated] as [String: Any]
+            },
             "summary": ["totalVisitors": r.summary.totalVisitors,
                         "avgDwellSeconds": r.summary.avgDwellSeconds,
                         "peakOccupancy": r.summary.peakOccupancy,
-                        ],
-            "zones": r.zones.map { ["code": $0.code, "visits": $0.visits, "share": $0.share,
+                        "captureRate": r.summary.captureRate],
+            "zones": r.zones.map { ["rank": $0.rank, "code": $0.code, "name": $0.name,
+                                    "visits": $0.visits, "share": $0.share,
                                     "rect": ["x": $0.rect.minX, "y": $0.rect.minY,
                                              "w": $0.rect.width, "h": $0.rect.height]] },
+            "customZones": session.customZones.map { ["id": $0.id.uuidString, "name": $0.name,
+                                                      "rect": ["x": $0.rect.minX, "y": $0.rect.minY,
+                                                               "w": $0.rect.width, "h": $0.rect.height]] },
             "stopPoints": r.stops.map { ["name": $0.name, "dwellSeconds": $0.dwellSeconds,
                                          "x": Double($0.point.x), "y": Double($0.point.y)] },
             "occupancy": r.occupancy.map { ["minute": $0.minute, "count": $0.count] },
         ]
+        if let q = r.identityQuality {
+            dict["identityQuality"] = [
+                "globalIDs": q.globalIDs,
+                "localStitches": q.localStitches,
+                "overlapMerges": q.overlapMerges,
+                "handoverMerges": q.handoverMerges,
+                "unmatchedTracklets": q.unmatchedTracklets,
+                "filteredTracklets": q.filteredTracklets,
+                "highConfidence": q.highConfidence,
+                "mediumConfidence": q.mediumConfidence,
+                "lowConfidence": q.lowConfidence,
+                "singleCamera": q.singleCamera,
+                "calibrationWarnings": q.calibrationWarnings,
+            ]
+        }
         dict["paths"] = r.paths.enumerated().map { (i, p) -> [String: Any] in
             var pts: [[String: Any]] = []
             for (idx, pt) in p.points.enumerated() {
@@ -202,28 +255,67 @@ struct ResultsView: View {
             }
             return ["id": i, "hue": p.hue, "points": pts]
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: dict,
-                                                     options: [.prettyPrinted, .sortedKeys]) else { return }
-        save(name: defaultName() + ".json", type: .json, data: data)
+        return try? JSONSerialization.data(withJSONObject: dict,
+                                           options: [.prettyPrinted, .sortedKeys])
     }
 
-    private func exportCSV() {
-        guard let r = session.result else { return }
+    private func buildCSV() -> String {
+        guard let r = session.result else { return "" }
+        func esc(_ v: String) -> String {
+            v.contains(",") || v.contains("\"")
+                ? "\"\(v.replacingOccurrences(of: "\"", with: "\"\""))\""
+                : v
+        }
+
         var s = "Food Court Analysis Report\n"
-        s += "Venue,\(session.venueName)\n"
-        s += "Size (m),\(session.venueWidthM) x \(session.venueHeightM)\n\n"
+        s += "Venue,\(esc(session.venueName))\n"
+        s += "Venue Type,\(esc(session.venueType.rawValue))\n"
+        s += "Size (m),\(session.venueWidthM) x \(session.venueHeightM)\n"
+        s += "Generated At,\(ISO8601DateFormatter().string(from: Date()))\n"
+        s += "Window Start (sec),\(session.trimStartSec)\n"
+        s += "Window Duration (sec),\(max(0, session.trimEndSec - session.trimStartSec))\n\n"
+
         s += "Metric,Value\n"
         s += "Total Visitors,\(r.summary.totalVisitors)\n"
         s += "Avg. Time Spent (sec),\(r.summary.avgDwellSeconds)\n"
-        s += "Busiest Moment,\(r.summary.peakOccupancy)\n\n"
-        s += "Zone,Visits,Share\n"
-        for z in r.zones { s += "\(z.code),\(z.visits),\(z.share)\n" }
+        s += "Busiest Moment,\(r.summary.peakOccupancy)\n"
+        s += "Capture Rate,\(r.summary.captureRate)\n\n"
+
+        s += "Camera,Resolution,Duration (sec),Time Offset (sec),Calibrated\n"
+        for cam in session.cameras {
+            s += "\(esc(cam.label)),\(cam.resolution),\(cam.durationSec),\(cam.timeOffsetSec),\(cam.isCalibrated)\n"
+        }
+
+        s += "\nRank,Zone,Visits,Share\n"
+        for z in r.zones { s += "\(z.rank),\(esc(z.name)),\(z.visits),\(z.share)\n" }
+
+        if !session.customZones.isEmpty {
+            s += "\nCustom Zone,x,y,w,h\n"
+            for z in session.customZones {
+                s += "\(esc(z.name)),\(z.rect.minX),\(z.rect.minY),\(z.rect.width),\(z.rect.height)\n"
+            }
+        }
+
         s += "\nStop Point,Dwell (sec),x,y\n"
-        for st in r.stops { s += "\(st.name),\(st.dwellSeconds),\(st.point.x),\(st.point.y)\n" }
+        for st in r.stops { s += "\(esc(st.name)),\(st.dwellSeconds),\(st.point.x),\(st.point.y)\n" }
+
         s += "\nMinute,Occupancy\n"
         for o in r.occupancy { s += "\(o.minute),\(o.count)\n" }
-        guard let data = s.data(using: .utf8) else { return }
-        save(name: defaultName() + ".csv", type: .commaSeparatedText, data: data)
+
+        if let q = r.identityQuality {
+            s += "\nIdentity Quality,Value\n"
+            s += "Global IDs,\(q.globalIDs)\n"
+            s += "Local Stitches,\(q.localStitches)\n"
+            s += "Overlap Merges,\(q.overlapMerges)\n"
+            s += "Handover Merges,\(q.handoverMerges)\n"
+            s += "Unmatched Tracklets,\(q.unmatchedTracklets)\n"
+            s += "Filtered Tracklets,\(q.filteredTracklets)\n"
+            s += "High Confidence,\(q.highConfidence)\n"
+            s += "Medium Confidence,\(q.mediumConfidence)\n"
+            s += "Low Confidence,\(q.lowConfidence)\n"
+            s += "Single Camera,\(q.singleCamera)\n"
+        }
+        return s
     }
 
     private var subtitle: String {
@@ -231,9 +323,9 @@ struct ResultsView: View {
             let name = session.venueName.isEmpty ? "Venue" : session.venueName
             let dur = timecode(session.trimEndSec - session.trimStartSec)
             let cams = session.overrideCameraCount ?? session.cameras.count
-            return "\(name) · \(cams) kamera · durasi \(dur)"
+            return "\(name) · \(cams) cameras · duration \(dur)"
         }
-        return "Contoh data jalankan analisis untuk hasil nyata."
+        return "Sample data — run an analysis for real results."
     }
 
     private var metrics: some View {
@@ -266,7 +358,8 @@ struct ResultsView: View {
                     .frame(maxWidth: .infinity)
                 case .path:
                     PathTab(paths: paths, trajectories: trajectories, flow: flowField,
-                            stops: stops, background: floorMapImage)
+                            stops: stops, background: floorMapImage,
+                            widthM: session.venueWidthM, heightM: session.venueHeightM)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                 case .heatmap:
@@ -296,8 +389,8 @@ struct ResultsView: View {
         switch visual {
         case .boundingBox:
             return boundingVideoURL != nil
-                ? "Video deteksi + ID global antar-kamera (grid + BEV bila multi-kamera)."
-                : "Contoh â jalankan analisis untuk video nyata."
+                ? "Detection video + global cross-camera IDs (grid + BEV when multi-camera)."
+                : "Sample — run an analysis for real footage."
         case .path:    return "Visitor movement paths projected on the floor plan."
         case .heatmap: return "Movement density projected on the floor plan."
         case .zona:    return "Zones on the floor plan. Colors match the ranking list below."
@@ -371,7 +464,7 @@ struct ResultsView: View {
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.catmullRom)
             }
-            .chartXAxisLabel("menit ke-")
+            .chartXAxisLabel("minute")
             .chartYAxisLabel("people")
             .frame(minHeight: 220)
         }
@@ -381,7 +474,7 @@ struct ResultsView: View {
 
 // MARK: - Player & gambar dari file (artifact engine)
 
-/// AVPlayerView (AppKit) â punya tombol full-screen + Picture-in-Picture bawaan.
+/// AVPlayerView (AppKit) → punya tombol full-screen + Picture-in-Picture bawaan.
 private struct PlayerView: NSViewRepresentable {
     let player: AVPlayer
     func makeNSView(context: Context) -> AVPlayerView {
@@ -430,7 +523,7 @@ private struct FileImage: View {
 // MARK: - Heatmap 2 opsi (jumlah orang vs lama singgah)
 
 /// Bangun blob heatmap dari observasi.
-/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (â waktu); 2 = GABUNGAN (keduanya dinormalisasi).
+/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (∝ waktu); 2 = GABUNGAN (keduanya dinormalisasi).
 func Foodcourt_heatBlobs(_ obs: [TrackObservation], mode: Int, top: Int = 40) -> [HeatBlob] {
     guard !obs.isEmpty else { return [] }
     let GW = 56, GH = 42
@@ -509,9 +602,12 @@ struct FlowArrow: Identifiable {
 
 /// Medan aliran: rata-rata arah gerak orang di tiap sel grid.
 /// Menjawab "sepanjang waktu, rata-rata orang di area ini bergerak ke mana".
-func Foodcourt_flowField(_ trajs: [[CGPoint]], gx: Int = 14, gy: Int = 10) -> [FlowArrow] {
+func Foodcourt_flowField(_ trajs: [[CGPoint]], gx: Int = 14, gy: Int = 10,
+                         minCoherence: Double = 0.55, minSteps: Double = 4) -> [FlowArrow] {
     var sumX = [Double](repeating: 0, count: gx * gy)
     var sumY = [Double](repeating: 0, count: gx * gy)
+    var sumU = [Double](repeating: 0, count: gx * gy)   // jumlah vektor satuan
+    var sumV = [Double](repeating: 0, count: gx * gy)
     var cnt  = [Double](repeating: 0, count: gx * gy)
     for t in trajs where t.count >= 2 {
         for i in 1..<t.count {
@@ -523,14 +619,21 @@ func Foodcourt_flowField(_ trajs: [[CGPoint]], gx: Int = 14, gy: Int = 10) -> [F
             let cy = min(gy - 1, max(0, Int(a.y * Double(gy))))
             let idx = cy * gx + cx
             sumX[idx] += dx; sumY[idx] += dy; cnt[idx] += 1
+            sumU[idx] += dx / d; sumV[idx] += dy / d
         }
     }
     let maxC = cnt.max() ?? 1
     var arrows: [FlowArrow] = []
-    for idx in 0..<(gx * gy) where cnt[idx] >= 2 {
+    // Hanya petak yang arahnya seragam yang dapat panah. Kekompakan diukur dari
+    // panjang jumlah vektor SATUAN dibagi jumlah langkah: 1 = semua orang searah,
+    // 0 = arahnya campur aduk. Ini beda dari besar perpindahan rata-rata, yang
+    // ikut terpengaruh cepat-lambatnya orang berjalan.
+    for idx in 0..<(gx * gy) where cnt[idx] >= minSteps {
         let vx = sumX[idx] / cnt[idx], vy = sumY[idx] / cnt[idx]
         let mag = (vx * vx + vy * vy).squareRoot()
         if mag < 0.004 { continue }                      // tak ada arah dominan (diam)
+        let kekompakan = (sumU[idx] * sumU[idx] + sumV[idx] * sumV[idx]).squareRoot() / cnt[idx]
+        if kekompakan < minCoherence { continue }        // arahnya campur -> tidak dipercaya
         let cx = idx % gx, cy = idx / gx
         arrows.append(FlowArrow(
             at: CGPoint(x: (Double(cx) + 0.5) / Double(gx), y: (Double(cy) + 0.5) / Double(gy)),
@@ -547,7 +650,7 @@ private struct StopPinsLayer: View {
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill").font(.title3).foregroundStyle(.orange)
                         .background(Circle().fill(.white).padding(3))
-                    Text("\(i + 1) Â· \(s.dwellText)").font(.system(size: 8, weight: .bold))
+                    Text("\(i + 1) · \(s.dwellText)").font(.system(size: 8, weight: .bold))
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
@@ -562,6 +665,26 @@ private struct PathSummary: View {
     let trajectories: [[CGPoint]]
     let flow: [FlowArrow]
     var background: NSImage? = nil
+    /// Lintasan padat dari engine; kalau ada, ini yang dirangkai.
+    var densePaths: [[CGPoint]] = []
+    var widthM: Double = 10
+    var heightM: Double = 7.5
+
+    /// Seluruh jejak biru dirangkai jadi satu garis. Tidak ada yang disaring:
+    /// jejak sependek apa pun ikut, dan batas lantai tidak dipakai.
+    private var linkedRoutes: [[CGPoint]] {
+        // Sumbernya semua yang digambar biru, ditambah lintasan padat dari engine.
+        let source = (trajectories + densePaths).flatMap { $0 }
+        let pieces = MainRoute.loopAroundTables(points: source, widthM: widthM,
+                                               heightM: heightM, floorplan: background)
+                   + MainRoute.ringsAroundTables(points: source, widthM: widthM,
+                                                 heightM: heightM, floorplan: background)
+        // garis yang saling menimpa disatukan: yang tertimpa dibuang bagiannya
+        // Penggeseran ke tepi lantai (MainRoute.snapToFloor) sengaja tidak
+        // dipakai: hasilnya kurang rapi dibanding versi ini.
+        return MainRoute.dedupe(pieces, widthM: widthM, heightM: heightM,
+                                minLengthM: 1.5)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -572,9 +695,14 @@ private struct PathSummary: View {
                 } else {
                     Color(hex: 0x0F1524)
                 }
-                // Heatmap garis: semua lintasan, garis tipis transparan -> menumpuk jadi terang
+                // Heatmap garis: semua lintasan, garis tipis transparan -> menumpuk
+                // jadi terang. Tiap lintasan dihaluskan dulu supaya yang menumpuk
+                // bentuk jalurnya, bukan getaran deteksi tiap langkah. Digambar dua
+                // lapis: lapis lebar yang samar untuk sebaran, lapis tipis yang
+                // lebih pekat untuk intinya -> tumpukannya jadi lebih terbaca.
                 Canvas { ctx, size in
-                    for t in trajectories {
+                    for raw in trajectories {
+                        let t = Foodcourt_smoothPath(raw, sigma: 3)
                         var path = Path(); var started = false
                         for i in 1..<t.count {
                             let a = t[i - 1], b = t[i]
@@ -584,24 +712,89 @@ private struct PathSummary: View {
                             if !started { path.move(to: pa); started = true }
                             path.addLine(to: pb)
                         }
-                        ctx.stroke(path, with: .color(.cyan.opacity(0.14)),
-                                   style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                        // Satu lapis lebar dan pudar saja: perannya latar bukti,
+                        // bukan gambar utama. Jalur biru tebal yang jadi fokus.
+                        ctx.stroke(path, with: .color(.cyan.opacity(0.055)),
+                                   style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
                     }
                 }
-                .blur(radius: 2)
-                // Medan aliran: panah arah rata-rata orang bergerak per area
+                .blur(radius: 1)
+                // Semua jejak biru itu dirangkai jadi SATU garis: mulai dari yang
+                // terpanjang, terus disambung ke jejak terdekat yang searah, dari
+                // kedua ujungnya. Yang samar pun ikut — tidak ada yang disaring.
+                Canvas { ctx, size in
+                    for route in linkedRoutes where route.count > 3 {
+                        var path = Path()
+                        path.move(to: CGPoint(x: route[0].x * size.width,
+                                              y: route[0].y * size.height))
+                        for p in route.dropFirst() {
+                            path.addLine(to: CGPoint(x: p.x * size.width, y: p.y * size.height))
+                        }
+                        ctx.stroke(path, with: .color(.white.opacity(0.5)),
+                                   style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+                        ctx.stroke(path, with: .color(Color(hex: 0x1C7ED6)),
+                                   style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+
+                        // Panah arah. Arahnya TIDAK dikarang: garis cuma tahu
+                        // bentuk, bukan arah jalan. Tiap panah menoleh ke arus
+                        // orang di sekitarnya (medan panah oranye); kalau di situ
+                        // tidak ada arus yang jelas, panahnya tidak digambar.
+                        let every = max(6, route.count / 8)
+                        for i in stride(from: every, to: route.count - 2, by: every) {
+                            let a = route[max(0, i - 3)], b = route[min(route.count - 1, i + 3)]
+                            var tx = Double(b.x - a.x), ty = Double(b.y - a.y)
+                            let tm = hypot(tx, ty)
+                            guard tm > 1e-9 else { continue }
+                            tx /= tm; ty /= tm
+
+                            let p = route[i]
+                            var sx = 0.0, sy = 0.0
+                            for f in flow {
+                                let d = hypot(Double(f.at.x - p.x), Double(f.at.y - p.y))
+                                guard d <= 0.08 else { continue }
+                                sx += f.dx * f.weight; sy += f.dy * f.weight
+                            }
+                            let sm = hypot(sx, sy)
+                            guard sm > 1e-6 else { continue }
+                            let searah = (sx / sm) * tx + (sy / sm) * ty
+                            guard abs(searah) >= 0.30 else { continue }
+                            if searah < 0 { tx = -tx; ty = -ty }
+
+                            let tip = CGPoint(x: p.x * size.width, y: p.y * size.height)
+                            let ang = atan2(ty * Double(size.height), tx * Double(size.width))
+                            let wing = Double.pi / 6, len = 11.0
+                            var head = Path()
+                            head.move(to: CGPoint(x: Double(tip.x) + cos(ang) * len * 0.5,
+                                                  y: Double(tip.y) + sin(ang) * len * 0.5))
+                            head.addLine(to: CGPoint(x: Double(tip.x) - cos(ang - wing) * len * 0.6,
+                                                     y: Double(tip.y) - sin(ang - wing) * len * 0.6))
+                            head.addLine(to: CGPoint(x: Double(tip.x) - cos(ang + wing) * len * 0.6,
+                                                     y: Double(tip.y) - sin(ang + wing) * len * 0.6))
+                            head.closeSubpath()
+                            ctx.stroke(head, with: .color(.white.opacity(0.9)),
+                                       style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+                            ctx.fill(head, with: .color(Color(hex: 0x0B4F8A)))
+                        }
+                    }
+                }
+                // Medan aliran: panah arah rata-rata orang bergerak per area.
+                // Versi garis aliran (FlowStreams) sudah dicoba dan ditolak:
+                // panahnya terlalu kecil dan terlalu rapat.
                 Canvas { ctx, size in
                     for a in flow {
                         let base = CGPoint(x: a.at.x * size.width, y: a.at.y * size.height)
                         let ang = atan2(a.dy, a.dx)
-                        let len = (0.028 + 0.05 * a.weight) * size.width
+                        // Semua panah yang lolos saringan kekompakan sama-sama
+                        // layak dipercaya, jadi tebal dan pekatnya dibuat sama.
+                        // Ramai-sepinya cuma diwakili sedikit selisih panjang.
+                        let len = (0.040 + 0.022 * a.weight) * size.width
                         let tip = CGPoint(x: base.x + cos(ang) * len, y: base.y + sin(ang) * len)
                         let col = Color(hue: 0.09, saturation: 0.85, brightness: 1.0)
-                            .opacity(0.35 + 0.55 * a.weight)
+                            .opacity(0.85)
                         var line = Path(); line.move(to: base); line.addLine(to: tip)
                         ctx.stroke(line, with: .color(col),
-                                   style: StrokeStyle(lineWidth: 1.5 + 2.5 * a.weight, lineCap: .round))
-                        let ah = 4.0 + 4.0 * a.weight
+                                   style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
+                        let ah = 6.5
                         let l = CGPoint(x: tip.x - cos(ang - .pi / 6) * ah, y: tip.y - sin(ang - .pi / 6) * ah)
                         let r = CGPoint(x: tip.x - cos(ang + .pi / 6) * ah, y: tip.y - sin(ang + .pi / 6) * ah)
                         var head = Path(); head.move(to: tip); head.addLine(to: l); head.addLine(to: r); head.closeSubpath()
@@ -613,12 +806,33 @@ private struct PathSummary: View {
     }
 }
 
+/// Rata-rata bergerak berbobot Gauss: menghilangkan getaran deteksi tiap langkah
+/// tanpa memindahkan jalurnya.
+func Foodcourt_smoothPath(_ pts: [CGPoint], sigma: Double = 2.4) -> [CGPoint] {
+    guard pts.count > 4, sigma > 0 else { return pts }
+    let radius = max(1, Int(sigma * 2.5))
+    var kernel: [Double] = []
+    for i in -radius...radius { kernel.append(exp(-Double(i * i) / (2 * sigma * sigma))) }
+    let norm = kernel.reduce(0, +)
+    return pts.indices.map { index in
+        var sx = 0.0, sy = 0.0
+        for (k, weight) in kernel.enumerated() {
+            let j = min(pts.count - 1, max(0, index + k - radius))
+            sx += Double(pts[j].x) * weight
+            sy += Double(pts[j].y) * weight
+        }
+        return CGPoint(x: sx / norm, y: sy / norm)
+    }
+}
+
 private struct PathTab: View {
     let paths: [PathTrace]
     let trajectories: [[CGPoint]]
     let flow: [FlowArrow]
     let stops: [StopPoint]
     var background: NSImage? = nil
+    var widthM: Double = 10
+    var heightM: Double = 7.5
     @State private var mode = 0   // 0 = detail, 1 = ringkasan
 
     var body: some View {
@@ -627,7 +841,9 @@ private struct PathTab: View {
                 if mode == 0 {
                     PathContent(paths: paths, background: background)
                 } else {
-                    PathSummary(trajectories: trajectories, flow: flow, background: background)
+                    PathSummary(trajectories: trajectories, flow: flow, background: background,
+                                densePaths: paths.map { $0.points },
+                                widthM: widthM, heightM: heightM)
                 }
             }
             .overlay(StopPinsLayer(stops: stops))

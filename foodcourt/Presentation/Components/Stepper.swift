@@ -11,17 +11,21 @@ struct HorizontalStepper: View {
     let steps: [FlowStep]
     let current: FlowStep
     let isLocked: Bool
+    /// Per-step gate: a step that returns false is dimmed and cannot be tapped.
+    let isEnabled: (FlowStep) -> Bool
     let onSelect: (FlowStep) -> Void
 
     init(
         steps: [FlowStep],
         current: FlowStep,
         isLocked: Bool = false,
+        isEnabled: @escaping (FlowStep) -> Bool = { _ in true },
         onSelect: @escaping (FlowStep) -> Void
     ) {
         self.steps = steps
         self.current = current
         self.isLocked = isLocked
+        self.isEnabled = isEnabled
         self.onSelect = onSelect
     }
 
@@ -31,8 +35,11 @@ struct HorizontalStepper: View {
                 StepNode(index: idx + 1,
                          step: step,
                          state: state(for: step))
+                    .opacity(isEnabled(step) ? 1 : 0.35)
                     .contentShape(Rectangle())
-                    .onTapGesture { onSelect(step) }
+                    .onTapGesture { if isEnabled(step) { onSelect(step) } }
+                    .allowsHitTesting(isEnabled(step))
+                    .help(isEnabled(step) ? "" : "Import a video first.")
 
                 if idx < steps.count - 1 {
                     Rectangle()
@@ -44,7 +51,7 @@ struct HorizontalStepper: View {
         }
         .opacity(isLocked ? 0.62 : 1)
         .disabled(isLocked)
-        .accessibilityHint(isLocked ? "Navigasi dikunci sampai analisis selesai." : "")
+        .accessibilityHint(isLocked ? "Navigation is locked until the analysis finishes." : "")
     }
 
     private func state(for step: FlowStep) -> StepNode.State {

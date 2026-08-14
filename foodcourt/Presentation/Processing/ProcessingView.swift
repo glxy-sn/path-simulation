@@ -187,7 +187,7 @@ struct ProcessingView: View {
                     RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                         .strokeBorder(Theme.hairline)
                 )
-            Text("Video deteksi + ID + titik kaki bisa dilihat di layar Hasil setelah selesai.")
+            Text("Detection video, IDs and foot points are available on the Results screen once finished.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .card()

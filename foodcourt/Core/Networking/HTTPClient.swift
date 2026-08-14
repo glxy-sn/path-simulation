@@ -16,10 +16,10 @@ enum EngineError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network:            return "Gagal terhubung ke engine."
-        case .notReady:           return "Engine belum siap. Pastikan server jalan di :8765."
+        case .network:            return "Could not connect to the engine."
+        case .notReady:           return "Engine is not ready. Make sure the server is running on :8765."
         case .http(let c, let m): return "HTTP \(c): \(m)"
-        case .decoding(let e):    return "Gagal membaca respons: \(e.localizedDescription)"
+        case .decoding(let e):    return "Could not read the response: \(e.localizedDescription)"
         case .job(let m):         return m
         }
     }

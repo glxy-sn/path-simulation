@@ -50,15 +50,15 @@ enum EngineRequestBuilder {
         duration: Double?
     ) throws -> CameraDTO {
         guard let url = camera.url else {
-            throw EngineError.job("Kamera \"\(camera.label)\" tidak punya file video.")
+            throw EngineError.job("Camera \"\(camera.label)\" has no video file.")
         }
         guard camera.imagePoints.count >= 4,
               camera.imagePoints.count == camera.planePoints.count else {
-            throw EngineError.job("Kalibrasi kamera \"\(camera.label)\" belum lengkap (butuh ≥4 pasang titik).")
+            throw EngineError.job("Calibration for camera \"\(camera.label)\" is incomplete (needs ≥4 point pairs).")
         }
         guard let calibration = camera.calibration, calibration.isValid,
               let frameSize = camera.framePixelSize, frameSize.isValid else {
-            throw EngineError.job("Kalibrasi kamera \"\(camera.label)\" invalid atau ukuran frame tidak tersedia.")
+            throw EngineError.job("Calibration for camera \"\(camera.label)\" is invalid or the frame size is unavailable.")
         }
         let normalized: Matrix3x3
         do {
@@ -68,7 +68,7 @@ enum EngineRequestBuilder {
             )
         } catch {
             throw EngineError.job(
-                "Matriks kalibrasi kamera \"\(camera.label)\" invalid: \(error.localizedDescription)"
+                "Calibration matrix for camera \"\(camera.label)\" is invalid: \(error.localizedDescription)"
             )
         }
         return CameraDTO(

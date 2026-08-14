@@ -101,8 +101,8 @@ struct GlobalTrimCard: View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Rentang Waktu").font(.headline)
-                    Text("Timeline global bersama · tersedia \(timecode(maxSec - minSec))")
+                    Text("Time Range").font(.headline)
+                    Text("Shared global timeline · \(timecode(maxSec - minSec)) available")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -135,18 +135,18 @@ struct GlobalTrimCard: View {
                 }
             }
 
-            Text("Semua preview mengikuti waktu global; offset diterapkan ke sumber tiap kamera.")
+            Text("All previews follow global time; offsets are applied per camera source.")
                 .font(.caption2).foregroundStyle(.tertiary)
 
             RangeSlider(lower: $startSec, upper: $endSec, minSec: minSec, maxSec: maxSec,
                         onScrub: { t in if let t { controller.scrub(to: t) } })
 
             HStack {
-                stat("Mulai", timecode(startSec))
+                stat("Start", timecode(startSec))
                 Spacer()
-                stat("Durasi", timecode(endSec - startSec))
+                stat("Duration", timecode(endSec - startSec))
                 Spacer()
-                stat("Selesai", timecode(endSec))
+                stat("Done", timecode(endSec))
             }
         }
         .card()
@@ -165,7 +165,7 @@ struct GlobalTrimCard: View {
                 .fill(Color.primary.opacity(0.05)).frame(height: 160)
             VStack(spacing: Space.s) {
                 Image(systemName: "film").font(.system(size: 28)).foregroundStyle(.secondary)
-                Text("Preview muncul setelah video punya file.").font(.caption).foregroundStyle(.secondary)
+                Text("Previews appear once the videos have files.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }

@@ -19,7 +19,7 @@ struct ArtifactDetailView: View {
                             .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: Radius.s))
                     }
                     .buttonStyle(.plain)
-                    .help("Kembali ke chat")
+                    .help("Back to chat")
                 }
                 Text(media.caption)
                     .font(.headline)
@@ -39,12 +39,12 @@ struct ArtifactDetailView: View {
                         .padding(Space.m)
                 } else if let errorMessage {
                     ContentUnavailableView(
-                        "Gambar gagal dimuat",
+                        "Image failed to load",
                         systemImage: "photo.badge.exclamationmark",
                         description: Text(errorMessage)
                     )
                 } else {
-                    ProgressView("Memuat gambar resolusi penuh…")
+                    ProgressView("Loading full-resolution image…")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -55,7 +55,7 @@ struct ArtifactDetailView: View {
 
     private func load() async {
         guard let url = URL(string: media.artifactURL, relativeTo: baseURL)?.absoluteURL else {
-            errorMessage = "URL artefak tidak valid."
+            errorMessage = "Invalid artifact URL."
             return
         }
         do {

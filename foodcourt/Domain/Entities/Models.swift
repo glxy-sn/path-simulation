@@ -30,9 +30,9 @@ func timecode(_ sec: Double) -> String {
 
 extension CameraClip {
     static let samples: [CameraClip] = [
-        .init(label: "Pintu Masuk", fileName: "cam_entrance.mp4", resolution: "1920×1080", durationSec: 7200),
-        .init(label: "Area Tengah", fileName: "cam_center.mp4",   resolution: "1920×1080", durationSec: 7200),
-        .init(label: "Kasir",       fileName: "cam_cashier.mp4",  resolution: "1280×720",  durationSec: 5400)
+        .init(label: "Entrance", fileName: "cam_entrance.mp4", resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Center Area", fileName: "cam_center.mp4",   resolution: "1920×1080", durationSec: 7200),
+        .init(label: "Cashier",       fileName: "cam_cashier.mp4",  resolution: "1280×720",  durationSec: 5400)
     ]
 }
 
@@ -42,16 +42,36 @@ enum VenueType: String, CaseIterable, Identifiable {
     case mall = "Mall"
     case other = "Lainnya"
     var id: String { rawValue }
+
+    /// rawValue stays as-is: it is the stored key in saved analyses and the value
+    /// sent to the backend. Only the on-screen label is translated.
+    var displayName: String {
+        switch self {
+        case .pujasera:   return "Food Court"
+        case .minimarket: return "Minimarket"
+        case .mall:       return "Mall"
+        case .other:      return "Other"
+        }
+    }
 }
 
 enum AnalysisMode: String, CaseIterable, Identifiable {
     case lengkap = "Mode Lengkap"
     case cepat = "Mode Cepat"
     var id: String { rawValue }
+
+    /// See VenueType.displayName — rawValue is persisted, so it must not change.
+    var displayName: String {
+        switch self {
+        case .lengkap: return "Full Mode"
+        case .cepat:   return "Fast Mode"
+        }
+    }
+
     var detail: String {
         switch self {
-        case .lengkap: return "Kalibrasi antar-kamera → bird's-eye gabungan & ID lintas kamera."
-        case .cepat:   return "Tanpa kalibrasi → analitik per-kamera saja (zero-config)."
+        case .lengkap: return "Cross-camera calibration → combined bird's-eye view & cross-camera IDs."
+        case .cepat:   return "No calibration → per-camera analytics only (zero-config)."
         }
     }
 }
@@ -59,7 +79,7 @@ enum AnalysisMode: String, CaseIterable, Identifiable {
 // MARK: - Kalibrasi
 
 enum PlaneSource: String, CaseIterable, Identifiable {
-    case canvas = "Canvas berskala"
+    case canvas = "Scaled canvas"
     case floorplan = "Upload floor plan"
     var id: String { rawValue }
 }
@@ -113,7 +133,7 @@ struct ZoneRank: Identifiable {
     let share: Double
     let rect: CGRect        // posisi zona di bidang lantai (ternormalisasi 0–1)
     let colorHex: UInt      // warna zona (dipakai peta + list ranking)
-    var name: String { "Zona \(code)" }
+    var name: String { "Zone \(code)" }
 }
 
 struct StopPoint: Identifiable {
@@ -231,17 +251,17 @@ struct HistoryEntry: Identifiable {
 
 extension HistoryEntry {
     static let samples: [HistoryEntry] = [
-        .init(venue: "Pujasera Kampus", type: "Pujasera / Food Court",
+        .init(venue: "Pujasera Kampus", type: "Food Court",
               date: Date().addingTimeInterval(-3600 * 5),
-              cameraCount: 3, visitors: 143, avgDwellSeconds: 87, mode: "Mode Lengkap"),
+              cameraCount: 3, visitors: 143, avgDwellSeconds: 87, mode: "Full Mode"),
         .init(venue: "Minimarket Blok C", type: "Minimarket",
               date: Date().addingTimeInterval(-3600 * 30),
-              cameraCount: 2, visitors: 89, avgDwellSeconds: 64, mode: "Mode Lengkap"),
-        .init(venue: "Atrium Mall Timur", type: "Mall",
+              cameraCount: 2, visitors: 89, avgDwellSeconds: 64, mode: "Full Mode"),
+        .init(venue: "East Mall Atrium", type: "Mall",
               date: Date().addingTimeInterval(-3600 * 74),
-              cameraCount: 4, visitors: 512, avgDwellSeconds: 132, mode: "Mode Cepat"),
-        .init(venue: "Food Court Lt. 3", type: "Pujasera / Food Court",
+              cameraCount: 4, visitors: 512, avgDwellSeconds: 132, mode: "Fast Mode"),
+        .init(venue: "Food Court Fl. 3", type: "Food Court",
               date: Date().addingTimeInterval(-3600 * 120),
-              cameraCount: 3, visitors: 201, avgDwellSeconds: 96, mode: "Mode Lengkap")
+              cameraCount: 3, visitors: 201, avgDwellSeconds: 96, mode: "Full Mode")
     ]
 }
