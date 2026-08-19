@@ -108,6 +108,10 @@ class StopPointOut(BaseModel):
 class OccupancyBin(BaseModel):
     minute: int
     count: int
+    # Bin satu menit membuat video di bawah 60 detik hanya menghasilkan satu
+    # titik, sehingga grafik okupansi tampak kosong. `second` membawa posisi bin
+    # dalam detik; `minute` dipertahankan agar klien lama tetap bisa membaca.
+    second: int | None = None
 
 
 class OverlayVideo(BaseModel):

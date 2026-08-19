@@ -55,7 +55,9 @@ class JobManager:
                     "status": "error",
                     "stage": prog.get("stage", "?"),
                     "fraction": prog.get("fraction", 0.0),
-                    "error": f"Proses engine berhenti tak terduga (exit {proc.returncode}). Cek terminal.",
+                    # Pengguna aplikasi tidak punya terminal untuk dilihat; keluaran worker
+                    # ikut tercatat di backend.log yang ditulis aplikasi.
+                    "error": f"Proses analisis berhenti tak terduga (exit {proc.returncode}). Rinciannya ada di backend.log.",
                 }
 
         return ProgressResponse(jobId=jid, status=prog["status"], stage=prog["stage"],

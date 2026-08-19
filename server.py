@@ -51,8 +51,12 @@ chat_manager = ChatSessionManager(explanatory_manager)
 def health():
     model = get_model_runtime().status()
     model.pop("modelPath", None)
+    # Kesehatan server tidak boleh bergantung pada Qwen: memuatnya makan puluhan
+    # detik, sedangkan pipeline deteksi sama sekali tidak memerlukannya. Dulu
+    # gerbang ini membuat analisis ditolak "engine not ready" selama model chat
+    # masih dimuat. Kesiapan model tetap dilaporkan di blok explanatory.
     return {
-        "status": "ok" if model.get("modelReady") else "starting",
+        "status": "ok",
         "device": Config.DEVICE,
         "explanatory": {"available": True, **model},
     }

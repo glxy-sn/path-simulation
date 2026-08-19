@@ -37,7 +37,10 @@ class Config:
     DEVICE = _default_device()
     HALF = False
 
-    YOLO_MODEL = os.getenv("PRISM_YOLO", "yolo11x.pt")
+    # 19 Agt 2026: detektor analisis disamakan dengan yang ditulis di laporan
+    # (YOLO11s). Hasil dari sebelum tanggal ini dibuat dengan yolo11x dan tidak
+    # bisa dibandingkan langsung dengan hasil baru.
+    YOLO_MODEL = os.getenv("PRISM_YOLO", "yolo11s.pt")
     IMGSZ = int(os.getenv("PRISM_IMGSZ", "1920"))
     CONF = float(os.getenv("PRISM_CONF", "0.10"))
     IOU = float(os.getenv("PRISM_IOU", "0.70"))

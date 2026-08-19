@@ -238,7 +238,37 @@ class LocalRAG:
         for area_id in sorted(self.area_by_id, key=len, reverse=True):
             label = self._area_label(self.area_by_id[area_id]) or "area tersebut"
             visible = re.sub(rf"(?<![\w-]){re.escape(area_id)}(?![\w-])", label, visible, flags=re.I)
+        # Qwen kerap menyalin penanda internal ke kalimat, misal "(areaId: Meja 3)".
+        # Itu detail mesin, bukan bagian jawaban, jadi dibuang dari teks tampilan.
+        visible = re.sub(r"\s*\(\s*area[_ ]?id\s*:[^)]*\)", "", visible, flags=re.I)
         return visible
+
+    def _area_id_from_text(self, *texts: str) -> str | None:
+        """Cadangan ketika model lupa menuliskan marker [[AREA_ID:...]].
+
+        Qwen hampir selalu menyebut area pilihannya di kalimat pertama, entah
+        sebagai areaId mentah maupun sebagai label yang tampil di UI. Cocokkan
+        keduanya lalu menangkan yang disebut paling awal; panjang needle jadi
+        penentu kedua supaya "Meja 3" tidak kalah oleh label yang lebih pendek.
+        """
+        candidates: list[tuple[int, int, str]] = []
+        for area_id, area in self.area_by_id.items():
+            needles = [area_id]
+            label = self._area_label(area)
+            if label:
+                needles.append(label)
+            for needle in needles:
+                pattern = rf"(?<![\w-]){re.escape(needle)}(?![\w-])"
+                for text in texts:
+                    if not text:
+                        continue
+                    found = re.search(pattern, text, flags=re.I)
+                    if found:
+                        candidates.append((found.start(), -len(needle), area_id))
+                        break
+        if not candidates:
+            return None
+        return min(candidates)[2]
 
     @staticmethod
     def _compact_area(area: dict[str, Any]) -> str:
@@ -335,6 +365,16 @@ class LocalRAG:
                 (area_id for area_id in self.area_by_id if area_id.casefold() == reported_id.casefold()),
                 None,
             )
+        # areaMarkerValid dihitung sebelum cadangan supaya tetap menilai marker.
+        marker_valid = (
+            reported_id is None or reported_id.casefold() == "none" or selected_id is not None
+        )
+        resolved_from_text = False
+        if selected_id is None:
+            fallback_id = self._area_id_from_text(text, answer)
+            if fallback_id:
+                selected_id = fallback_id
+                resolved_from_text = True
         valid_support = {"supported", "partially_supported", "unsupported"}
         support_level = reported_support if reported_support in valid_support else "partially_supported"
         usage = {
@@ -345,7 +385,8 @@ class LocalRAG:
             "durationMs": (time.perf_counter() - started) * 1000.0,
             "fallback": False,
             "thinkingAvailable": bool(str(result.get("thinking") or "").strip()),
-            "areaMarkerValid": reported_id is None or reported_id.casefold() == "none" or selected_id is not None,
+            "areaMarkerValid": marker_valid,
+            "areaResolvedFromText": resolved_from_text,
             "supportMarkerValid": reported_support in valid_support,
         }
         return answer, selected_id, support_level, str(result.get("thinking") or "").strip(), usage

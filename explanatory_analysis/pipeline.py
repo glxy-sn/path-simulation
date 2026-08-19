@@ -184,11 +184,21 @@ def _identity_mode(series: pd.Series) -> str | None:
     return Counter(values).most_common(1)[0][0] if values else None
 
 
+# Sebelum 11 Agustus 2026 (commit 152f4f4) pipeline hanya menulis t/id/x/y.
+# Job dari masa itu masih sah untuk dianalisis; yang hilang cuma penanda identitas
+# lintas kamera, dan nilai default di bawah ini sama persis dengan yang ditulis
+# pipeline sekarang ketika sebuah global id tidak punya catatan kepercayaan.
+_IDENTITY_DEFAULTS = {"identityScore": None, "identityLevel": "singleCamera"}
+
+
 def prepare_trajectory(raw: pd.DataFrame, width_m: float, height_m: float, camera_start_sec: float, config: AnalysisConfig) -> tuple[pd.DataFrame, float]:
-    missing = REQUIRED_TRAJECTORY_COLUMNS - set(raw.columns)
+    frame = raw.copy()
+    for column, default in _IDENTITY_DEFAULTS.items():
+        if column not in frame.columns:
+            frame[column] = default
+    missing = REQUIRED_TRAJECTORY_COLUMNS - set(frame.columns)
     if missing:
         raise ValueError(f"Kolom trajectory hilang: {sorted(missing)}")
-    frame = raw.copy()
     for column in ("t", "x", "y", "identityScore"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame = frame.sort_values(["id", "t"], kind="mergesort").reset_index(drop=True)
@@ -1140,10 +1150,18 @@ def _compatible_history(config: AnalysisConfig, active_id: str, fingerprint: str
         floorplan = Path(path_value).expanduser() if path_value else None
         if venue_fingerprint(floorplan, float(venue.get("widthM", 0)), float(venue.get("heightM", 0))) != fingerprint:
             continue
-        raw = pd.read_parquet(directory / "trajectories.parquet")
         cameras = job.get("cameras") or []
         start = min((float(camera.get("startSec") or 0) for camera in cameras), default=0.0)
-        prepared, _ = prepare_trajectory(raw, float(venue["widthM"]), float(venue["heightM"]), start, config)
+        try:
+            raw = pd.read_parquet(directory / "trajectories.parquet")
+            prepared, _ = prepare_trajectory(raw, float(venue["widthM"]), float(venue["heightM"]), start, config)
+        except Exception as exc:
+            # Riwayat pembanding sifatnya opsional. Satu job lama yang skemanya
+            # sudah tidak cocok (misal tanpa kolom identityLevel) dulu membuat
+            # SELURUH pembangunan paket gagal, sehingga chatbot mati untuk job
+            # yang sebenarnya sehat. Lewati job itu, jangan jatuhkan yang lain.
+            print(f"[explanatory] riwayat {row.jobId} dilewati: {exc}", flush=True)
+            continue
         history.append((str(row.jobId), prepared))
     return history
 

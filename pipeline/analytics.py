@@ -201,7 +201,13 @@ def compute_analytics(global_tracks, venue, cfg):
     # ---- okupansi per bin + puncak ----
     occ, peak = [], 0
     if total and tmax > tmin:
+        # Rekaman pendek (demo biasanya di bawah satu menit) hanya menghasilkan
+        # satu bin kalau lebarnya tetap 60 detik, dan grafiknya jadi kosong.
+        # Untuk itu lebar bin dipersempit agar tetap ada sekitar 12 titik.
         binsec = cfg.OCC_BIN_SEC
+        span = tmax - tmin
+        if span < binsec * 3:
+            binsec = max(1.0, span / 12.0)
         nb = int((tmax - tmin) // binsec) + 1
         counts = np.zeros(nb, dtype=int)
         for obs in global_tracks.values():
@@ -210,7 +216,9 @@ def compute_analytics(global_tracks, venue, cfg):
                 if 0 <= b < nb:
                     counts[b] += 1
         peak = int(counts.max()) if nb else 0
-        occ = [OccupancyBin(minute=int(round(b * binsec / 60)), count=int(counts[b]))
+        occ = [OccupancyBin(minute=int(round(b * binsec / 60)),
+                            second=int(round(b * binsec)),
+                            count=int(counts[b]))
                for b in range(nb)]
 
     # ---- heatmap grid (untuk render) ----
