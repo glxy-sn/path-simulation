@@ -27,7 +27,9 @@ struct EngineProcessingService: ProcessingService {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    guard await sidecar.waitUntilReady() else { throw EngineError.notReady }
+                    // Backend pertama kali perlu memuat torch dan bobot deteksi; sepuluh detik
+                    // bawaan terlalu pendek dan menolak analisis yang sebenarnya baik-baik saja.
+                    guard await sidecar.waitUntilReady(timeout: 180) else { throw EngineError.notReady }
                     let jobId = try await api.createJob(built)
 
                     while true {
@@ -95,7 +97,7 @@ struct EngineProcessingService: ProcessingService {
         }
         let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds,
                                                    point: CGPoint(x: $0.x, y: $0.y)) }
-        let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) }
+        let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count, second: $0.second) }
         let summary = VenueSummary(
             totalVisitors: dto.summary.totalVisitors,
             avgDwellSeconds: dto.summary.avgDwellSeconds,

@@ -110,6 +110,13 @@ enum CalibrationProfileStore {
         session.floorPlanName = profile.floorplan.usesCanvas ? nil : profile.floorplan.sourceName
         session.floorPlanPixelSize = profile.floorplan.usesCanvas ? nil : profile.floorplan.pixelSize
         session.tableAnnotations = profile.tables ?? []
+        // Nama tempat ikut tersimpan di profil tetapi selama ini tidak pernah dibaca
+        // balik. Isi hanya kalau sesi masih kosong supaya ketikan pengguna menang.
+        if session.venueName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let savedVenue = profile.venueName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !savedVenue.isEmpty {
+            session.venueName = savedVenue
+        }
         session.cameras = stagedCameras
         return stagedCameras.filter(\.isCalibrated).count
     }

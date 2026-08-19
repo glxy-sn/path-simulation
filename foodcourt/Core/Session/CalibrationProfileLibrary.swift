@@ -153,12 +153,30 @@ enum CalibrationProfileLibrary {
     }
 
     static func delete(_ record: SavedCalibrationProfile) throws {
-        let root = try libraryRoot().standardizedFileURL
+        let root = try libraryRoot()
         let target = record.directoryURL.standardizedFileURL
-        guard target.deletingLastPathComponent() == root else {
+        guard isDirectChild(target, of: root) else {
             throw CalibrationProfileLibraryError.invalidPackage
         }
         try FileManager.default.removeItem(at: target)
+    }
+
+    /// `contentsOfDirectory` mengembalikan URL dengan kapitalisasi asli di disk
+    /// ("Foodcourt"), sedangkan `libraryRoot()` menyusunnya sebagai "foodcourt".
+    /// Membandingkan URL mentah karena itu selalu gagal walau folder yang dimaksud
+    /// sama persis, sehingga penghapusan selalu ditolak. Bandingkan jalur kanonik.
+    private static func isDirectChild(_ candidate: URL, of directory: URL) -> Bool {
+        func canonicalPath(_ url: URL) -> String {
+            let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+            if let canonical = try? resolved.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath,
+               !canonical.isEmpty {
+                return canonical
+            }
+            return resolved.path
+        }
+        let parent = canonicalPath(candidate.deletingLastPathComponent())
+        let root = canonicalPath(directory)
+        return parent.compare(root, options: .caseInsensitive) == .orderedSame
     }
 
     static func detachedFloorPlanCopy(for record: SavedCalibrationProfile) throws -> URL? {

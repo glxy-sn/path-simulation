@@ -35,6 +35,15 @@ struct ResultsView: View {
     private var stops: [StopPoint] { session.result?.stops ?? SampleResult.stops }
     private var occupancy: [OccupancyPoint] { session.result?.occupancy ?? SampleResult.occupancy }
 
+    /// Rekaman pendek dibagi per detik; yang panjang tetap per menit.
+    private var occupancyUsesSeconds: Bool {
+        occupancy.contains { $0.second != nil } && (occupancy.last?.second ?? 0) < 180
+    }
+    private var occupancyAxisLabel: String { occupancyUsesSeconds ? "second" : "minute" }
+    private func occupancyX(_ point: OccupancyPoint) -> Int {
+        occupancyUsesSeconds ? (point.second ?? point.minute * 60) : point.minute
+    }
+
     private var heatmapURL: URL? { session.result?.heatmapURL }
     private var pathVideoURL: URL? { session.result?.pathVideoURL }
     private var boundingVideoURL: URL? {
@@ -456,17 +465,27 @@ struct ResultsView: View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("Occupancy Over Time").font(.headline)
             Chart(occupancy) { point in
-                AreaMark(x: .value("Minute", point.minute), y: .value("People", point.count))
+                AreaMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
                     .foregroundStyle(LinearGradient(
                         colors: [Theme.accent.opacity(0.35), Theme.accent.opacity(0.02)],
                         startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Minute", point.minute), y: .value("People", point.count))
+                LineMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.catmullRom)
+                // Tanpa titik, rekaman yang hanya menghasilkan satu bin tampil
+                // sebagai grafik kosong karena garis butuh dua titik.
+                PointMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
+                    .foregroundStyle(Theme.accent)
+                    .symbolSize(occupancy.count > 1 ? 18 : 60)
             }
-            .chartXAxisLabel("minute")
+            .chartXAxisLabel(occupancyAxisLabel)
             .chartYAxisLabel("people")
             .frame(minHeight: 220)
+            if occupancy.count == 1 {
+                Text("The recording is too short to show a trend; this is the whole clip as one sample.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .card()
     }

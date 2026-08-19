@@ -11,13 +11,41 @@ struct RootView: View {
     @State private var router = AppRouter()
     @State private var session = AnalysisSession()
     @State private var sidecar = Sidecar()
+    @State private var installer = AssetInstaller()
+    @State private var setupTask: Task<Void, Never>?
     private let referenceWidth: CGFloat = 1440
 
     var body: some View {
+        Group {
+            if case .ready = installer.phase {
+                workspace
+            } else {
+                SetupView(installer: installer, onRetry: startSetup)
+                    .frame(minWidth: 1060, minHeight: 700)
+            }
+        }
+        .task { startSetup() }
+    }
+
+    /// Backend baru dinyalakan setelah asetnya lengkap; sebelum itu tidak ada
+    /// runtime Python yang bisa dijalankan sama sekali.
+    private func startSetup() {
+        setupTask?.cancel()
+        setupTask = Task {
+            await installer.install()
+            if case .ready = installer.phase {
+                await sidecar.ensureRunning()
+            }
+        }
+    }
+
+    private var workspace: some View {
         GeometryReader { geo in
             let scale = geo.size.width / referenceWidth
             let menuWidth = min(max(geo.size.width * 0.16, 190), 240)
 
+            VStack(spacing: 0) {
+            backendBanner
             HStack(spacing: 0) {
                 SideMenu(current: router.section,
                          onSelect: { router.open($0) })
@@ -28,6 +56,7 @@ struct RootView: View {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            }
             .environment(\.uiScale, scale)
             .environment(router)
             .environment(session)
@@ -35,7 +64,35 @@ struct RootView: View {
         }
         .frame(minWidth: 1060, minHeight: 700)
         .background(WindowBackground())
-        .task { await sidecar.ensureRunning() }
+    }
+
+    /// `launchError` sudah lama diisi tetapi tidak pernah ditampilkan, sehingga
+    /// backend yang gagal nyala hanya terlihat sebagai aplikasi yang diam.
+    @ViewBuilder private var backendBanner: some View {
+        if let error = sidecar.launchError {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("The analysis engine is not running")
+                        .font(.callout.weight(.semibold))
+                    Spacer()
+                    Button("Retry") { Task { await sidecar.ensureRunning() } }
+                        .controlSize(.small)
+                }
+                ScrollView(.vertical) {
+                    Text(error)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 110)
+            }
+            .padding(12)
+            .background(Color.orange.opacity(0.12))
+            Divider()
+        }
     }
 
     @ViewBuilder

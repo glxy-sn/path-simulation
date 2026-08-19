@@ -82,7 +82,7 @@ struct SummaryDTO: Codable {
 struct RectDTO: Codable { let x: Double; let y: Double; let w: Double; let h: Double }
 struct ZoneDTO: Codable { let code: String; let visits: Int; let share: Double; let rect: RectDTO }
 struct StopDTO: Codable { let label: String; let x: Double; let y: Double; let dwellSeconds: Int }
-struct OccDTO: Codable { let minute: Int; let count: Int }
+struct OccDTO: Codable { let minute: Int; let count: Int; let second: Int? }
 struct OverlayDTO: Codable { let cam: String; let uri: String }
 
 struct BlobDTO: Codable { let x: Double; let y: Double; let intensity: Double; let radius: Double }
