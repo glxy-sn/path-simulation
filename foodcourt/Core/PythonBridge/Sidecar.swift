@@ -173,6 +173,7 @@ final class Sidecar {
                 .first { fm.fileExists(atPath: $0.path) }
         }
         var environment: [String: String] = [:]
+        environment["USEE_MODELS_ROOT"] = AssetInstaller.modelsRoot.path
 
         let weights = [
             ("PRISM_YOLO", "yolo11s.pt"),

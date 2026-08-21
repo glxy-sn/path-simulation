@@ -15,7 +15,7 @@ struct SideMenu: View {
             HStack(spacing: Space.s) {
                 Image(systemName: "square.grid.2x2.fill")
                     .foregroundStyle(Theme.accent)
-                Text("Foodcourt")
+                Text("U See")
                     .font(.system(.title2, design: .rounded, weight: .bold))
             }
             .spad(Space.l, [.horizontal, .top])

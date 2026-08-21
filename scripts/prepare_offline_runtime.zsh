@@ -11,7 +11,7 @@ UI_ROOT=${0:A:h:h}
 WORKSPACE=${UI_ROOT:h}
 DIST="$WORKSPACE/dist"
 RUNTIME="$DIST/python"
-REQ="$WORKSPACE/backend-shafa/requirements.txt"
+REQ="$WORKSPACE/be/path-simulation/requirements.txt"
 
 PY_RELEASE=20260814
 PY_VERSION=3.12.14

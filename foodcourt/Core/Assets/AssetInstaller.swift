@@ -62,11 +62,11 @@ final class AssetInstaller {
     nonisolated static var assetsRoot: URL {
         // Override dipakai untuk pengujian supaya unduhan percobaan tidak menimpa
         // aset sungguhan milik pengguna.
-        if let override = ProcessInfo.processInfo.environment["FOODCOURT_ASSETS_ROOT"], !override.isEmpty {
+        if let override = ProcessInfo.processInfo.environment["USEE_ASSETS_ROOT"] ?? ProcessInfo.processInfo.environment["FOODCOURT_ASSETS_ROOT"], !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return support.appendingPathComponent("Foodcourt", isDirectory: true)
+        return support.appendingPathComponent("U See", isDirectory: true)
     }
 
     nonisolated static var runtimePythonURL: URL {
@@ -78,8 +78,12 @@ final class AssetInstaller {
     }
 
     private var manifestURL: URL? {
-        if let override = ProcessInfo.processInfo.environment["FOODCOURT_ASSET_MANIFEST_URL"],
+        if let override = ProcessInfo.processInfo.environment["USEE_ASSET_MANIFEST_URL"] ?? ProcessInfo.processInfo.environment["FOODCOURT_ASSET_MANIFEST_URL"],
            let url = URL(string: override) {
+            return url
+        }
+        if let bundled = Bundle.main.object(forInfoDictionaryKey: "USeeAssetManifestURL") as? String,
+           let url = URL(string: bundled) {
             return url
         }
         if let bundled = Bundle.main.object(forInfoDictionaryKey: "FoodcourtAssetManifestURL") as? String,
@@ -132,7 +136,7 @@ final class AssetInstaller {
             return
         }
         guard let manifestURL else {
-            phase = .failed("Asset manifest URL is not configured. This build cannot download its runtime.")
+            phase = .failed("Runtime download is not configured for this U See build. Install an offline build or rebuild it with an asset manifest URL.")
             return
         }
         // Runtime Python yang dikemas hanya arm64. Di Mac Intel bagian Swift tetap
@@ -154,7 +158,7 @@ final class AssetInstaller {
             // .part yang sama dan saling merusak; hasilnya checksum gagal terus
             // tanpa sebab yang jelas. Kunci ini membuat yang kedua menunggu.
             guard let lock = DownloadLock(at: Self.assetsRoot.appendingPathComponent("unduhan.lock")) else {
-                phase = .failed("Another copy of Foodcourt is already downloading these files. Finish that one first, or quit it and try again.")
+                phase = .failed("Another copy of U See is already downloading these files. Finish that one first, or quit it and try again.")
                 return
             }
             defer { lock.release() }
@@ -202,7 +206,7 @@ final class AssetInstaller {
         #if arch(arm64)
         return nil
         #else
-        return "Foodcourt needs a Mac with Apple silicon (M1 or newer). This Mac uses an Intel processor, which the analysis runtime does not support."
+        return "U See needs a Mac with Apple silicon (M1 or newer). This Mac uses an Intel processor, which the analysis runtime does not support."
         #endif
     }
 
@@ -218,7 +222,7 @@ final class AssetInstaller {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useGB]
         formatter.countStyle = .file
-        return "Not enough disk space. Foodcourt needs about \(formatter.string(fromByteCount: required)) free, but only \(formatter.string(fromByteCount: available)) is available."
+        return "Not enough disk space. U See needs about \(formatter.string(fromByteCount: required)) free, but only \(formatter.string(fromByteCount: available)) is available."
     }
 
     /// Hanya berlaku untuk aset berupa berkas tunggal; arsip tidak bisa

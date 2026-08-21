@@ -18,7 +18,7 @@ struct SetupView: View {
                 .foregroundStyle(Theme.accent)
 
             VStack(spacing: Space.xs) {
-                Text("Setting up Foodcourt")
+                Text("Setting up U See")
                     .font(.title3.weight(.semibold))
                 Text(subtitle)
                     .font(.callout)
@@ -59,7 +59,7 @@ struct SetupView: View {
             }
 
             if case .failed = installer.phase {} else {
-                Text("You can leave this running and use other apps. Downloads resume where they left off if the connection drops, but quitting Foodcourt pauses them.")
+                Text("You can leave this running and use other apps. Downloads resume where they left off if the connection drops, but quitting U See pauses them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -75,7 +75,7 @@ struct SetupView: View {
         case .checking:
             return "Checking what needs to be downloaded…"
         case .downloading:
-            return "This happens once. Afterwards Foodcourt runs entirely offline."
+            return "This happens once. Afterwards U See runs entirely offline."
         case .verifying(let label):
             return "Verifying \(label)…"
         case .installing(let label):
