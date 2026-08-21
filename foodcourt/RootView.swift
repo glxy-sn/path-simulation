@@ -159,7 +159,7 @@ private struct WizardContainer: View {
 private struct ActiveResultsView: View {
     @Environment(AnalysisSession.self) private var session
     @Environment(Sidecar.self) private var sidecar
-    @State private var showsChat = false
+    @State private var showsChat = true
 
     var body: some View {
         ResultsChatContainer(
