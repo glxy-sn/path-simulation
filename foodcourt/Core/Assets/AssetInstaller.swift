@@ -225,13 +225,19 @@ final class AssetInstaller {
         return "Not enough disk space. U See needs about \(formatter.string(fromByteCount: required)) free, but only \(formatter.string(fromByteCount: available)) is available."
     }
 
-    /// Hanya berlaku untuk aset berupa berkas tunggal; arsip tidak bisa
-    /// diperiksa dari hasil bongkarannya tanpa membongkar ulang.
+    /// Aset berkas tunggal dapat diperiksa dengan checksum. Untuk arsip,
+    /// marker hasil ekstraksi adalah bukti pemasangan yang cukup: checksum
+    /// arsip sudah diverifikasi sebelum dibongkar dan arsip staging dihapus.
+    /// Ini juga mencegah runtime Python diunduh ulang jika `installed.json`
+    /// belum sempat tertulis pada setup sebelumnya.
     private func alreadyInPlace(_ entry: AssetEntry) throws -> Bool {
-        guard entry.kind == .file else { return false }
         let target = Self.assetsRoot
             .appendingPathComponent(entry.destination, isDirectory: true)
             .appendingPathComponent(entry.marker)
+
+        if entry.kind == .archive {
+            return FileManager.default.fileExists(atPath: target.path)
+        }
         guard let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64,
               size == entry.size else { return false }
         phase = .verifying(label: entry.name)

@@ -742,7 +742,12 @@ struct HistoryChatInspector: View {
     }
 
     @ViewBuilder private var composerNote: some View {
-        if viewModel.blockedReason == nil, let reason = viewModel.disabledReason {
+        // Saat jawaban sedang dibuat, input sudah nonaktif sehingga status ini
+        // hanya menduplikasi keadaan dan menambah bar loading di atas composer.
+        // Tetap tampilkan alasan lain, misalnya model belum siap atau chat gagal.
+        if viewModel.blockedReason == nil,
+           !viewModel.isAnswering,
+           let reason = viewModel.disabledReason {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
                 Text(reason)
