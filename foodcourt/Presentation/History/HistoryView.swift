@@ -6,36 +6,56 @@
 //
 
 import SwiftUI
-
-@Observable
-final class HistoryViewModel {
-    var entries: [HistoryEntry] = HistoryEntry.samples
-}
+import SwiftData
 
 struct HistoryView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
-    @State private var vm = HistoryViewModel()
+    @Environment(\.modelContext) private var modelContext
+    @Environment(Sidecar.self) private var sidecar
+    @Query(sort: \AnalysisRecord.date, order: .reverse) private var records: [AnalysisRecord]
+
+    // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
+    @State private var viewerSession = AnalysisSession()
+    @State private var selectedFolder: String?
 
     var body: some View {
+        Group {
+            if let selectedFolder {
+                HistoryDetailView(
+                    jobId: records.first(where: { $0.folder == selectedFolder })?.jobId ?? viewerSession.jobId,
+                    viewerSession: viewerSession,
+                    http: sidecar.http,
+                    onClose: { self.selectedFolder = nil }
+                )
+                .environment(router)
+            } else {
+                historyList
+            }
+        }
+    }
+
+    private var historyList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 HStack(alignment: .top) {
                     SectionHeader(
-                        title: "Riwayat Analisis",
-                        subtitle: "\(vm.entries.count) analisis tersimpan."
+                        title: "Analysis History",
+                        subtitle: "\(records.count) saved analyses."
                     )
-                    PrimaryButton(title: "Analisis Baru", systemImage: "plus") {
+                    PrimaryButton(title: "New Analysis", systemImage: "plus") {
                         router.startNew()
                     }
                 }
 
-                if vm.entries.isEmpty {
+                if records.isEmpty {
                     emptyState
                 } else {
                     VStack(spacing: Space.m) {
-                        ForEach(vm.entries) { entry in
-                            HistoryRow(entry: entry) { router.openResult() }
+                        ForEach(records) { rec in
+                            HistoryRow(record: rec, onDelete: { remove(rec) })
+                                .contentShape(Rectangle())
+                                .onTapGesture { open(rec) }
                         }
                     }
                 }
@@ -45,56 +65,151 @@ struct HistoryView: View {
         }
     }
 
+    private func open(_ rec: AnalysisRecord) {
+        guard load(into: viewerSession, folder: rec.folder) else { return }
+        selectedFolder = rec.folder
+    }
+
+    @discardableResult
+    private func load(into s: AnalysisSession, folder: String) -> Bool {
+        guard let loaded = HistoryStore.load(folder: folder) else { return false }
+        s.reset()
+        s.venueName = loaded.venueName
+        if let vt = VenueType(rawValue: loaded.venueType) { s.venueType = vt }
+        s.widthM = loaded.widthM
+        s.heightM = loaded.heightM
+        s.usesScaledCanvas = loaded.usesScaledCanvas
+        s.jobId = loaded.jobId
+        s.floorPlanURL = loaded.floorPlanURL
+        s.customZones = loaded.customZones
+        s.tableAnnotations = loaded.tables
+        s.result = loaded.result
+        s.trimStartSec = 0
+        s.trimEndSec = loaded.durationSec
+        s.overrideCameraCount = loaded.cameraCount
+        s.historyFolder = folder      // edit zona di viewer ikut tersimpan
+        return true
+    }
+
+    private func remove(_ rec: AnalysisRecord) {
+        HistoryStore.delete(folder: rec.folder)
+        modelContext.delete(rec)
+    }
+
     private var emptyState: some View {
         VStack(spacing: Space.m) {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("Belum ada analisis").font(.headline)
-            Text("Mulai dari “Analisis Baru”.")
+            Text("No analyses yet").font(.headline)
+            Text("Start from New Analysis. Results are saved here automatically.")
                 .font(.callout).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, minHeight: 240)
         .card()
     }
 }
 
+private struct HistoryDetailView: View {
+    let jobId: String?
+    let viewerSession: AnalysisSession
+    let http: HTTPClient
+    let onClose: () -> Void
+
+    @SceneStorage("history.showsTanyaDataPanel") private var showsChat = true
+
+    var body: some View {
+        ResultsChatContainer(
+            jobId: jobId,
+            http: http,
+            isHistory: true,
+            onClose: onClose,
+            showsChat: $showsChat
+        )
+        .environment(viewerSession)
+    }
+}
+
+struct LegacyChatUnavailable: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Ask Data").font(.headline)
+                    Text("Not available for this record")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.s))
+                }
+                .buttonStyle(.plain)
+                .help("Close Ask Data")
+            }
+            .padding(Space.m)
+            Divider()
+            ContentUnavailableView(
+                "Ask Data is unavailable",
+                systemImage: "bubble.left.and.exclamationmark.bubble.right",
+                description: Text("This old history entry has no jobId that can be safely mapped to the backend.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(.regularMaterial)
+    }
+}
+
 private struct HistoryRow: View {
-    let entry: HistoryEntry
-    var onOpen: () -> Void
+    let record: AnalysisRecord
+    var onDelete: () -> Void
+    @State private var thumb: NSImage? = nil
 
     var body: some View {
         HStack(spacing: Space.l) {
-            RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-                .fill(Theme.accentSoft)
-                .frame(width: 64, height: 64)
-                .overlay(
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.title2)
-                        .foregroundStyle(Theme.accent)
-                )
+            Group {
+                if let thumb {
+                    Image(nsImage: thumb).resizable().scaledToFill()
+                } else {
+                    Theme.accentSoft.overlay(
+                        Image(systemName: "chart.bar.doc.horizontal")
+                            .font(.title2).foregroundStyle(Theme.accent)
+                    )
+                }
+            }
+            .frame(width: 104, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).strokeBorder(Theme.hairline))
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: Space.s) {
-                    Text(entry.venue).font(.headline)
-                    Tag(text: entry.mode,
-                        color: entry.mode == "Mode Lengkap" ? Theme.accent : .orange)
-                }
-                Text("\(entry.type) · \(entry.dateText)")
+                Text(record.venueName).font(.headline).lineLimit(1)
+                Text("\(record.venueType) · \(record.dateText)")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: Space.l) {
-                    stat("person.2", "\(entry.visitors) pengunjung")
-                    stat("clock", entry.avgDwellText)
-                    stat("camera", "\(entry.cameraCount) kamera")
+                    stat("person.2", "\(record.totalVisitors) visitors")
+                    stat("clock", record.avgDwellText)
+                    stat("chart.line.uptrend.xyaxis", "peak \(record.peakOccupancy)")
+                    stat("camera", "\(record.cameraCount) cameras")
+                    stat("timer", timecode(record.durationSec))
                 }
                 .padding(.top, 2)
             }
 
             Spacer()
 
-            GhostButton(title: "Buka", systemImage: "arrow.up.right", action: onOpen)
+            Image(systemName: "chevron.right").font(.callout).foregroundStyle(.tertiary)
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash").foregroundStyle(.secondary).padding(6).contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Remove from history")
         }
         .card(padding: Space.m)
+        .task(id: record.folder) { thumb = await HistoryStore.thumbnail(folder: record.folder) }
     }
 
     private func stat(_ symbol: String, _ text: String) -> some View {
@@ -103,10 +218,4 @@ private struct HistoryRow: View {
             Text(text).font(.caption).foregroundStyle(.secondary)
         }
     }
-}
-
-#Preview {
-    HistoryView()
-        .environment(AppRouter())
-        .frame(width: 1100, height: 780)
 }

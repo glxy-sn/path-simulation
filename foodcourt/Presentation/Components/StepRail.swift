@@ -77,12 +77,12 @@ struct StepRow: View {
 
     private var circleFill: Color {
         switch state {
-        case .done:    return Theme.accent
-        case .active:  return Theme.accent
+        case .done:    return Theme.accentFill
+        case .active:  return Theme.accentFill
         case .pending: return Color.primary.opacity(0.1)
         }
     }
     private var iconColor: Color {
-        state == .pending ? .secondary : .white
+        state == .pending ? .secondary : Theme.onAccent
     }
 }

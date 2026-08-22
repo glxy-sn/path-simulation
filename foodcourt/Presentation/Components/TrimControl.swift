@@ -12,7 +12,13 @@ import AVFoundation
 @MainActor
 @Observable
 final class MultiTrimController {
-    struct Entry: Identifiable { let id: URL; let label: String; let player: AVPlayer }
+    struct Entry: Identifiable {
+        let id: UUID
+        let label: String
+        let url: URL
+        let offsetSec: Double
+        let player: AVPlayer
+    }
 
     private(set) var entries: [Entry] = []
     var startSec: Double = 0
@@ -25,9 +31,11 @@ final class MultiTrimController {
     }
 
     /// Bangun ulang player kalau daftar url berubah.
-    func setCameras(_ cams: [(label: String, url: URL)]) {
-        let newURLs = cams.map { $0.url }
-        if newURLs == entries.map({ $0.id }) { return }
+    func setCameras(_ cams: [TrimCameraPreview]) {
+        let current = entries.map {
+            TrimCameraPreview(id: $0.id, label: $0.label, url: $0.url, offsetSec: $0.offsetSec)
+        }
+        if cams == current { return }
 
         for e in entries {
             if let tok = observers[ObjectIdentifier(e.player)] {
@@ -44,13 +52,21 @@ final class MultiTrimController {
                 MainActor.assumeIsolated {
                     guard let self, let p, p.rate != 0 else { return }
                     let t = time.seconds
-                    if t >= self.endSec - 0.02 || t < self.startSec - 0.10 {
-                        self.seek(p, self.startSec)
+                    let sourceStart = self.startSec + c.offsetSec
+                    let sourceEnd = self.endSec + c.offsetSec
+                    if t >= sourceEnd - 0.02 || t < sourceStart - 0.10 {
+                        self.seek(p, sourceStart)
                     }
                 }
             }
             observers[ObjectIdentifier(p)] = tok
-            return Entry(id: c.url, label: c.label, player: p)
+            return Entry(
+                id: c.id,
+                label: c.label,
+                url: c.url,
+                offsetSec: c.offsetSec,
+                player: p
+            )
         }
         seekAll(startSec)
     }
@@ -62,7 +78,7 @@ final class MultiTrimController {
     }
 
     private func seekAll(_ t: Double) {
-        for e in entries { seek(e.player, t) }
+        for e in entries { seek(e.player, t + e.offsetSec) }
     }
 
     private func seek(_ p: AVPlayer, _ t: Double) {
@@ -75,8 +91,9 @@ final class MultiTrimController {
 struct GlobalTrimCard: View {
     @Binding var startSec: Double
     @Binding var endSec: Double
+    let minSec: Double
     let maxSec: Double
-    var cameras: [(label: String, url: URL)] = []
+    var cameras: [TrimCameraPreview] = []
 
     @State private var controller = MultiTrimController()
 
@@ -84,8 +101,8 @@ struct GlobalTrimCard: View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Rentang Waktu").font(.headline)
-                    Text("Satu rentang untuk semua kamera · total \(timecode(maxSec))")
+                    Text("Time Range").font(.headline)
+                    Text("Shared global timeline · \(timecode(maxSec - minSec)) available")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -99,7 +116,13 @@ struct GlobalTrimCard: View {
                           spacing: Space.s) {
                     ForEach(controller.entries) { e in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(e.label).font(.caption.weight(.medium)).lineLimit(1)
+                            HStack {
+                                Text(e.label).font(.caption.weight(.medium)).lineLimit(1)
+                                Spacer()
+                                Text(String(format: "%+.1f s", e.offsetSec))
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
                             VideoPlayer(player: e.player)
                                 .frame(height: 150)
                                 .clipShape(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
@@ -112,18 +135,15 @@ struct GlobalTrimCard: View {
                 }
             }
 
-            Text("Semua preview memutar bagian yang sama (loop di dalam potongan).")
-                .font(.caption2).foregroundStyle(.tertiary)
-
-            RangeSlider(lower: $startSec, upper: $endSec, maxSec: maxSec,
+            RangeSlider(lower: $startSec, upper: $endSec, minSec: minSec, maxSec: maxSec,
                         onScrub: { t in if let t { controller.scrub(to: t) } })
 
             HStack {
-                stat("Mulai", timecode(startSec))
+                stat("Start", timecode(startSec))
                 Spacer()
-                stat("Durasi", timecode(endSec - startSec))
+                stat("Duration", timecode(endSec - startSec))
                 Spacer()
-                stat("Selesai", timecode(endSec))
+                stat("Done", timecode(endSec))
             }
         }
         .card()
@@ -131,7 +151,7 @@ struct GlobalTrimCard: View {
             controller.setRange(startSec, endSec)
             controller.setCameras(cameras)
         }
-        .onChange(of: cameras.map { $0.url }) { _, _ in controller.setCameras(cameras) }
+        .onChange(of: cameras) { _, _ in controller.setCameras(cameras) }
         .onChange(of: startSec) { _, s in controller.setRange(s, endSec) }
         .onChange(of: endSec) { _, e in controller.setRange(startSec, e) }
     }
@@ -142,7 +162,7 @@ struct GlobalTrimCard: View {
                 .fill(Color.primary.opacity(0.05)).frame(height: 160)
             VStack(spacing: Space.s) {
                 Image(systemName: "film").font(.system(size: 28)).foregroundStyle(.secondary)
-                Text("Preview muncul setelah video punya file.").font(.caption).foregroundStyle(.secondary)
+                Text("Previews appear once the videos have files.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -160,6 +180,7 @@ struct GlobalTrimCard: View {
 struct RangeSlider: View {
     @Binding var lower: Double
     @Binding var upper: Double
+    var minSec: Double = 0
     let maxSec: Double
     var minGap: Double = 1
     var onScrub: (Double?) -> Void = { _ in }
@@ -200,17 +221,19 @@ struct RangeSlider: View {
     }
 
     private func xFor(_ v: Double, _ W: CGFloat) -> CGFloat {
-        guard maxSec > 0 else { return 0 }
-        return CGFloat(v / maxSec) * W
+        let span = maxSec - minSec
+        guard span > 0 else { return 0 }
+        return CGFloat((v - minSec) / span) * W
     }
 
     private func drag(_ handle: Int, _ W: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named("slider"))
             .onChanged { v in
                 active = handle
-                guard maxSec > 0 else { return }
-                let t = Double(min(max(v.location.x, 0), W) / W) * maxSec
-                if handle == 0 { lower = min(max(0, t), upper - minGap) }
+                let span = maxSec - minSec
+                guard span > 0 else { return }
+                let t = minSec + Double(min(max(v.location.x, 0), W) / W) * span
+                if handle == 0 { lower = min(max(minSec, t), upper - minGap) }
                 else            { upper = max(min(maxSec, t), lower + minGap) }
                 onScrub(handle == 0 ? lower : upper)
             }
@@ -223,7 +246,7 @@ struct RangeSlider: View {
         @State var a: Double = 600
         @State var b: Double = 1500
         var body: some View {
-            GlobalTrimCard(startSec: $a, endSec: $b, maxSec: 7200, cameras: [])
+            GlobalTrimCard(startSec: $a, endSec: $b, minSec: 0, maxSec: 7200, cameras: [])
                 .frame(width: 620).padding()
         }
     }

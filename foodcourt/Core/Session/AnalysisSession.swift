@@ -18,13 +18,37 @@ struct SessionCamera: Identifiable, Hashable {
     var imagePoints: [NormPoint] = []
     var planePoints: [NormPoint] = []
     var referenceFrameSeconds: Double = 0
+    /// Waktu sumber video = waktu global + offset. Positif berarti membaca frame lebih akhir.
+    var timeOffsetSec: Double = 0
     var framePixelSize: PixelSize?
     var calibration: CameraCalibration?
     var isCalibrated: Bool { calibration?.isValid == true }
 }
 
+struct TrimCameraPreview: Identifiable, Hashable {
+    let id: UUID
+    let label: String
+    let url: URL
+    let offsetSec: Double
+}
+
+struct IdentityQualitySummary {
+    var globalIDs: Int
+    var localStitches: Int
+    var overlapMerges: Int
+    var handoverMerges: Int
+    var unmatchedTracklets: Int
+    var filteredTracklets: Int
+    var highConfidence: Int
+    var mediumConfidence: Int
+    var lowConfidence: Int
+    var singleCamera: Int
+    var calibrationWarnings: [String]
+}
+
 /// Hasil yang sudah dipetakan ke model UI (siap dipakai layar Hasil).
 struct AnalysisResult {
+    var jobId: String? = nil
     var summary: VenueSummary
     var zones: [ZoneRank]
     var stops: [StopPoint]
@@ -33,6 +57,41 @@ struct AnalysisResult {
     var pathVideoURL: URL?
     var combinedVideoURL: URL?
     var overlayVideos: [(cam: String, url: URL)]
+    var blobs: [HeatBlob]
+    var paths: [PathTrace]
+    var identityQuality: IdentityQualitySummary?
+    var fusionDiagnosticsURL: URL?
+    var observations: [TrackObservation] = []
+}
+
+/// Rectangle meja terverifikasi dalam koordinat floorplan ternormalisasi.
+struct TableAnnotation: Identifiable, Hashable, Codable {
+    var id: UUID
+    var label: String
+    var rectNormalized: CGRect
+    var verified: Bool
+
+    init(id: UUID = UUID(), label: String, rectNormalized: CGRect, verified: Bool = true) {
+        self.id = id
+        self.label = label
+        self.rectNormalized = rectNormalized
+        self.verified = verified
+    }
+}
+
+/// Zona buatan pengguna (bisa digambar/geser/resize/rename di layar Hasil).
+struct CustomZone: Identifiable, Hashable {
+    var id: UUID
+    var name: String
+    var rect: CGRect          // ternormalisasi 0–1
+    var colorHex: UInt
+
+    init(id: UUID = UUID(), name: String, rect: CGRect, colorHex: UInt) {
+        self.id = id
+        self.name = name
+        self.rect = rect
+        self.colorHex = colorHex
+    }
 }
 
 @Observable
@@ -50,7 +109,8 @@ final class AnalysisSession {
     var floorPlanName: String?
     var floorPlanPixelSize: PixelSize?
     /// Pilihan sumber yang aktif. Berkas denah tetap disimpan saat pengguna beralih ke canvas.
-    var usesScaledCanvas = false
+    var usesScaledCanvas = true
+    var tableAnnotations: [TableAnnotation] = []
 
     // Trim global
     var trimStartSec: Double = 0
@@ -63,15 +123,36 @@ final class AnalysisSession {
     var isProcessing = false
     var errorMessage: String?
     var result: AnalysisResult?
+    var customZones: [CustomZone] = []
+    /// Folder riwayat untuk sesi ini (agar edit zona ikut tersimpan). nil = belum tersimpan.
+    var historyFolder: String? = nil
+    /// Jumlah kamera untuk ditampilkan saat melihat riwayat (kamera asli tak dimuat ulang).
+    var overrideCameraCount: Int? = nil
 
     // Turunan
     var venueWidthM: Double { Double(widthM) ?? 0 }
     var venueHeightM: Double { Double(heightM) ?? 0 }
-    var timelineMax: Double { cameras.compactMap { $0.durationSec > 0 ? $0.durationSec : nil }.min() ?? 0 }
+    var timelineMin: Double {
+        cameras.map { max(0, -$0.timeOffsetSec) }.max() ?? 0
+    }
+    var timelineMax: Double {
+        cameras.compactMap {
+            $0.durationSec > 0 ? $0.durationSec - $0.timeOffsetSec : nil
+        }.min() ?? 0
+    }
     var previewURL: URL? { cameras.first { $0.url != nil }?.url }
     /// Semua kamera yang punya file (untuk preview per-video di trim card, bila dipakai).
-    var previews: [(label: String, url: URL)] {
-        cameras.compactMap { c in c.url.map { (label: c.label, url: $0) } }
+    var previews: [TrimCameraPreview] {
+        cameras.compactMap { camera in
+            camera.url.map {
+                TrimCameraPreview(
+                    id: camera.id,
+                    label: camera.label,
+                    url: $0,
+                    offsetSec: camera.timeOffsetSec
+                )
+            }
+        }
     }
     var allCalibrated: Bool { !cameras.isEmpty && cameras.allSatisfy { $0.isCalibrated } }
     var calibrationFloorSize: PixelSize {
@@ -80,18 +161,23 @@ final class AnalysisSession {
     }
 
     func normalizeTrim() {
-        let m = timelineMax
-        guard m > 0 else { trimStartSec = 0; trimEndSec = 0; return }
-        trimStartSec = min(max(0, trimStartSec), m)
-        if trimEndSec <= trimStartSec || trimEndSec > m {
-            trimEndSec = min(m, trimStartSec + 600)
+        let lower = timelineMin
+        let upper = timelineMax
+        guard upper > lower else { trimStartSec = lower; trimEndSec = lower; return }
+        trimStartSec = min(max(lower, trimStartSec), upper)
+        if trimEndSec <= trimStartSec || trimEndSec > upper {
+            trimEndSec = min(upper, trimStartSec + 600)
         }
     }
 
     func reset() {
         cameras = []
-        floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = false
+        floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
+        tableAnnotations = []
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
+        customZones = []
+        historyFolder = nil
+        overrideCameraCount = nil
     }
 }

@@ -21,7 +21,7 @@ struct ImportView: View {
                 VStack(alignment: .leading, spacing: Space.l * scale) {
                     SectionHeader(
                         title: "Import Footage",
-                        subtitle: "Upload rekaman CCTV dari tiap sudut, lalu beri label kameranya."
+                        subtitle: "Upload CCTV footage from each angle, then label the cameras."
                     )
                     HStack(alignment: .top, spacing: Space.l * scale) {
                         ImportMainColumn(session: session) { addFiles(into: session) }
@@ -35,7 +35,7 @@ struct ImportView: View {
             }
 
             WizardFooter {
-                PrimaryButton(title: "Lanjut ke Kalibrasi",
+                PrimaryButton(title: "Continue to Calibration",
                               systemImage: "arrow.right",
                               enabled: !session.cameras.isEmpty) {
                     router.next()
@@ -53,7 +53,7 @@ struct ImportView: View {
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video]
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
-            let cam = SessionCamera(label: "Kamera \(session.cameras.count + 1)", url: url)
+            let cam = SessionCamera(label: "Camera \(session.cameras.count + 1)", url: url)
             session.cameras.append(cam)
             loadMeta(cam.id, url: url, into: session)
         }
@@ -94,9 +94,9 @@ private struct ImportMainColumn: View {
                 DropZone(onTap: onAdd)
             } else {
                 HStack {
-                    FieldLabel(text: "Video terimpor (\(session.cameras.count))")
+                    FieldLabel(text: "Imported videos (\(session.cameras.count))")
                     Spacer()
-                    GhostButton(title: "Tambah File", systemImage: "plus") { onAdd() }
+                    GhostButton(title: "Add File", systemImage: "plus") { onAdd() }
                 }
 
                 VStack(spacing: Space.s) {
@@ -106,6 +106,12 @@ private struct ImportMainColumn: View {
                             onLabelChange: { newLabel in
                                 if let i = session.cameras.firstIndex(where: { $0.id == cam.id }) {
                                     session.cameras[i].label = newLabel
+                                }
+                            },
+                            onOffsetChange: { offset in
+                                if let i = session.cameras.firstIndex(where: { $0.id == cam.id }) {
+                                    session.cameras[i].timeOffsetSec = min(300, max(-300, offset))
+                                    session.normalizeTrim()
                                 }
                             },
                             onRemove: {
@@ -119,6 +125,7 @@ private struct ImportMainColumn: View {
                 if session.timelineMax > 0 {
                     GlobalTrimCard(startSec: $session.trimStartSec,
                                    endSec: $session.trimEndSec,
+                                   minSec: session.timelineMin,
                                    maxSec: session.timelineMax,
                                    cameras: session.previews)
                 }
@@ -136,32 +143,14 @@ private struct ImportInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l * scale) {
             VStack(alignment: .leading, spacing: Space.m) {
-                FieldLabel(text: "Detail Venue")
-                field("Nama venue") {
-                    TextField("mis. Pujasera Kampus", text: $session.venueName).textFieldStyle(.roundedBorder)
-                }
-                field("Tipe") {
-                    Picker("", selection: $session.venueType) {
-                        ForEach(VenueType.allCases) { Text($0.rawValue).tag($0) }
-                    }.labelsHidden()
+                FieldLabel(text: "Venue Details")
+                field("Venue name") {
+                    TextField("e.g. Campus Food Court", text: $session.venueName).textFieldStyle(.roundedBorder)
                 }
                 HStack(spacing: Space.s) {
-                    field("Lebar (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
-                    field("Panjang (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
+                    field("Width (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
+                    field("Length (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
                 }
-                InfoNote(text: "Dimensi venue jadi referensi skala. Tanpa ini, dwell & jarak tidak bermakna.")
-            }
-            .card()
-
-            VStack(alignment: .leading, spacing: Space.m) {
-                FieldLabel(text: "Mode Analisis")
-                Picker("", selection: $session.mode) {
-                    ForEach(AnalysisMode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
-                Text(session.mode.detail)
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .card()
         }
@@ -181,6 +170,7 @@ private struct ImportInspector: View {
 private struct CameraRow: View {
     let camera: SessionCamera
     var onLabelChange: (String) -> Void
+    var onOffsetChange: (Double) -> Void
     var onRemove: () -> Void
 
     var body: some View {
@@ -191,7 +181,7 @@ private struct CameraRow: View {
                 .overlay(Image(systemName: "film").foregroundStyle(.secondary))
 
             VStack(alignment: .leading, spacing: 2) {
-                TextField("Label kamera",
+                TextField("Camera label",
                           text: Binding(get: { camera.label }, set: { onLabelChange($0) }))
                     .textFieldStyle(.plain).font(.headline)
                 Text(camera.url?.lastPathComponent ?? "—").font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -204,6 +194,36 @@ private struct CameraRow: View {
                 Text(camera.resolution).font(.caption).foregroundStyle(.secondary)
             }
 
+            Divider().frame(height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Time offset").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: Space.xs) {
+                    TextField(
+                        "0,0",
+                        value: Binding(
+                            get: { camera.timeOffsetSec },
+                            set: { onOffsetChange($0) }
+                        ),
+                        format: .number.precision(.fractionLength(1...2))
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 72)
+                    Stepper(
+                        "",
+                        value: Binding(
+                            get: { camera.timeOffsetSec },
+                            set: { onOffsetChange($0) }
+                        ),
+                        in: -300...300,
+                        step: 0.1
+                    )
+                    .labelsHidden()
+                    Text("s").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .help("Source time = global time + offset. Positive reads later frames.")
+
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
@@ -212,7 +232,7 @@ private struct CameraRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help("Hapus video")
+            .help("Remove video")
         }
         .card(padding: Space.m)
     }
@@ -228,9 +248,9 @@ private struct DropZone: View {
         VStack(spacing: Space.s) {
             Image(systemName: "square.and.arrow.down.on.square")
                 .font(.system(size: 34)).foregroundStyle(Theme.accent)
-            Text("Drag & drop video CCTV di sini").font(.headline)
-            Text("atau").font(.caption).foregroundStyle(.secondary)
-            GhostButton(title: "Pilih File", systemImage: "folder") { onTap() }
+            Text("Drag & drop CCTV video here").font(.headline)
+            Text("or").font(.caption).foregroundStyle(.secondary)
+            GhostButton(title: "Choose File", systemImage: "folder") { onTap() }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Space.xl * scale)

@@ -28,9 +28,9 @@ enum CalibrationProfileLibraryError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unavailableStorage: return "Penyimpanan riwayat kalibrasi tidak tersedia."
-        case .invalidPackage: return "Paket profil kalibrasi tidak valid atau rusak."
-        case .missingFloorPlan: return "Pilih file floor plan yang digunakan oleh profil lama ini."
+        case .unavailableStorage: return "Calibration history storage is unavailable."
+        case .invalidPackage: return "The calibration profile package is invalid or corrupted."
+        case .missingFloorPlan: return "Select the floor plan file used by this saved profile."
         }
     }
 }
@@ -86,7 +86,7 @@ enum CalibrationProfileLibrary {
         let directory = try writeSnapshot(profile, floorPlanURL: session.floorPlanURL)
         return SavedCalibrationProfile(
             id: id,
-            displayName: profile.displayName ?? "Profil Kalibrasi",
+            displayName: profile.displayName ?? "Calibration Profile",
             savedAt: now,
             cameraCount: profile.cameras.count,
             usesCanvas: profile.floorplan.usesCanvas,
@@ -143,7 +143,7 @@ enum CalibrationProfileLibrary {
         let directory = try writeSnapshot(profile, floorPlanURL: sourceFloorPlan)
         return SavedCalibrationProfile(
             id: id,
-            displayName: profile.displayName ?? "Profil Kalibrasi",
+            displayName: profile.displayName ?? "Calibration Profile",
             savedAt: now,
             cameraCount: profile.cameras.count,
             usesCanvas: profile.floorplan.usesCanvas,
@@ -153,12 +153,30 @@ enum CalibrationProfileLibrary {
     }
 
     static func delete(_ record: SavedCalibrationProfile) throws {
-        let root = try libraryRoot().standardizedFileURL
+        let root = try libraryRoot()
         let target = record.directoryURL.standardizedFileURL
-        guard target.deletingLastPathComponent() == root else {
+        guard isDirectChild(target, of: root) else {
             throw CalibrationProfileLibraryError.invalidPackage
         }
         try FileManager.default.removeItem(at: target)
+    }
+
+    /// `contentsOfDirectory` mengembalikan URL dengan kapitalisasi asli di disk
+    /// ("Foodcourt"), sedangkan `libraryRoot()` menyusunnya sebagai "foodcourt".
+    /// Membandingkan URL mentah karena itu selalu gagal walau folder yang dimaksud
+    /// sama persis, sehingga penghapusan selalu ditolak. Bandingkan jalur kanonik.
+    private static func isDirectChild(_ candidate: URL, of directory: URL) -> Bool {
+        func canonicalPath(_ url: URL) -> String {
+            let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+            if let canonical = try? resolved.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath,
+               !canonical.isEmpty {
+                return canonical
+            }
+            return resolved.path
+        }
+        let parent = canonicalPath(candidate.deletingLastPathComponent())
+        let root = canonicalPath(directory)
+        return parent.compare(root, options: .caseInsensitive) == .orderedSame
     }
 
     static func detachedFloorPlanCopy(for record: SavedCalibrationProfile) throws -> URL? {
@@ -244,7 +262,7 @@ enum CalibrationProfileLibrary {
 
     private static func defaultDisplayName(venueName: String?, at date: Date) -> String {
         let venue = venueName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = venue?.isEmpty == false ? venue! : "Kalibrasi"
+        let base = venue?.isEmpty == false ? venue! : "Calibration"
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "id_ID")
         formatter.dateFormat = "d MMM yyyy, HH.mm.ss"

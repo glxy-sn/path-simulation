@@ -4,16 +4,21 @@
 //
 //  Created by Shafa Tiara on 03/08/26.
 //
+
 import SwiftUI
+import SwiftData
+internal import Combine
 
 struct ProcessingView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
     @Environment(AnalysisSession.self) private var session
     @Environment(Sidecar.self) private var sidecar
+    @Environment(\.modelContext) private var modelContext
 
     @State private var stages = ProcessingStage.pipeline
     @State private var progress = 0.0
+    @State private var shown = 0.0
     @State private var done = false
     @State private var errorMsg: String? = nil
 
@@ -21,27 +26,38 @@ struct ProcessingView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Space.l * scale) {
                 SectionHeader(
-                    title: "Memproses",
-                    subtitle: done ? "Analisis selesai."
-                        : (errorMsg == nil ? "Menjalankan pipeline pada footage kamu…" : "Terjadi masalah.")
+                    title: "Processing",
+                    subtitle: done ? "Analysis complete."
+                        : (errorMsg == nil ? "Running the pipeline on your footage…" : "Something went wrong.")
                 )
-                HStack(alignment: .top, spacing: Space.l * scale) {
-                    stagesPanel.relativeWidth(0.42)
-                    previewPanel.frame(maxWidth: .infinity)
-                }
+                stagesPanel.frame(maxWidth: .infinity)
             }
             .spad(Space.xl, [.horizontal, .top])
             .padding(.bottom, Space.l)
 
             Spacer(minLength: 0)
 
-            WizardFooter(onBack: { router.back() }) {
-                PrimaryButton(title: "Lihat Hasil", systemImage: "arrow.right", enabled: done) {
-                    router.next()
+            WizardFooter(onBack: done ? { router.back() } : nil) {
+                HStack(spacing: Space.s) {
+                    if !done && errorMsg == nil {
+                        GhostButton(title: "Cancel", systemImage: "xmark") { router.back() }
+                    }
+                    PrimaryButton(title: "View Results", systemImage: "arrow.right", enabled: done) {
+                        router.next()
+                    }
                 }
             }
         }
         .task { await runIfNeeded() }
+        .onChange(of: progress) { _, p in
+            if p > shown { withAnimation(.easeOut(duration: 0.3)) { shown = p } }
+            if p >= 1 { withAnimation(.easeOut(duration: 0.3)) { shown = 1 } }
+        }
+        .onReceive(Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()) { _ in
+            guard !done, errorMsg == nil else { return }
+            let ceiling = min(0.99, progress + 0.14)   // merayap pelan biar tak terlihat macet
+            if shown < ceiling { shown = min(ceiling, shown + max(0.004, (ceiling - shown) * 0.06)) }
+        }
     }
 
     // MARK: run engine
@@ -65,7 +81,9 @@ struct ProcessingView: View {
                 case .progress(let stage, let frac):
                     applyStage(stage, frac)
                 case .finished(let result):
+                    session.jobId = result.jobId
                     session.result = result
+                    saveToHistory(result)
                     progress = 1
                     for i in stages.indices { stages[i].state = .done }
                     done = true
@@ -74,6 +92,31 @@ struct ProcessingView: View {
         } catch {
             errorMsg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private func saveToHistory(_ result: AnalysisResult) {
+        let folder = UUID().uuidString
+        let saved = SavedAnalysis(from: session, result: result)
+        let floorSrc = session.usesScaledCanvas ? nil : session.floorPlanURL
+        HistoryStore.writeMeta(saved, folder: folder, floorPlanSource: floorSrc)
+
+        var arts: [(name: String, url: URL)] = []
+        if let u = result.heatmapURL, let f = saved.heatmapFile { arts.append((f, u)) }
+        if let u = result.pathVideoURL, let f = saved.pathVideoFile { arts.append((f, u)) }
+        if let u = result.combinedVideoURL, let f = saved.combinedVideoFile { arts.append((f, u)) }
+        if let u = result.fusionDiagnosticsURL, let f = saved.fusionDiagnosticsFile { arts.append((f, u)) }
+        for (i, ov) in result.overlayVideos.enumerated() where i < saved.overlays.count {
+            arts.append((saved.overlays[i].file, ov.url))
+        }
+
+        let rec = AnalysisRecord(from: session, result: result)
+        rec.folder = folder
+        modelContext.insert(rec)
+        try? modelContext.save()
+        session.historyFolder = folder   // agar edit zona di Hasil ikut tersimpan
+
+        let artsCopy = arts
+        Task.detached { await HistoryStore.downloadArtifacts(artsCopy, folder: folder) }
     }
 
     private func applyStage(_ name: String, _ fraction: Double) {
@@ -97,13 +140,13 @@ struct ProcessingView: View {
         VStack(alignment: .leading, spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.s) {
                 HStack {
-                    Text("Progress keseluruhan").font(.headline)
+                    Text("Overall Progress").font(.headline)
                     Spacer()
-                    Text("\(Int((progress * 100).rounded()))%")
+                    Text("\(Int((shown * 100).rounded()))%")
                         .font(.headline.monospacedDigit())
                         .foregroundStyle(Theme.accent)
                 }
-                ProgressView(value: progress).tint(Theme.accent)
+                ProgressView(value: shown).tint(Theme.accent)
                 Text(currentStageName).font(.callout).foregroundStyle(.secondary)
             }
 
@@ -119,7 +162,7 @@ struct ProcessingView: View {
                     Label(errorMsg, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout).foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
-                    GhostButton(title: "Coba lagi", systemImage: "arrow.clockwise") {
+                    GhostButton(title: "Retry", systemImage: "arrow.clockwise") {
                         Task { await retry() }
                     }
                 }
@@ -129,9 +172,9 @@ struct ProcessingView: View {
     }
 
     private var currentStageName: String {
-        if done { return "Selesai" }
-        if errorMsg != nil { return "Berhenti" }
-        return stages.first { $0.state == .active }?.name ?? "Menyiapkan…"
+        if done { return "Complete" }
+        if errorMsg != nil { return "Stopped" }
+        return stages.first { $0.state == .active }?.name ?? "Preparing…"
     }
 
     private var previewPanel: some View {
@@ -144,7 +187,7 @@ struct ProcessingView: View {
                     RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
                         .strokeBorder(Theme.hairline)
                 )
-            Text("Video deteksi + ID + titik kaki bisa dilihat di layar Hasil setelah selesai.")
+            Text("Detection video, IDs and foot points are available on the Results screen once finished.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .card()
@@ -176,7 +219,7 @@ private struct StageRow: View {
     }
     private var fill: Color {
         switch stage.state {
-        case .done, .active: return Theme.accent
+        case .done, .active: return Theme.accentFill
         case .pending:       return Color.primary.opacity(0.08)
         }
     }
@@ -206,7 +249,7 @@ private struct BoundingBoxPreview: View {
                             .frame(width: r.width, height: r.height)
                         Text("ID \(box.id)").font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Theme.accent).foregroundStyle(.white).offset(y: -14)
+                            .background(Theme.accentFill).foregroundStyle(Theme.onAccent).offset(y: -14)
                         Circle().fill(.orange).frame(width: 5, height: 5)
                             .offset(x: r.width / 2 - 2.5, y: r.height - 2.5)
                     }

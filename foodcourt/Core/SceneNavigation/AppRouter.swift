@@ -15,8 +15,8 @@ enum AppSection: Hashable {
 
     var title: String {
         switch self {
-        case .newAnalysis: return "Analisis Baru"
-        case .history:     return "Riwayat"
+        case .newAnalysis: return "New Analysis"
+        case .history:     return "History"
         }
     }
     var systemImage: String {
@@ -38,9 +38,9 @@ enum FlowStep: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .importFootage: return "Import"
-        case .calibration:   return "Kalibrasi"
-        case .processing:    return "Proses"
-        case .results:       return "Hasil"
+        case .calibration:   return "Calibration"
+        case .processing:    return "Processing"
+        case .results:       return "Results"
         }
     }
 

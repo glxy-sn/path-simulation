@@ -67,6 +67,16 @@ struct Matrix3x3: Codable, Hashable {
         set { values[row][column] = newValue }
     }
 
+    var isFiniteAndInvertible: Bool {
+        guard values.count == 3, values.allSatisfy({ $0.count == 3 }),
+              values.flatMap({ $0 }).allSatisfy(\.isFinite) else { return false }
+        let determinant =
+            self[0, 0] * (self[1, 1] * self[2, 2] - self[1, 2] * self[2, 1])
+            - self[0, 1] * (self[1, 0] * self[2, 2] - self[1, 2] * self[2, 0])
+            + self[0, 2] * (self[1, 0] * self[2, 1] - self[1, 1] * self[2, 0])
+        return determinant.isFinite && abs(determinant) > 1e-12
+    }
+
     init(from decoder: Decoder) throws {
         values = try decoder.singleValueContainer().decode([[Double]].self)
     }
@@ -82,14 +92,24 @@ struct CalibrationMetrics: Codable, Hashable {
     var p95ErrorM: Double
     var inliers: Int
     var points: Int
+    var cameraCoverage: Double? = nil
+    var floorCoverage: Double? = nil
 
     static let empty = CalibrationMetrics(medianErrorM: 0, p95ErrorM: 0, inliers: 0, points: 0)
 
     enum CodingKeys: String, CodingKey {
         case medianErrorM = "median_error_m"
         case p95ErrorM = "p95_error_m"
+        case cameraCoverage = "camera_coverage"
+        case floorCoverage = "floor_coverage"
         case inliers, points
     }
+}
+
+enum CalibrationQuality: String {
+    case good = "Good"
+    case warning = "Warning"
+    case invalid = "Invalid"
 }
 
 struct CameraCalibration: Codable, Hashable {
@@ -102,7 +122,30 @@ struct CameraCalibration: Codable, Hashable {
     var reprojectionErrorsM: [Double]
     var metrics: CalibrationMetrics
 
-    var isValid: Bool { metrics.points >= 4 && metrics.inliers >= 4 }
+    var isValid: Bool {
+        metrics.points >= 4 && metrics.inliers >= 4 && homographyCameraToWorld.isFiniteAndInvertible
+    }
+
+    var qualityWarnings: [String] {
+        guard isValid else { return ["Invalid matrix or inlier count."] }
+        var warnings: [String] = []
+        let ratio = metrics.points > 0 ? Double(metrics.inliers) / Double(metrics.points) : 0
+        if ratio < 0.75 { warnings.append("Inlier ratio is below 75%.") }
+        if metrics.medianErrorM > 0.15 { warnings.append("Median error is above 0.15 m.") }
+        if metrics.p95ErrorM > 0.40 { warnings.append("P95 error is above 0.40 m.") }
+        if let coverage = metrics.cameraCoverage, coverage < 0.10 {
+            warnings.append("CCTV point spread is below 10% of the frame.")
+        }
+        if let coverage = metrics.floorCoverage, coverage < 0.15 {
+            warnings.append("Floor plan point spread is below 15% of the area.")
+        }
+        return warnings
+    }
+
+    var quality: CalibrationQuality {
+        guard isValid else { return .invalid }
+        return qualityWarnings.isEmpty ? .good : .warning
+    }
 
     enum CodingKeys: String, CodingKey {
         case homographyCameraToWorld = "H_cam_to_world"
@@ -117,7 +160,7 @@ struct CameraCalibration: Codable, Hashable {
 }
 
 struct CalibrationProfile: Codable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var profileID: UUID?
@@ -129,6 +172,8 @@ struct CalibrationProfile: Codable {
     var homographyFloorToWorld: Matrix3x3
     var homographyWorldToFloor: Matrix3x3
     var cameras: [CameraCalibrationProfile]
+    /// Optional menjaga profil schema 1/2 tetap dapat didekode.
+    var tables: [TableAnnotation]?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -141,6 +186,7 @@ struct CalibrationProfile: Codable {
         case homographyFloorToWorld = "H_floor_to_world"
         case homographyWorldToFloor = "H_world_to_floor"
         case cameras
+        case tables
     }
 }
 
@@ -162,6 +208,7 @@ struct CameraCalibrationProfile: Codable {
     var cameraID: UUID
     var label: String
     var referenceFrameSeconds: Double
+    var timeOffsetSec: Double? = nil
     var imageSize: PixelSize
     var sourceFileName: String?
     var calibration: CameraCalibration
@@ -170,6 +217,7 @@ struct CameraCalibrationProfile: Codable {
         case cameraID = "camera_id"
         case label
         case referenceFrameSeconds = "reference_frame_seconds"
+        case timeOffsetSec = "time_offset_sec"
         case imageSize = "image_size"
         case sourceFileName = "source_file_name"
         case calibration
@@ -191,17 +239,17 @@ enum CalibrationError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .invalidVenueSize: return "Lebar dan panjang venue harus lebih dari 0 meter."
-        case .invalidImageSize: return "Ukuran gambar atau frame tidak valid."
-        case .unequalPointCounts: return "Jumlah titik CCTV dan denah harus sama."
-        case .tooFewPoints: return "Setiap kamera membutuhkan minimal 4 pasangan titik."
-        case .tooManyPoints: return "Maksimum 8 pasangan titik untuk setiap kamera."
-        case .duplicatePoints: return "Ada titik yang terlalu berdekatan atau duplikat."
-        case .degeneratePoints: return "Susunan titik tidak dapat membentuk homografi. Sebarkan titik pada area lantai."
-        case .noValidModel: return "Homografi gagal ditemukan. Periksa pasangan titik dan coba lagi."
-        case .invalidProfile: return "Profil kalibrasi tidak cocok dengan sesi saat ini."
-        case .missingFloorPlan: return "Profil membutuhkan file floor plan yang tersimpan."
-        case .cameraMismatch(let detail): return "Kamera pada profil tidak cocok: \(detail)"
+        case .invalidVenueSize: return "Venue width and length must be greater than 0 meters."
+        case .invalidImageSize: return "Invalid image or frame size."
+        case .unequalPointCounts: return "The number of CCTV and floor plan points must match."
+        case .tooFewPoints: return "Each camera needs at least 4 point pairs."
+        case .tooManyPoints: return "Maximum of 8 point pairs per camera."
+        case .duplicatePoints: return "Some points are too close together or duplicated."
+        case .degeneratePoints: return "These points cannot form a homography. Spread them across the floor area."
+        case .noValidModel: return "Homography could not be found. Check the point pairs and try again."
+        case .invalidProfile: return "The calibration profile does not match the current session."
+        case .missingFloorPlan: return "The profile requires its saved floor plan file."
+        case .cameraMismatch(let detail): return "Profile cameras do not match: \(detail)"
         }
     }
 }

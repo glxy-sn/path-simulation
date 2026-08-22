@@ -4,11 +4,13 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>U See</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Foodcourt Calibration Profile</string>
+			<string>U See Calibration Profile</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSItemContentTypes</key>
@@ -25,8 +27,10 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>USeeAssetManifestURL</key>
+	<string>https://huggingface.co/fitrim14111/foodcourt-runtime/resolve/main/manifest.json</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>U See</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,7 +49,7 @@
 				<string>com.apple.package</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Foodcourt Calibration Profile</string>
+			<string>U See Calibration Profile</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.tiara.foodcourt.calibration-profile</string>
 			<key>UTTypeTagSpecification</key>

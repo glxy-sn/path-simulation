@@ -15,6 +15,7 @@ struct CalibrationView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AppRouter.self) private var router
     @Environment(AnalysisSession.self) private var session
+    @Environment(Sidecar.self) private var sidecar
 
     @State private var selectedCameraIndex = 0
     @State private var floorPlanImage: NSImage?
@@ -25,6 +26,13 @@ struct CalibrationView: View {
     @State private var savedProfiles: [SavedCalibrationProfile] = []
     @State private var activeProfileID: UUID?
     @State private var showsProfileHistory = false
+    @State private var showsCalibrationWarningConfirmation = false
+    @State private var personPreview: CalibrationPreviewResponseDTO?
+    @State private var personPreviewToken: String?
+    @State private var personDetectionRefreshToken = UUID()
+    @State private var personDetectionRequestID = UUID()
+    @State private var isDetectingPerson = false
+    @State private var personDetectionError: String?
 
     private var selectedIndex: Int {
         min(max(0, selectedCameraIndex), max(0, session.cameras.count - 1))
@@ -42,9 +50,16 @@ struct CalibrationView: View {
         }
         .task(id: reloadToken) {
             await refreshImages()
+            await refreshPersonDetection(forceSample: true)
+        }
+        .task(id: personDetectionRefreshToken) {
+            await refreshPersonDetection(forceSample: false)
         }
         .task { reloadProfileHistory() }
-        .onChange(of: selectedCameraIndex) { _, _ in reloadToken = UUID() }
+        .onChange(of: selectedCameraIndex) { _, _ in
+            resetPersonDetectionCache()
+            reloadToken = UUID()
+        }
         .sheet(isPresented: $showsProfileHistory) {
             CalibrationProfileHistorySheet(
                 profiles: savedProfiles,
@@ -54,6 +69,12 @@ struct CalibrationView: View {
                 onDelete: { deleteProfile($0) }
             )
         }
+        .alert("Calibration has warnings", isPresented: $showsCalibrationWarningConfirmation) {
+            Button("Continue") { router.next() }
+            Button("Check Again", role: .cancel) {}
+        } message: {
+            Text(calibrationWarningText)
+        }
     }
 
     private var emptyState: some View {
@@ -61,11 +82,11 @@ struct CalibrationView: View {
             Image(systemName: "camera.metering.none")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("Belum ada kamera").font(.headline)
-            Text("Import video dulu di langkah sebelumnya.")
+            Text("No cameras yet").font(.headline)
+            Text("Import a video in the previous step first.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            GhostButton(title: "Ke Import", systemImage: "chevron.left") { router.back() }
+            GhostButton(title: "Go to Import", systemImage: "chevron.left") { router.back() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -80,6 +101,14 @@ struct CalibrationView: View {
                         .frame(height: 360 * scale)
 
                     inspector
+
+                    if session.allCalibrated {
+                        TableAnnotationEditor(
+                            image: session.usesScaledCanvas ? nil : floorPlanImage,
+                            sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize
+                        )
+                        .frame(minHeight: 390 * scale)
+                    }
                 }
                 .spad(Space.xl, [.horizontal, .top])
                 .padding(.bottom, Space.xl)
@@ -88,11 +117,11 @@ struct CalibrationView: View {
 
             WizardFooter(onBack: { router.back() }) {
                 PrimaryButton(
-                    title: session.allCalibrated ? "Kalibrasi Selesai" : "Kalibrasi Semua Kamera",
+                    title: session.allCalibrated ? "Calibration Done" : "Calibrate All Cameras",
                     systemImage: "checkmark.seal",
                     enabled: session.allCalibrated
                 ) {
-                    router.next()
+                    continueAfterCalibration()
                 }
             }
         }
@@ -101,8 +130,8 @@ struct CalibrationView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.m * scale) {
             SectionHeader(
-                title: "Kalibrasi",
-                subtitle: "Pilih titik lantai yang sama pada CCTV dan denah. Gunakan 4–8 pasangan titik bebas."
+                title: "Calibration",
+                subtitle: "Pick the same floor points on the CCTV frame and the floor plan. Use 4–8 free point pairs."
             )
             HStack(spacing: Space.s) {
                 ForEach(Array(session.cameras.enumerated()), id: \.element.id) { index, camera in
@@ -110,23 +139,24 @@ struct CalibrationView: View {
                         selectedCameraIndex = index
                     } label: {
                         HStack(spacing: Space.s) {
-                            Image(systemName: camera.isCalibrated ? "checkmark.circle.fill" : "camera")
-                                .foregroundStyle(camera.isCalibrated ? .green : (index == selectedIndex ? .white : .secondary))
+                            let quality = camera.calibration?.quality ?? .invalid
+                            Image(systemName: quality == .good ? "checkmark.circle.fill" : (quality == .warning ? "exclamationmark.triangle.fill" : "camera"))
+                                .foregroundStyle(index == selectedIndex ? .white : calibrationQualityColor(quality))
                             Text(camera.label)
                                 .lineLimit(1)
                         }
                         .padding(.horizontal, Space.m)
                         .padding(.vertical, Space.s)
-                        .foregroundStyle(index == selectedIndex ? Color.white : Color.primary)
-                        .background(index == selectedIndex ? Theme.accent : Color.primary.opacity(0.06), in: Capsule())
+                        .foregroundStyle(index == selectedIndex ? Theme.onAccent : Color.primary)
+                        .background(index == selectedIndex ? Theme.accentFill : Color.primary.opacity(0.06), in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Pilih \(camera.label)")
+                    .accessibilityLabel("Select \(camera.label)")
                 }
                 Spacer()
                 profileMenu
                     .buttonStyle(.bordered)
-                Button("Simpan Profil", systemImage: "tray.and.arrow.down") { saveProfile() }
+                Button("Save Profile", systemImage: "tray.and.arrow.down") { saveProfile() }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canSaveProfile)
             }
@@ -136,7 +166,7 @@ struct CalibrationView: View {
     private var profileMenu: some View {
         Menu {
             if savedProfiles.isEmpty {
-                Text("Belum ada profil tersimpan")
+                Text("No saved profiles yet")
             } else {
                 ForEach(savedProfiles) { profile in
                     Button {
@@ -151,20 +181,20 @@ struct CalibrationView: View {
                 }
                 Divider()
             }
-            Button("Impor dari File…", systemImage: "square.and.arrow.down") { importProfile() }
-            Button("Ekspor Profil Terpilih…", systemImage: "square.and.arrow.up") {
+            Button("Import from File…", systemImage: "square.and.arrow.down") { importProfile() }
+            Button("Export Selected Profile…", systemImage: "square.and.arrow.up") {
                 if let profile = activeProfile { exportProfile(profile) }
             }
             .disabled(activeProfile == nil)
-            Button("Kelola Riwayat…", systemImage: "clock.arrow.circlepath") {
+            Button("Manage History…", systemImage: "clock.arrow.circlepath") {
                 showsProfileHistory = true
             }
             .disabled(savedProfiles.isEmpty)
         } label: {
-            Text(activeProfile?.displayName ?? "Profil Kalibrasi")
+            Text(activeProfile?.displayName ?? "Calibration Profile")
                 .lineLimit(1)
         }
-        .help("Pilih profil tersimpan atau impor profil dari file")
+        .help("Choose a saved profile or import one from a file")
     }
 
     private var activeProfile: SavedCalibrationProfile? {
@@ -175,50 +205,75 @@ struct CalibrationView: View {
         session.allCalibrated && (session.usesScaledCanvas || session.floorPlanURL != nil)
     }
 
+    private var calibrationWarningText: String {
+        session.cameras.compactMap { camera in
+            guard let calibration = camera.calibration,
+                  calibration.quality == .warning else { return nil }
+            return "\(camera.label): \(calibration.qualityWarnings.joined(separator: " "))"
+        }.joined(separator: "\n")
+    }
+
+    private func continueAfterCalibration() {
+        guard session.allCalibrated else { return }
+        if calibrationWarningText.isEmpty {
+            router.next()
+        } else {
+            showsCalibrationWarningConfirmation = true
+        }
+    }
+
     private var canvases: some View {
         let camera = selectedCamera
         let calibration = camera?.calibration
         return HStack(spacing: Space.m * scale) {
             CalibrationCanvas(
-                title: "Frame CCTV — \(camera?.label ?? "")",
-                subtitle: isLoadingFrame ? "Memuat frame…" : "Klik titik lantai, lalu klik pasangan yang sama di denah.",
+                title: "CCTV Frame — \(camera?.label ?? "")",
+                subtitle: cameraDetectionSubtitle,
                 image: cameraFrameImage,
                 sourceSize: camera?.framePixelSize?.cgSize,
                 points: camera?.imagePoints ?? [],
                 projectedPoints: [],
+                detectionMarkers: cameraDetectionMarkers,
                 accent: Theme.accent,
                 canInteract: cameraFrameImage != nil,
-                canvasAccessory: nil,
+                canvasAccessory: personDetectionAccessory,
                 footerAccessory: nil,
                 emptyState: AnyView(
                     ContentUnavailableView(
-                        "Frame belum tersedia",
+                        "Frame not available yet",
                         systemImage: "video.slash",
-                        description: Text("Pilih video pada langkah Import atau tunggu frame dimuat.")
+                        description: Text("Select a video in the Import step or wait for the frame to load.")
                     )
                 ),
                 onAdd: { addCameraPoint($0) },
+                onMovePoint: { index, point, isFinal in
+                    moveCameraPoint(at: index, to: point, isFinal: isFinal)
+                },
                 onDeletePair: { deletePair(at: $0) }
             )
             CalibrationCanvas(
-                title: session.usesScaledCanvas ? "Canvas Berskala" : (session.floorPlanName ?? "Floor Plan"),
-                subtitle: "Seluruh gambar dipetakan ke \(session.widthM) × \(session.heightM) m.",
+                title: session.usesScaledCanvas ? "Scaled Canvas" : (session.floorPlanName ?? "Floor Plan"),
+                subtitle: floorDetectionSubtitle,
                 image: session.usesScaledCanvas ? nil : floorPlanImage,
                 sourceSize: session.usesScaledCanvas ? nil : session.floorPlanPixelSize?.cgSize,
                 points: camera?.planePoints ?? [],
                 projectedPoints: validationPoints(calibration),
+                detectionMarkers: floorDetectionMarkers,
                 accent: .orange,
                 canInteract: session.usesScaledCanvas || floorPlanImage != nil,
                 canvasAccessory: floorPlanCanvasAction,
                 footerAccessory: AnyView(floorSourcePicker),
                 emptyState: AnyView(
                     ContentUnavailableView(
-                        "Floor plan belum tersedia",
+                        "Floor plan not available yet",
                         systemImage: "photo.badge.plus",
-                        description: Text("Klik Upload untuk memilih gambar atau PDF floor plan.")
+                        description: Text("Click Upload to choose a floor plan image or PDF.")
                     )
                 ),
                 onAdd: { addPlanePoint($0) },
+                onMovePoint: { index, point, isFinal in
+                    movePlanePoint(at: index, to: point, isFinal: isFinal)
+                },
                 onDeletePair: { deletePair(at: $0) }
             )
         }
@@ -259,7 +314,7 @@ struct CalibrationView: View {
     private func referenceFramePanel(_ camera: SessionCamera?, height: CGFloat) -> some View {
         inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
-                FieldLabel(text: "Frame Referensi")
+                FieldLabel(text: "Reference Frame")
                 if let camera {
                     let range = referenceRange(for: camera)
                     Slider(
@@ -267,7 +322,7 @@ struct CalibrationView: View {
                             get: { clamp(session.cameras[selectedIndex].referenceFrameSeconds, to: range) },
                             set: { value in
                                 session.cameras[selectedIndex].referenceFrameSeconds = clamp(value, to: range)
-                                invalidateCalibration(for: selectedIndex)
+                                resetPersonDetectionCache()
                                 reloadToken = UUID()
                             }
                     ),
@@ -289,13 +344,13 @@ struct CalibrationView: View {
         inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
                 HStack {
-                    FieldLabel(text: "Pasangan Titik")
+                    FieldLabel(text: "Point Pairs")
                     Spacer()
                     Text("\(camera?.imagePoints.count ?? 0)/8")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                pointActionButton("Reset Kamera", systemImage: "arrow.counterclockwise", enabled: canUndoCameraPoint) {
+                pointActionButton("Reset Camera", systemImage: "arrow.counterclockwise", enabled: canUndoCameraPoint) {
                     resetSelectedCamera()
                 }
                 pointActionButton("Undo CCTV", systemImage: "arrow.uturn.backward", enabled: canUndoCameraPoint) {
@@ -335,11 +390,12 @@ struct CalibrationView: View {
     private func cameraStatusPanel(height: CGFloat) -> some View {
         inspectorPanel(height: height) {
             VStack(alignment: .leading, spacing: Space.s) {
-                FieldLabel(text: "Status Kamera")
+                FieldLabel(text: "Camera Status")
                 ForEach(session.cameras) { item in
                     HStack(spacing: Space.s) {
-                        Image(systemName: item.isCalibrated ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(item.isCalibrated ? .green : .secondary)
+                        let quality = item.calibration?.quality ?? .invalid
+                        Image(systemName: quality == .good ? "checkmark.circle.fill" : (quality == .warning ? "exclamationmark.triangle.fill" : "xmark.circle"))
+                            .foregroundStyle(calibrationQualityColor(quality))
                         Text(item.label).font(.callout).lineLimit(1)
                         Spacer()
                     }
@@ -363,13 +419,20 @@ struct CalibrationView: View {
     @ViewBuilder
     private func metricContent(_ calibration: CameraCalibration?) -> some View {
         VStack(alignment: .leading, spacing: Space.s) {
-            FieldLabel(text: "Validasi")
+            FieldLabel(text: "Validation")
             if let calibration {
+                HStack {
+                    Text("Status").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(calibration.quality.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(calibrationQualityColor(calibration.quality))
+                }
                 metric("Median", String(format: "%.3f m", calibration.metrics.medianErrorM))
                 metric("P95", String(format: "%.3f m", calibration.metrics.p95ErrorM))
                 metric("Inlier", "\(calibration.metrics.inliers)/\(calibration.metrics.points)")
             } else {
-                Text("Tambahkan minimal empat pasangan titik untuk menghitung homografi.")
+                Text("Add at least four point pairs to compute the homography.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -385,25 +448,33 @@ struct CalibrationView: View {
         }
     }
 
+    private func calibrationQualityColor(_ quality: CalibrationQuality) -> Color {
+        switch quality {
+        case .good: return .green
+        case .warning: return .orange
+        case .invalid: return .red
+        }
+    }
+
     private func addCameraPoint(_ point: CGPoint) {
         guard session.cameras.indices.contains(selectedIndex) else { return }
         let camera = session.cameras[selectedIndex]
         guard camera.imagePoints.count < HomographySolver.maximumPoints else {
-            message = "Gagal: maksimum 8 pasangan titik per kamera."; return
+            message = "Failed: maximum of 8 point pairs per camera."; return
         }
         guard camera.imagePoints.count == camera.planePoints.count else {
-            message = "Klik pasangan titik di denah terlebih dahulu."; return
+            message = "Click the matching point on the floor plan first."; return
         }
         session.cameras[selectedIndex].imagePoints.append(NormPoint(x: point.x, y: point.y))
         invalidateCalibration(for: selectedIndex)
-        message = "Titik CCTV \(camera.imagePoints.count + 1) ditambahkan. Klik pasangan yang sama di denah."
+        message = "CCTV point \(camera.imagePoints.count + 1) added. Click the matching point on the floor plan."
     }
 
     private func addPlanePoint(_ point: CGPoint) {
         guard session.cameras.indices.contains(selectedIndex) else { return }
         let camera = session.cameras[selectedIndex]
         guard camera.planePoints.count < camera.imagePoints.count else {
-            message = "Mulai pasangan baru dengan klik titik pada CCTV."; return
+            message = "Start a new pair by clicking a point on the CCTV frame."; return
         }
         session.cameras[selectedIndex].planePoints.append(NormPoint(x: point.x, y: point.y))
         recalculateSelectedCamera()
@@ -419,12 +490,40 @@ struct CalibrationView: View {
         recalculateSelectedCamera()
     }
 
+    private func moveCameraPoint(at pointIndex: Int, to point: CGPoint, isFinal: Bool) {
+        guard session.cameras.indices.contains(selectedIndex),
+              session.cameras[selectedIndex].imagePoints.indices.contains(pointIndex) else { return }
+        session.cameras[selectedIndex].imagePoints[pointIndex].x = point.x
+        session.cameras[selectedIndex].imagePoints[pointIndex].y = point.y
+        invalidateCalibration(for: selectedIndex)
+        if isFinal {
+            recalculateSelectedCamera()
+            if session.cameras[selectedIndex].calibration?.isValid == true {
+                message = "CCTV point \(pointIndex + 1) moved without changing its pair."
+            }
+        }
+    }
+
+    private func movePlanePoint(at pointIndex: Int, to point: CGPoint, isFinal: Bool) {
+        guard session.cameras.indices.contains(selectedIndex),
+              session.cameras[selectedIndex].planePoints.indices.contains(pointIndex) else { return }
+        session.cameras[selectedIndex].planePoints[pointIndex].x = point.x
+        session.cameras[selectedIndex].planePoints[pointIndex].y = point.y
+        invalidateCalibration(for: selectedIndex)
+        if isFinal {
+            recalculateSelectedCamera()
+            if session.cameras[selectedIndex].calibration?.isValid == true {
+                message = "Floor plan point \(pointIndex + 1) moved without changing its pair."
+            }
+        }
+    }
+
     private func resetSelectedCamera() {
         guard session.cameras.indices.contains(selectedIndex) else { return }
         session.cameras[selectedIndex].imagePoints = []
         session.cameras[selectedIndex].planePoints = []
         invalidateCalibration(for: selectedIndex)
-        message = "Titik \(session.cameras[selectedIndex].label) direset."
+        message = "Points for \(session.cameras[selectedIndex].label) were reset."
     }
 
     private var canUndoCameraPoint: Bool {
@@ -450,27 +549,30 @@ struct CalibrationView: View {
         }
         invalidateCalibration(for: selectedIndex)
         recalculateSelectedCamera()
-        message = "Titik CCTV terakhir dihapus."
+        message = "Last CCTV point removed."
     }
 
     private func undoFloorPlanPoint() {
         guard canUndoFloorPlanPoint else { return }
         session.cameras[selectedIndex].planePoints.removeLast()
         invalidateCalibration(for: selectedIndex)
-        message = "Titik floor plan terakhir dihapus. Pilih titik penggantinya di denah."
+        message = "Last floor plan point removed. Pick its replacement on the floor plan."
     }
 
     private func invalidateCalibration(for index: Int) {
         guard session.cameras.indices.contains(index) else { return }
         session.cameras[index].calibration = nil
+        personPreview = nil
+        personDetectionError = nil
         activeProfileID = nil
     }
 
     private func referenceRange(for camera: SessionCamera) -> ClosedRange<Double> {
-        let upperLimit = max(0, camera.durationSec)
-        let lower = min(max(0, session.trimStartSec), upperLimit)
-        let requestedUpper = session.trimEndSec > lower ? session.trimEndSec : upperLimit
-        let upper = min(max(lower, requestedUpper), upperLimit)
+        let sourceUpper = max(0, camera.durationSec - camera.timeOffsetSec)
+        let offsetLower = max(0, -camera.timeOffsetSec)
+        let lower = min(max(offsetLower, session.trimStartSec), sourceUpper)
+        let requestedUpper = session.trimEndSec > lower ? session.trimEndSec : sourceUpper
+        let upper = min(max(lower, requestedUpper), sourceUpper)
         return lower...upper
     }
 
@@ -493,7 +595,7 @@ struct CalibrationView: View {
         guard camera.imagePoints.count == camera.planePoints.count else { return }
         guard camera.imagePoints.count >= HomographySolver.minimumPoints else { return }
         guard let frameSize = camera.framePixelSize, frameSize.isValid else {
-            message = "Gagal: frame CCTV belum dapat dibaca."; return
+            message = "Failed: the CCTV frame cannot be read yet."; return
         }
         let cameraPoints = camera.imagePoints.map {
             CalibrationPoint(x: $0.x * frameSize.width, y: $0.y * frameSize.height)
@@ -508,13 +610,16 @@ struct CalibrationView: View {
                 floorPointsPx: floorPoints,
                 floorSize: floorSize,
                 venueWidthM: session.venueWidthM,
-                venueHeightM: session.venueHeightM
+                venueHeightM: session.venueHeightM,
+                cameraImageSize: frameSize
             )
             let metrics = session.cameras[selectedIndex].calibration?.metrics
-            message = "Kalibrasi valid: \(metrics?.inliers ?? 0)/\(metrics?.points ?? 0) inlier."
+            let quality = session.cameras[selectedIndex].calibration?.quality.rawValue ?? "Invalid"
+            message = "Calibration \(quality): \(metrics?.inliers ?? 0)/\(metrics?.points ?? 0) inliers."
+            personDetectionRefreshToken = UUID()
         } catch {
             session.cameras[selectedIndex].calibration = nil
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -541,7 +646,7 @@ struct CalibrationView: View {
         session.floorPlanPixelSize = pixelSize(of: image)
         session.usesScaledCanvas = false
         invalidateAllCalibrations()
-        message = "Denah diperbarui. Kalibrasi tiap kamera perlu dihitung ulang."
+        message = "Floor plan updated. Every camera needs to be recalibrated."
     }
 
     private var floorSourcePicker: some View {
@@ -565,7 +670,7 @@ struct CalibrationView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Gunakan \(title)")
+        .accessibilityLabel("Use \(title)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -573,7 +678,7 @@ struct CalibrationView: View {
         guard !session.usesScaledCanvas else { return }
         session.usesScaledCanvas = true
         invalidateAllCalibrations()
-        message = "Menggunakan Canvas Berskala. Kalibrasi tiap kamera perlu dihitung ulang."
+        message = "Using the scaled canvas. Every camera needs to be recalibrated."
     }
 
     private func selectFloorPlan() {
@@ -581,9 +686,9 @@ struct CalibrationView: View {
         session.usesScaledCanvas = false
         invalidateAllCalibrations()
         if session.floorPlanURL == nil {
-            message = "Unggah floor plan untuk mulai memberi titik pada denah."
+            message = "Upload a floor plan to start placing points on it."
         } else {
-            message = "Menggunakan floor plan tersimpan. Kalibrasi tiap kamera perlu dihitung ulang."
+            message = "Using the saved floor plan. Every camera needs to be recalibrated."
         }
     }
 
@@ -603,9 +708,9 @@ struct CalibrationView: View {
             let saved = try CalibrationProfileLibrary.save(session: session)
             reloadProfileHistory()
             activeProfileID = saved.id
-            message = "Profil \(saved.displayName) disimpan ke riwayat."
+            message = "Profile \(saved.displayName) saved to history."
         } catch {
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -631,7 +736,7 @@ struct CalibrationView: View {
             reloadProfileHistory()
             applySavedProfile(saved)
         } catch {
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -650,12 +755,13 @@ struct CalibrationView: View {
                 to: session
             )
             activeProfileID = profile.id
+            resetPersonDetectionCache()
             reloadToken = UUID()
             message = validCount == session.cameras.count
-                ? "Semua kamera valid (\(validCount)/\(session.cameras.count)). Periksa kembali titik bila video berubah."
-                : "\(validCount)/\(session.cameras.count) kamera valid."
+                ? "All cameras are valid (\(validCount)/\(session.cameras.count)). Re-check the points if the footage changes."
+                : "\(validCount)/\(session.cameras.count) cameras valid."
         } catch {
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -667,9 +773,9 @@ struct CalibrationView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try CalibrationProfileLibrary.export(profile, to: url)
-            message = "Profil diekspor ke \(url.lastPathComponent)."
+            message = "Profile exported to \(url.lastPathComponent)."
         } catch {
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -685,9 +791,9 @@ struct CalibrationView: View {
                 activeProfileID = nil
             }
             reloadProfileHistory()
-            message = "Profil \(profile.displayName) dihapus dari riwayat."
+            message = "Profile \(profile.displayName) removed from history."
         } catch {
-            message = "Gagal: \(error.localizedDescription)"
+            message = "Failed: \(error.localizedDescription)"
         }
     }
 
@@ -699,13 +805,13 @@ struct CalibrationView: View {
             }
         } catch {
             savedProfiles = []
-            message = "Gagal memuat riwayat: \(error.localizedDescription)"
+            message = "Failed to load history: \(error.localizedDescription)"
         }
     }
 
     private func chooseLegacyFloorPlan(for profile: CalibrationProfile) throws -> URL {
         let panel = NSOpenPanel()
-        panel.message = "Pilih floor plan yang digunakan saat profil ini dibuat."
+        panel.message = "Select the floor plan that was used when this profile was created."
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.png, .jpeg, .pdf, .image]
@@ -717,7 +823,7 @@ struct CalibrationView: View {
         let expected = profile.floorplan.pixelSize
         guard abs(selectedSize.width - expected.width) <= 1,
               abs(selectedSize.height - expected.height) <= 1 else {
-            throw CalibrationError.cameraMismatch("ukuran floor plan berbeda dari profil")
+            throw CalibrationError.cameraMismatch("floor plan size differs from the profile")
         }
         return url
     }
@@ -728,11 +834,11 @@ struct CalibrationView: View {
         }
         guard hasCalibrationWork else { return true }
         let alert = NSAlert()
-        alert.messageText = "Ganti kalibrasi saat ini?"
-        alert.informativeText = "Titik dan hasil kalibrasi yang sedang tampil akan diganti oleh profil yang dipilih."
+        alert.messageText = "Replace the current calibration?"
+        alert.informativeText = "The points and calibration currently shown will be replaced by the selected profile."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Ganti Profil")
-        alert.addButton(withTitle: "Batal")
+        alert.addButton(withTitle: "Replace Profile")
+        alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }
 
@@ -756,7 +862,8 @@ struct CalibrationView: View {
         }
         isLoadingFrame = true
         let expectedID = camera.id
-        let image = await VideoFrameLoader.image(url: url, at: camera.referenceFrameSeconds)
+        let sourceTime = camera.referenceFrameSeconds + camera.timeOffsetSec
+        let image = await VideoFrameLoader.image(url: url, at: sourceTime)
         guard selectedCamera?.id == expectedID else { return }
         cameraFrameImage = image
         if let image {
@@ -764,6 +871,164 @@ struct CalibrationView: View {
             if size.isValid { session.cameras[selectedIndex].framePixelSize = size }
         }
         isLoadingFrame = false
+    }
+
+    private var previewMarkers: [PreviewMarkerDTO] {
+        guard let cameraID = selectedCamera?.id.uuidString else { return [] }
+        return personPreview?.cameras.first(where: { $0.cameraId == cameraID })?.markers ?? []
+    }
+
+    private var cameraDetectionMarkers: [CalibrationDetectionMarker] {
+        previewMarkers.compactMap { marker in
+            guard marker.bboxNorm.count == 4 else { return nil }
+            let rect = CGRect(
+                x: marker.bboxNorm[0],
+                y: marker.bboxNorm[1],
+                width: marker.bboxNorm[2] - marker.bboxNorm[0],
+                height: marker.bboxNorm[3] - marker.bboxNorm[1]
+            )
+            return CalibrationDetectionMarker(
+                id: marker.id,
+                label: marker.identityLabel,
+                point: CGPoint(x: rect.midX, y: rect.maxY),
+                bbox: rect,
+                confidence: marker.confidence,
+                isOutside: false
+            )
+        }
+    }
+
+    private var floorDetectionMarkers: [CalibrationDetectionMarker] {
+        previewMarkers.map { marker in
+            let rawX = marker.worldX / max(0.01, session.venueWidthM)
+            let rawY = marker.worldY / max(0.01, session.venueHeightM)
+            let outside = !(0...1).contains(rawX) || !(0...1).contains(rawY)
+            return CalibrationDetectionMarker(
+                id: marker.id,
+                label: marker.identityLabel,
+                point: CGPoint(
+                    x: min(0.985, max(0.015, rawX)),
+                    y: min(0.985, max(0.015, rawY))
+                ),
+                bbox: nil,
+                confidence: marker.confidence,
+                isOutside: outside
+            )
+        }
+    }
+
+    private var cameraDetectionSubtitle: String {
+        if isLoadingFrame { return "Loading frame…" }
+        if isDetectingPerson { return "Running person detection on this frame…" }
+        if let personDetectionError { return personDetectionError }
+        if personPreview != nil {
+            return previewMarkers.isEmpty
+                ? "No people detected. Click the frame to continue calibrating."
+                : "\(previewMarkers.count) people detected. Drag the numbered markers to correct the calibration."
+        }
+        return "Click to add a pair, or drag a numbered marker to move it."
+    }
+
+    private var floorDetectionSubtitle: String {
+        guard personPreview != nil else {
+            return "The whole image is mapped to \(session.widthM) × \(session.heightM) m."
+        }
+        let outside = floorDetectionMarkers.filter(\.isOutside).count
+        if outside > 0 {
+            return "\(previewMarkers.count) foot points · \(outside) outside the floor plan, check the calibration."
+        }
+        return "\(previewMarkers.count) foot points projected. Calibration markers can be dragged in any order."
+    }
+
+    private var personDetectionAccessory: AnyView? {
+        guard selectedCamera?.calibration?.isValid == true else { return nil }
+        return AnyView(
+            HStack(spacing: Space.s) {
+                if isDetectingPerson { ProgressView().controlSize(.small) }
+                Button("Deteksi Ulang", systemImage: "person.crop.rectangle") {
+                    resetPersonDetectionCache()
+                    personDetectionRefreshToken = UUID()
+                }
+                .buttonStyle(.bordered)
+                .disabled(isDetectingPerson)
+            }
+            .padding(4)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Radius.s))
+        )
+    }
+
+    @MainActor
+    private func refreshPersonDetection(forceSample: Bool) async {
+        guard let camera = selectedCamera,
+              camera.calibration?.isValid == true,
+              cameraFrameImage != nil else {
+            personPreview = nil
+            personDetectionError = nil
+            isDetectingPerson = false
+            return
+        }
+        let expectedCameraID = camera.id
+        let expectedGlobalTime = camera.referenceFrameSeconds
+        let expectedCalibration = camera.calibration
+        let requestID = UUID()
+        personDetectionRequestID = requestID
+        isDetectingPerson = true
+        personDetectionError = nil
+        defer {
+            if personDetectionRequestID == requestID { isDetectingPerson = false }
+        }
+        do {
+            let cameraDTO = try EngineRequestBuilder.camera(
+                camera,
+                globalStart: expectedGlobalTime,
+                duration: nil
+            )
+            let api = EngineAPI(http: sidecar.http)
+            let result: CalibrationPreviewResponseDTO
+            if !forceSample, let token = personPreviewToken {
+                result = try await api.reprojectCalibrationPreview(
+                    CalibrationReprojectRequestDTO(
+                        token: token,
+                        venue: EngineRequestBuilder.venue(from: session),
+                        cameras: [cameraDTO]
+                    )
+                )
+            } else {
+                result = try await api.calibrationPreview(
+                    CalibrationPreviewRequestDTO(
+                        venue: EngineRequestBuilder.venue(from: session),
+                        cameras: [cameraDTO],
+                        globalTimeSec: expectedGlobalTime
+                    )
+                )
+            }
+            try Task.checkCancellation()
+            guard personDetectionRequestID == requestID,
+                  selectedCamera?.id == expectedCameraID,
+                  selectedCamera?.referenceFrameSeconds == expectedGlobalTime,
+                  selectedCamera?.calibration == expectedCalibration else { return }
+            guard result.camera(matching: cameraDTO) != nil else {
+                throw EngineError.job(
+                    "The detection response does not match the active camera or homography. Re-run detection."
+                )
+            }
+            personPreview = result
+            personPreviewToken = result.token
+        } catch is CancellationError {
+            return
+        } catch EngineError.http(404, _) {
+            guard personDetectionRequestID == requestID else { return }
+            personDetectionError = "The detection endpoint is not active. Restart the latest backend."
+        } catch {
+            guard personDetectionRequestID == requestID else { return }
+            personDetectionError = "Detection failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func resetPersonDetectionCache() {
+        personPreview = nil
+        personPreviewToken = nil
+        personDetectionError = nil
     }
 
     private func loadFloorPlanImage(_ url: URL) -> NSImage? {
@@ -795,21 +1060,21 @@ private struct CalibrationProfileHistorySheet: View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack {
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Riwayat Kalibrasi").font(.title2.bold())
-                    Text("Semua snapshot disimpan lokal bersama floor plan-nya.")
+                    Text("Calibration History").font(.title2.bold())
+                    Text("All snapshots are stored locally together with their floor plan.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Selesai") { dismiss() }
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
 
             if profiles.isEmpty {
                 ContentUnavailableView(
-                    "Belum Ada Profil",
+                    "No Profiles Yet",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Profil yang disimpan akan muncul di sini.")
+                    description: Text("Saved profiles will appear here.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -822,18 +1087,18 @@ private struct CalibrationProfileHistorySheet: View {
                             HStack(spacing: Space.xs) {
                                 Text(profile.displayName).font(.headline).lineLimit(1)
                                 if activeProfileID == profile.id {
-                                    Text("Aktif")
+                                    Text("Active")
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(Theme.accent)
                                 }
                             }
-                            Text("\(profile.cameraCount) kamera • \(profile.sourceName) • \(profile.savedAt.formatted(date: .abbreviated, time: .shortened))")
+                            Text("\(profile.cameraCount) cameras • \(profile.sourceName) • \(profile.savedAt.formatted(date: .abbreviated, time: .shortened))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                         Spacer()
-                        Button("Muat") {
+                        Button("Load") {
                             dismiss()
                             DispatchQueue.main.async { onLoad(profile) }
                         }
@@ -844,14 +1109,14 @@ private struct CalibrationProfileHistorySheet: View {
                             Image(systemName: "square.and.arrow.up")
                         }
                         .buttonStyle(.borderless)
-                        .help("Ekspor profil")
+                        .help("Export profile")
                         Button(role: .destructive) {
                             deletionCandidate = profile
                         } label: {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
-                        .help("Hapus profil")
+                        .help("Delete profile")
                     }
                     .padding(.vertical, Space.xs)
                 }
@@ -860,20 +1125,20 @@ private struct CalibrationProfileHistorySheet: View {
         .padding(Space.l)
         .frame(minWidth: 720, minHeight: 430)
         .alert(
-            "Hapus profil kalibrasi?",
+            "Delete this calibration profile?",
             isPresented: Binding(
                 get: { deletionCandidate != nil },
                 set: { if !$0 { deletionCandidate = nil } }
             ),
             presenting: deletionCandidate
         ) { profile in
-            Button("Hapus", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 onDelete(profile)
                 deletionCandidate = nil
             }
-            Button("Batal", role: .cancel) { deletionCandidate = nil }
+            Button("Cancel", role: .cancel) { deletionCandidate = nil }
         } message: { profile in
-            Text("\(profile.displayName) dan salinan floor plan-nya akan dihapus dari riwayat.")
+            Text("\(profile.displayName) and its floor plan copy will be removed from history.")
         }
     }
 }
@@ -906,6 +1171,15 @@ private struct ValidationPoint: Identifiable {
     let isInlier: Bool
 }
 
+private struct CalibrationDetectionMarker: Identifiable {
+    let id: String
+    let label: String
+    let point: CGPoint
+    let bbox: CGRect?
+    let confidence: Double
+    let isOutside: Bool
+}
+
 private struct CalibrationCanvas: View {
     let title: String
     let subtitle: String
@@ -913,12 +1187,14 @@ private struct CalibrationCanvas: View {
     let sourceSize: CGSize?
     let points: [NormPoint]
     let projectedPoints: [ValidationPoint]
+    let detectionMarkers: [CalibrationDetectionMarker]
     let accent: Color
     let canInteract: Bool
     let canvasAccessory: AnyView?
     let footerAccessory: AnyView?
     let emptyState: AnyView?
     let onAdd: (CGPoint) -> Void
+    let onMovePoint: (Int, CGPoint, Bool) -> Void
     let onDeletePair: (Int) -> Void
 
     @State private var zoom: CGFloat = 1
@@ -926,6 +1202,8 @@ private struct CalibrationCanvas: View {
     @State private var pan: CGSize = .zero
     @State private var basePan: CGSize = .zero
     @State private var hoveredIndex: Int?
+    @State private var dragCandidateIndex: Int?
+    @State private var draggedPointIndex: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.s) {
@@ -988,13 +1266,21 @@ private struct CalibrationCanvas: View {
                 .stroke(accent.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
             }
             ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
-                PointMarker(number: index + 1, color: accent, deleteMode: hoveredIndex == index)
+                PointMarker(
+                    number: index + 1,
+                    color: accent,
+                    deleteMode: hoveredIndex == index && draggedPointIndex != index,
+                    isDragging: draggedPointIndex == index
+                )
                     .position(x: point.x * size.width, y: point.y * size.height)
                     .onHover { hoveredIndex = $0 ? index : nil }
             }
             ForEach(Array(projectedPoints.enumerated()), id: \.element.id) { index, point in
                 ProjectedMarker(number: index + 1, isInlier: point.isInlier)
                     .position(x: point.point.x * size.width, y: point.point.y * size.height)
+            }
+            ForEach(detectionMarkers) { marker in
+                DetectionMarkerView(marker: marker, canvasSize: size)
             }
         }
         .clipShape(Rectangle())
@@ -1005,12 +1291,34 @@ private struct CalibrationCanvas: View {
             .onChanged { value in
                 guard canInteract else { return }
                 let distance = hypot(value.translation.width, value.translation.height)
-                if distance > 6, zoom > 1 {
+                let candidate: Int? = {
+                    if let dragCandidateIndex { return dragCandidateIndex }
+                    guard let start = normalizedPoint(value.startLocation, in: rect) else { return nil }
+                    let found = nearestPoint(to: start, in: rect)
+                    dragCandidateIndex = found
+                    return found
+                }()
+                if let candidate, distance > 1 {
+                    draggedPointIndex = candidate
+                    if let normalized = normalizedPoint(value.location, in: rect, clamped: true) {
+                        onMovePoint(candidate, normalized, false)
+                    }
+                } else if candidate == nil, distance > 6, zoom > 1 {
                     pan = clampedPan(CGSize(width: basePan.width + value.translation.width, height: basePan.height + value.translation.height), rect: rect)
                 }
             }
             .onEnded { value in
                 guard canInteract else { return }
+                defer {
+                    dragCandidateIndex = nil
+                    draggedPointIndex = nil
+                }
+                if let draggedPointIndex {
+                    if let normalized = normalizedPoint(value.location, in: rect, clamped: true) {
+                        onMovePoint(draggedPointIndex, normalized, true)
+                    }
+                    return
+                }
                 let distance = hypot(value.translation.width, value.translation.height)
                 if distance > 6, zoom > 1 { basePan = pan; return }
                 guard let normalized = normalizedPoint(value.location, in: rect) else { return }
@@ -1056,12 +1364,19 @@ private struct CalibrationCanvas: View {
         return CGRect(x: (container.width - size.width) / 2, y: (container.height - size.height) / 2, width: size.width, height: size.height)
     }
 
-    private func normalizedPoint(_ point: CGPoint, in rect: CGRect) -> CGPoint? {
+    private func normalizedPoint(_ point: CGPoint, in rect: CGRect, clamped: Bool = false) -> CGPoint? {
         guard rect.width > 0, rect.height > 0 else { return nil }
         let x = ((point.x - rect.midX - pan.width) / zoom) + rect.midX
         let y = ((point.y - rect.midY - pan.height) / zoom) + rect.midY
+        let normalized = CGPoint(x: (x - rect.minX) / rect.width, y: (y - rect.minY) / rect.height)
+        if clamped {
+            return CGPoint(
+                x: min(1, max(0, normalized.x)),
+                y: min(1, max(0, normalized.y))
+            )
+        }
         guard rect.contains(CGPoint(x: x, y: y)) else { return nil }
-        return CGPoint(x: (x - rect.minX) / rect.width, y: (y - rect.minY) / rect.height)
+        return normalized
     }
 
     private func nearestPoint(to point: CGPoint, in rect: CGRect) -> Int? {
@@ -1088,20 +1403,62 @@ private struct CalibrationCanvas: View {
     }
 }
 
+private struct DetectionMarkerView: View {
+    let marker: CalibrationDetectionMarker
+    let canvasSize: CGSize
+
+    var body: some View {
+        ZStack {
+            if let bbox = marker.bbox {
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(Color.cyan, lineWidth: 2)
+                    .frame(
+                        width: max(2, bbox.width * canvasSize.width),
+                        height: max(2, bbox.height * canvasSize.height)
+                    )
+                    .position(x: bbox.midX * canvasSize.width, y: bbox.midY * canvasSize.height)
+            }
+            VStack(spacing: 2) {
+                Text(marker.isOutside ? "\(marker.label) · outside" : marker.label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(marker.isOutside ? Color.red : Color.cyan, in: Capsule())
+                Circle()
+                    .fill(marker.isOutside ? Color.red : Color.cyan)
+                    .frame(width: 11, height: 11)
+                    .overlay(Circle().stroke(.white, lineWidth: 2))
+            }
+            .position(x: marker.point.x * canvasSize.width, y: marker.point.y * canvasSize.height)
+        }
+        .frame(width: canvasSize.width, height: canvasSize.height)
+        .allowsHitTesting(false)
+        .help("\(marker.label) · confidence \(Int((marker.confidence * 100).rounded()))%")
+    }
+}
+
 private struct PointMarker: View {
     let number: Int
     let color: Color
     let deleteMode: Bool
+    let isDragging: Bool
 
     var body: some View {
         ZStack {
-            Circle().fill(deleteMode ? Color.red : color).frame(width: deleteMode ? 26 : 22, height: deleteMode ? 26 : 22)
+            Circle()
+                .fill(isDragging ? Color.green : (deleteMode ? Color.red : color))
+                .frame(width: (deleteMode || isDragging) ? 26 : 22, height: (deleteMode || isDragging) ? 26 : 22)
                 .overlay(Circle().stroke(.white, lineWidth: 1.5))
-            if deleteMode { Image(systemName: "xmark").font(.caption.bold()).foregroundStyle(.white) }
+            if isDragging {
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+            } else if deleteMode { Image(systemName: "xmark").font(.caption.bold()).foregroundStyle(.white) }
             else { Text("\(number)").font(.caption2.bold()).foregroundStyle(.white) }
         }
         .shadow(radius: 1)
-        .help("Klik untuk menghapus pasangan titik \(number)")
+        .help("Drag to move point \(number) • click to delete its pair")
     }
 }
 

@@ -23,6 +23,7 @@ enum CalibrationProfileStore {
                 cameraID: camera.id,
                 label: camera.label,
                 referenceFrameSeconds: camera.referenceFrameSeconds,
+                timeOffsetSec: camera.timeOffsetSec,
                 imageSize: imageSize,
                 sourceFileName: camera.url?.lastPathComponent,
                 calibration: calibration
@@ -37,14 +38,15 @@ enum CalibrationProfileStore {
             venueName: session.venueName.isEmpty ? nil : session.venueName,
             worldBoundsM: PixelSize(width: session.venueWidthM, height: session.venueHeightM),
             floorplan: FloorplanProfile(
-                sourceName: session.usesScaledCanvas ? "Canvas berskala" : (session.floorPlanName ?? "Floor plan"),
+                sourceName: session.usesScaledCanvas ? "Scaled canvas" : (session.floorPlanName ?? "Floor plan"),
                 pixelSize: floorSize,
                 usesCanvas: session.usesScaledCanvas,
                 assetFileName: nil
             ),
             homographyFloorToWorld: floorToWorld,
             homographyWorldToFloor: worldToFloor,
-            cameras: profiles
+            cameras: profiles,
+            tables: session.tableAnnotations
         )
     }
 
@@ -54,7 +56,7 @@ enum CalibrationProfileStore {
         guard profile.worldBoundsM.width > 0, profile.worldBoundsM.height > 0 else { throw CalibrationError.invalidProfile }
         guard profile.floorplan.pixelSize.isValid else { throw CalibrationError.invalidProfile }
         guard profile.cameras.count == session.cameras.count, !session.cameras.isEmpty else {
-            throw CalibrationError.cameraMismatch("jumlah kamera berbeda")
+            throw CalibrationError.cameraMismatch("camera count differs")
         }
         if !profile.floorplan.usesCanvas {
             guard let floorPlanURL, FileManager.default.fileExists(atPath: floorPlanURL.path) else {
@@ -73,7 +75,7 @@ enum CalibrationProfileStore {
             }
             let frameSize = current.framePixelSize?.isValid == true ? current.framePixelSize! : saved.imageSize
             guard compatibleAspectRatio(frameSize, saved.imageSize) else {
-                throw CalibrationError.cameraMismatch("rasio resolusi \(current.label) berbeda")
+                throw CalibrationError.cameraMismatch("resolution ratio of \(current.label) differs")
             }
 
             let imagePoints = saved.calibration.cameraPointsPx.map {
@@ -89,10 +91,12 @@ enum CalibrationProfileStore {
                 },
                 floorSize: profile.floorplan.pixelSize,
                 venueWidthM: profile.worldBoundsM.width,
-                venueHeightM: profile.worldBoundsM.height
+                venueHeightM: profile.worldBoundsM.height,
+                cameraImageSize: frameSize
             )
             guard recalibrated.isValid else { throw CalibrationError.invalidProfile }
             stagedCameras[sessionIndex].referenceFrameSeconds = max(0, saved.referenceFrameSeconds)
+            stagedCameras[sessionIndex].timeOffsetSec = saved.timeOffsetSec ?? 0
             stagedCameras[sessionIndex].framePixelSize = frameSize
             stagedCameras[sessionIndex].imagePoints = imagePoints
             stagedCameras[sessionIndex].planePoints = planePoints
@@ -105,6 +109,14 @@ enum CalibrationProfileStore {
         session.floorPlanURL = profile.floorplan.usesCanvas ? nil : floorPlanURL
         session.floorPlanName = profile.floorplan.usesCanvas ? nil : profile.floorplan.sourceName
         session.floorPlanPixelSize = profile.floorplan.usesCanvas ? nil : profile.floorplan.pixelSize
+        session.tableAnnotations = profile.tables ?? []
+        // Nama tempat ikut tersimpan di profil tetapi selama ini tidak pernah dibaca
+        // balik. Isi hanya kalau sesi masih kosong supaya ketikan pengguna menang.
+        if session.venueName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let savedVenue = profile.venueName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !savedVenue.isEmpty {
+            session.venueName = savedVenue
+        }
         session.cameras = stagedCameras
         return stagedCameras.filter(\.isCalibrated).count
     }
@@ -155,7 +167,7 @@ enum CalibrationProfileStore {
             unused.remove(matched)
             result.append((index, matched))
         }
-        guard unused.isEmpty else { throw CalibrationError.cameraMismatch("ada kamera profil yang tidak terpakai") }
+        guard unused.isEmpty else { throw CalibrationError.cameraMismatch("some profile cameras are unused") }
         return result
     }
 
