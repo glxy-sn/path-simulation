@@ -586,7 +586,7 @@ private struct HeatmapTab: View {
     let observations: [TrackObservation]
     let fallbackBlobs: [HeatBlob]
     var background: NSImage? = nil
-    @State private var mode = 2   // default: gabungan (Activity)
+    @State private var mode = 0   // default: Foot Traffic
 
     var body: some View {
         let blobs = observations.isEmpty ? fallbackBlobs
@@ -596,7 +596,6 @@ private struct HeatmapTab: View {
                 .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
 
             Picker("", selection: $mode) {
-                Text("Activity").tag(2)
                 Text("Foot Traffic").tag(0)
                 Text("Time Spent").tag(1)
             }

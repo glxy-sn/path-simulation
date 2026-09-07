@@ -41,6 +41,9 @@ fi
 YOLO_BASE="$BACKEND/yolo11s.pt"
 YOLO_FINETUNED="$BACKEND/models/yolo11s-finetuned-stage2-caviar.pt"
 OSNET="$BACKEND/osnet_x0_25_msmt17.pt"
+PRIVACY_NAME="deeplabv3_mobilenet_v3_large-fc3c493d.pth"
+PRIVACY_MODEL="$BACKEND/models/$PRIVACY_NAME"
+[[ -f "$PRIVACY_MODEL" ]] || fail "Model privasi tidak ada di $PRIVACY_MODEL"
 [[ -f "$YOLO_BASE" ]] || fail "yolo11s.pt tidak ada di $BACKEND"
 [[ -f "$YOLO_FINETUNED" ]] || fail "model fine-tuned tidak ada di $YOLO_FINETUNED"
 [[ -f "$OSNET" ]] || fail "osnet_x0_25_msmt17.pt tidak ada di $OSNET"
@@ -77,6 +80,7 @@ emit() {
     "$(emit yolo11s.pt file models yolo11s.pt "$YOLO_BASE" "$URL_YOLOS")"
     "$(emit yolo11s-finetuned-stage2-caviar.pt file models yolo11s-finetuned-stage2-caviar.pt "$YOLO_FINETUNED" "$BASE_URL/yolo11s-finetuned-stage2-caviar.pt")"
     "$(emit osnet_x0_25_msmt17.pt file models osnet_x0_25_msmt17.pt "$OSNET" "$BASE_URL/osnet_x0_25_msmt17.pt")"
+    "$(emit $PRIVACY_NAME file models $PRIVACY_NAME "$PRIVACY_MODEL" "https://download.pytorch.org/models/$PRIVACY_NAME")"
     "$(emit $GGUF file models $GGUF "$GGUF_SRC" "$URL_QWEN")"
   )
   print -l ${(j:,\n:)entries}

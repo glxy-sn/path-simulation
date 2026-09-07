@@ -96,6 +96,10 @@ final class Sidecar {
         environment["MPLCONFIGDIR"] = matplotlibCache.path
         environment["YOLO_CONFIG_DIR"] = ultralyticsCache.path
         environment["PYTHONUNBUFFERED"] = "1"
+        // Xcode's Metal diagnostics are for the Swift app. Do not inject them
+        // into third-party PyTorch/llama.cpp kernels in the Python subprocess.
+        environment["MTL_DEBUG_LAYER"] = "0"
+        environment["MTL_SHADER_VALIDATION"] = "0"
         // Berkas .pyc yang ditulis ke dalam bundel merusak segel code signing,
         // sehingga macOS menolak aplikasi dengan pesan "is damaged" di Mac lain.
         environment["PYTHONDONTWRITEBYTECODE"] = "1"

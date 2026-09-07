@@ -10,7 +10,7 @@ set -euo pipefail
 UI_ROOT=${0:A:h:h}
 WORKSPACE=${UI_ROOT:h}
 RUNTIME="$WORKSPACE/dist/python"
-BACKEND="$WORKSPACE/backend-shafa"
+BACKEND="$WORKSPACE/be/path-simulation"
 OUT="$WORKSPACE/dist/Foodcourt.app"
 DERIVED="$WORKSPACE/dist/DerivedData"
 
@@ -71,6 +71,10 @@ for w in $MODELS; do
   [[ -f "$BACKEND/$w" ]] || fail "Bobot $w tidak ada di $BACKEND"
   cp "$BACKEND/$w" "$RES/backend/models/$w"
 done
+
+PRIVACY_NAME="deeplabv3_mobilenet_v3_large-fc3c493d.pth"
+[[ -f "$BACKEND/models/$PRIVACY_NAME" ]] || fail "Model privasi tidak tersedia"
+cp "$BACKEND/models/$PRIVACY_NAME" "$RES/backend/models/$PRIVACY_NAME"
 
 if [[ -f "$GGUF_SRC" ]]; then
   info "Menyalin $GGUF (4.7 GB, sabar)…"
