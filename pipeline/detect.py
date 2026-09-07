@@ -8,13 +8,13 @@ import cv2
 from ultralytics import YOLO
 
 
-def load_model(cfg):
+def load_model(cfg, model_path=None):
     try:
         import torch
         torch.set_num_threads(1)     # hindari over-subscription thread (segfault/lambat)
     except Exception:
         pass
-    return YOLO(cfg.YOLO_MODEL)
+    return YOLO(str(model_path or cfg.YOLO_MODEL))
 
 
 def seek_accurate(cap, target_frame):

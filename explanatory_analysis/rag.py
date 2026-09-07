@@ -287,6 +287,14 @@ class LocalRAG:
             "anonim unik, bukan jumlah orang terverifikasi. Jangan mengarang metrik, kondisi, atau kesimpulan yang tidak ada di data. "
             "CCTV tidak membuktikan identitas orang, kenyamanan, kebisingan, kepuasan, pembelian, atau sebab-akibat kecuali data memang "
             "menyediakannya. Jawab ringkas tetapi cukup menjelaskan alasan. Jangan tampilkan proses berpikir internal. "
+            "Semua penjelasan dan alasan yang dibaca pengguna wajib menggunakan bahasa sehari-hari yang mudah dipahami orang awam. "
+            "Parafrase istilah dalam bukti, jangan salin nama variabel, key JSON, nama file, atau istilah kode ke dalam jawaban. "
+            "Contoh: visitCount menjadi jumlah kunjungan, uniqueVisitors menjadi jumlah pengunjung yang dibedakan oleh sistem "
+            "(perkiraan dari jejak anonim), meanVisitDurationSec menjadi rata-rata lama kunjungan dalam detik, "
+            "totalDwellSec menjadi total waktu yang dihabiskan, relativeIntensity menjadi tingkat keramaian relatif. "
+            "Jelaskan arti ukuran lain secara natural juga. Pertahankan angka, satuan, ketidakpastian, dan batas bukti. "
+            "Misalnya: Meja 1 lebih sering dikunjungi, dengan 20 kunjungan, dibandingkan 8 kunjungan di Meja 2. "
+            "Aturan bahasa ini tidak mengubah format marker kontrol berikut. "
             "Pada akhir jawaban, tulis marker [[SUPPORT:supported]], [[SUPPORT:partially_supported]], atau [[SUPPORT:unsupported]] "
             "sesuai kecukupan data, lalu [[AREA_ID:id-yang-persis]] jika satu area paling relevan untuk highlight; gunakan [[AREA_ID:none]] "
             "jika tidak ada satu area. Marker bukan bagian dari jawaban pengguna."
@@ -327,6 +335,21 @@ class LocalRAG:
             flags=re.I,
         ).strip()
         answer = self._hide_internal_area_ids(answer)
+        # Guard common metric names if the model copies evidence despite the prompt.
+        metric_labels = {
+            "visitCount": "jumlah kunjungan",
+            "uniqueVisitors": "jumlah pengunjung yang dibedakan oleh sistem berdasarkan jejak anonim",
+            "meanVisitDurationSec": "rata-rata lama kunjungan (detik)",
+            "totalDwellSec": "total waktu yang dihabiskan (detik)",
+            "relativeIntensity": "tingkat keramaian relatif",
+            "totalPathLengthM": "total jarak pergerakan (meter)",
+            "tableAreaM2": "luas meja (meter persegi)",
+            "interactionAreaM2": "luas area sekitar meja (meter persegi)",
+            "trackCount": "jumlah jejak anonim",
+        }
+        for name, label in metric_labels.items():
+            answer = re.sub(r"(?<!\w)`?" + re.escape(name) + r"`?(?!\w)", label, answer)
+
         if not answer:
             raise RuntimeError("Qwen3-8B tidak menghasilkan jawaban yang dapat ditampilkan.")
         selected_id = None
@@ -389,8 +412,8 @@ class LocalRAG:
             "question": question,
             "supportLevel": support_level,
             "dataGrounding": "grounded" if evidence or self.package.areas else "general_knowledge",
-            "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
-            "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+            "interpretation": "Jawaban menggunakan hasil pengamatan pada area yang relevan dengan pertanyaan Anda.",
+            "assumption": "Area dipilih berdasarkan data pengamatan yang tersedia. Penjelasan tidak memastikan niat atau pengalaman pengunjung.",
             "alternativeInterpretations": [],
             "answer": answer,
             "selectedAreaId": selected_id,

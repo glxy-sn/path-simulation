@@ -3,6 +3,10 @@
 import os
 from pathlib import Path
 
+from model_registry import DEFAULT_DETECTION_MODEL_ID, resolve_detection_model
+
+DEFAULT_YOLO_MODEL = resolve_detection_model(DEFAULT_DETECTION_MODEL_ID).path
+
 
 def _default_device() -> str:
     if os.getenv("PRISM_DEVICE"):
@@ -37,7 +41,7 @@ class Config:
     DEVICE = _default_device()
     HALF = False
 
-    YOLO_MODEL = os.getenv("PRISM_YOLO", "yolo11x.pt")
+    YOLO_MODEL = os.getenv("PRISM_YOLO", str(DEFAULT_YOLO_MODEL))
     IMGSZ = int(os.getenv("PRISM_IMGSZ", "1920"))
     CONF = float(os.getenv("PRISM_CONF", "0.10"))
     IOU = float(os.getenv("PRISM_IOU", "0.70"))
@@ -51,7 +55,9 @@ class Config:
     REID_MAX_SAMPLES = int(os.getenv("PRISM_REID_MAX_SAMPLES", "12"))
     REID_MIN_SAMPLES = int(os.getenv("PRISM_REID_MIN_SAMPLES", "3"))
 
-    PREVIEW_YOLO_MODEL = os.getenv("PRISM_PREVIEW_YOLO", "yolo11s.pt")
+    PREVIEW_YOLO_MODEL = os.getenv(
+        "PRISM_PREVIEW_YOLO", str(DEFAULT_YOLO_MODEL)
+    )
     PREVIEW_IMGSZ = int(os.getenv("PRISM_PREVIEW_IMGSZ", "960"))
     PREVIEW_SAMPLE_DELTA_SEC = float(os.getenv("PRISM_PREVIEW_DELTA", "0.5"))
     PREVIEW_CACHE_TTL_SEC = float(os.getenv("PRISM_PREVIEW_CACHE_TTL", "600"))

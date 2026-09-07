@@ -1,0 +1,233 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area arus 1 memiliki totalPathLengthM terpanjang sebesar 172,093 meter. Dari area kategori flow_hotspot (Area arus 1 hingga Area arus 5), nilai totalPathLengthM masing-masing adalah 172,093 m (Area arus 1), 53,7501 m (Area arus 2), 48,7552 m (Area arus 3), 29,8407 m (Area arus 4), dan 18,242 m (Area arus 5). Area arus rendah 1 (kategori low_flow_area) memiliki totalPathLengthM 64,7587 m, tetapi bukan flow area.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T072912.793054Z-916cad71/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T072912.793054Z-916cad71/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T072912.793054Z-916cad71/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T072912.793054Z-916cad71/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T072912.793054Z-916cad71",
+    "runId": "20260813T072912.793054Z-916cad71"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0017",
+    "72ebb6668052-v2-evidence-0020",
+    "72ebb6668052-v2-evidence-0018",
+    "72ebb6668052-v2-evidence-0019",
+    "72ebb6668052-v2-evidence-0016",
+    "72ebb6668052-v2-evidence-0021"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0017",
+      "72ebb6668052-v2-evidence-0020",
+      "72ebb6668052-v2-evidence-0018",
+      "72ebb6668052-v2-evidence-0019",
+      "72ebb6668052-v2-evidence-0016",
+      "72ebb6668052-v2-evidence-0021"
+    ],
+    "selectedAreaIdReportedByModel": "flow-01",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+    "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui."
+  ],
+  "metricSummary": {
+    "meanSpeedMps": "0.726",
+    "meanVisitDurationSec": "51.4",
+    "medianVisitDurationSec": "10.6",
+    "p95VisitDurationSec": "267",
+    "pointCount": "1.16e+03",
+    "relativeIntensity": "1",
+    "totalPathLengthM": "172",
+    "uniqueVisitors": "18",
+    "visitCount": "52"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which flow area has the longest total path length?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "flow-01",
+    "confidence": 0.8741473161992697,
+    "confidenceBasis": "density_contour_with_unique_visitor_support",
+    "geometryM": {
+      "areaM2": 7.3875,
+      "centroid": [
+        5.405492808798647,
+        5.287896926113934
+      ],
+      "points": [
+        [
+          6.325,
+          7.3500000000000005
+        ],
+        [
+          6.0,
+          7.375
+        ],
+        [
+          5.5,
+          6.925000000000001
+        ],
+        [
+          5.2,
+          6.875
+        ],
+        [
+          4.65,
+          6.575
+        ],
+        [
+          4.2250000000000005,
+          6.5
+        ],
+        [
+          4.275,
+          5.45
+        ],
+        [
+          4.125,
+          4.9
+        ],
+        [
+          4.275,
+          4.6000000000000005
+        ],
+        [
+          4.325,
+          4.25
+        ],
+        [
+          4.4750000000000005,
+          3.95
+        ],
+        [
+          4.9750000000000005,
+          3.45
+        ],
+        [
+          5.175000000000001,
+          2.85
+        ],
+        [
+          5.45,
+          2.6750000000000003
+        ],
+        [
+          5.6000000000000005,
+          2.6750000000000003
+        ],
+        [
+          5.825,
+          2.85
+        ],
+        [
+          5.875,
+          3.35
+        ],
+        [
+          6.075,
+          3.8000000000000003
+        ],
+        [
+          6.075,
+          4.25
+        ],
+        [
+          5.9750000000000005,
+          4.6000000000000005
+        ],
+        [
+          5.9750000000000005,
+          5.550000000000001
+        ],
+        [
+          6.15,
+          5.825
+        ],
+        [
+          6.5,
+          6.025
+        ],
+        [
+          6.775,
+          6.300000000000001
+        ],
+        [
+          6.875,
+          6.550000000000001
+        ],
+        [
+          7.075,
+          6.75
+        ],
+        [
+          7.075,
+          6.9
+        ],
+        [
+          6.9,
+          7.075
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "flow_hotspot",
+    "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+    "metrics": {
+      "meanSpeedMps": 0.7257030292652749,
+      "meanVisitDurationSec": 51.36909479995852,
+      "medianVisitDurationSec": 10.557331745337173,
+      "p95VisitDurationSec": 266.6269281107288,
+      "pointCount": 1159,
+      "relativeIntensity": 1.0,
+      "totalPathLengthM": 172.09347845180454,
+      "uniqueVisitors": 18,
+      "visitCount": 52
+    },
+    "timeRangeSec": {
+      "end": 542.6453632425611,
+      "start": 2.198863027127255
+    }
+  },
+  "selectedAreaId": "flow-01",
+  "sessionId": "eval-flow-high-02",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 582,
+      "durationMs": 55446.1479169986,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6723,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 55449.91187501
+  }
+}

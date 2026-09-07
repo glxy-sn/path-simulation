@@ -1,0 +1,14 @@
+{
+  "catalogAreaCount": 39,
+  "mode": "qwen_general_reasoning",
+  "retrievedEvidenceCardIds": [
+    "72ebb6668052-v2-evidence-0015",
+    "72ebb6668052-v2-evidence-0014",
+    "72ebb6668052-v2-evidence-0013",
+    "72ebb6668052-v2-evidence-0003",
+    "72ebb6668052-v2-evidence-0001",
+    "72ebb6668052-v2-evidence-0002"
+  ],
+  "selectedAreaIdReportedByModel": "crowd-02",
+  "thinkingAvailable": true
+}

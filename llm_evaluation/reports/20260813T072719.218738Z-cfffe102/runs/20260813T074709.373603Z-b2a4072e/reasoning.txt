@@ -1,0 +1,13 @@
+Okay, let's tackle this question. The user is asking which table has the largest interaction area. First, I need to look through the provided data to find all the tables mentioned. The areaCatalog section lists several areas, including tables. Let me scan through each entry.
+
+Looking at the areaCatalog, there are entries for table-01 to table-05. Each of these has an "interactionAreaM2" metric. The question is about the largest interaction area, so I need to compare these values. 
+
+Table-01 has interactionAreaM2 of 8.63305, table-02 is 8.61924, table-03 is 8.63357, table-04 is 7.97972, and table-05 is 7.99474. Comparing these numbers, table-03 has the highest value at 8.63357. 
+
+Wait, but I should make sure there aren't any other tables or areas that might be considered. The other areas like presence-01 to presence-08, crowd-01 to crowd-03, flow-01 to flow-05, and others are not tables, so they can be excluded. The stop clusters and route archetypes are also not tables. 
+
+So the tables are only the five mentioned. The interactionAreaM2 for table-03 is the largest. The user might be interested in the size of the interaction area, which is directly provided here. There's no need to consider other metrics like visit duration or unique visitors since the question specifically asks about the interaction area. 
+
+I should also check if there's any other data in the retrievedEvidence that might mention interaction areas, but looking at the evidence, the metrics for each table's interaction area are already listed. The evidence cards reference the tables by their area IDs and include the interactionAreaM2 values. 
+
+Therefore, the answer should be table-03 with the highest interactionAreaM2. The other tables have slightly lower values. No other tables are present in the data, so this is the correct answer. The marker should be [[SUPPORT:supported]] since the data directly provides the interaction area metrics, and [[AREA_ID:table-03]] as the relevant area.

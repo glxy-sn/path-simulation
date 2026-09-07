@@ -1,0 +1,398 @@
+{
+  "cards": [
+    {
+      "areaId": "table-05",
+      "cardId": "72ebb6668052-v2-evidence-0042",
+      "confidence": 1.0,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.0422439341734333,
+        "centroid": [
+          5.261112424636481,
+          1.2950944652598002
+        ],
+        "points": [
+          [
+            4.325139146567718,
+            1.0296846011131722
+          ],
+          [
+            6.175788497217068,
+            1.0018552875695734
+          ],
+          [
+            6.217532467532468,
+            1.558441558441558
+          ],
+          [
+            4.325139146567718,
+            1.5862708719851577
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+      "metrics": {
+        "interactionAreaM2": 7.994735586254205,
+        "meanVisitDurationSec": 0.0,
+        "medianVisitDurationSec": 0.0,
+        "p95VisitDurationSec": 0.0,
+        "tableAreaM2": 1.0422439341734333,
+        "uniqueVisitors": 0,
+        "visitCount": 0
+      },
+      "questionTypes": [
+        "table_effectiveness",
+        "board_game_table"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.18775628867121943,
+      "statement": "Meja teranotasi di sekitar (5.26 m, 1.30 m) dengan area ID table-05."
+    },
+    {
+      "areaId": "table-03",
+      "cardId": "72ebb6668052-v2-evidence-0040",
+      "confidence": 1.0,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.6931865510582709,
+        "centroid": [
+          6.767817761753073,
+          4.0014702278853225
+        ],
+        "points": [
+          [
+            6.301020408163266,
+            3.1029684601113168
+          ],
+          [
+            7.219387755102041,
+            3.075139146567718
+          ],
+          [
+            7.247217068645641,
+            4.8979591836734695
+          ],
+          [
+            6.301020408163266,
+            4.911873840445269
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+      "metrics": {
+        "interactionAreaM2": 8.63357213204132,
+        "meanVisitDurationSec": 65.35801410130188,
+        "medianVisitDurationSec": 7.9947751490615815,
+        "p95VisitDurationSec": 323.188785400818,
+        "tableAreaM2": 1.6931865510582709,
+        "uniqueVisitors": 7,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "table_effectiveness",
+        "board_game_table"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16435557327614186,
+      "statement": "Meja teranotasi di sekitar (6.77 m, 4.00 m) dengan area ID table-03."
+    },
+    {
+      "areaId": "table-01",
+      "cardId": "72ebb6668052-v2-evidence-0038",
+      "confidence": 1.0,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.6928961245486556,
+        "centroid": [
+          2.1816777912837018,
+          3.96464328178908
+        ],
+        "points": [
+          [
+            1.7091836734693868,
+            3.0612244897959187
+          ],
+          [
+            2.655380333951762,
+            3.0612244897959187
+          ],
+          [
+            2.6414656771799616,
+            4.87012987012987
+          ],
+          [
+            1.7230983302411862,
+            4.88404452690167
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+      "metrics": {
+        "interactionAreaM2": 8.633048887066225,
+        "meanVisitDurationSec": 15.502239031402615,
+        "medianVisitDurationSec": 8.894187353331077,
+        "p95VisitDurationSec": 53.39067484492415,
+        "tableAreaM2": 1.6928961245486556,
+        "uniqueVisitors": 8,
+        "visitCount": 28
+      },
+      "questionTypes": [
+        "table_effectiveness",
+        "board_game_table"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.1612220230679143,
+      "statement": "Meja teranotasi di sekitar (2.18 m, 3.96 m) dengan area ID table-01."
+    },
+    {
+      "areaId": "table-04",
+      "cardId": "72ebb6668052-v2-evidence-0041",
+      "confidence": 1.0,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 0.9814479848272585,
+        "centroid": [
+          2.646918718347289,
+          1.280898279073461
+        ],
+        "points": [
+          [
+            1.7091836734693868,
+            1.0296846011131722
+          ],
+          [
+            3.601576994434137,
+            1.0157699443413728
+          ],
+          [
+            3.6154916512059363,
+            1.516697588126159
+          ],
+          [
+            1.695269016697587,
+            1.558441558441558
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+      "metrics": {
+        "interactionAreaM2": 7.979724180344841,
+        "meanVisitDurationSec": 18.132270502104543,
+        "medianVisitDurationSec": 12.693436565689153,
+        "p95VisitDurationSec": 40.1292502450724,
+        "tableAreaM2": 0.9814479848272585,
+        "uniqueVisitors": 8,
+        "visitCount": 24
+      },
+      "questionTypes": [
+        "table_effectiveness",
+        "board_game_table"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.15825550500998292,
+      "statement": "Meja teranotasi di sekitar (2.65 m, 1.28 m) dengan area ID table-04."
+    },
+    {
+      "areaId": "table-02",
+      "cardId": "72ebb6668052-v2-evidence-0039",
+      "confidence": 1.0,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.674212019096726,
+        "centroid": [
+          4.4851576994434135,
+          3.9795918367346936
+        ],
+        "points": [
+          [
+            4.019016697588125,
+            3.075139146567718
+          ],
+          [
+            4.937384044526901,
+            3.0612244897959187
+          ],
+          [
+            4.9512987012987,
+            4.88404452690167
+          ],
+          [
+            4.032931354359926,
+            4.8979591836734695
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+      "metrics": {
+        "interactionAreaM2": 8.619239945728348,
+        "meanVisitDurationSec": 25.88275847607558,
+        "medianVisitDurationSec": 10.193338315053609,
+        "p95VisitDurationSec": 74.52146695573093,
+        "tableAreaM2": 1.674212019096726,
+        "uniqueVisitors": 12,
+        "visitCount": 65
+      },
+      "questionTypes": [
+        "table_effectiveness",
+        "board_game_table"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.15381282156838694,
+      "statement": "Meja teranotasi di sekitar (4.49 m, 3.98 m) dengan area ID table-02."
+    },
+    {
+      "areaId": "presence-05",
+      "cardId": "72ebb6668052-v2-evidence-0008",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 2.0706250000000006,
+        "centroid": [
+          3.2351921722507297,
+          5.806016701881478
+        ],
+        "points": [
+          [
+            2.9250000000000003,
+            6.550000000000001
+          ],
+          [
+            2.6,
+            6.575
+          ],
+          [
+            2.375,
+            6.45
+          ],
+          [
+            2.225,
+            6.2
+          ],
+          [
+            2.225,
+            5.9
+          ],
+          [
+            2.325,
+            5.7
+          ],
+          [
+            3.3000000000000003,
+            5.125
+          ],
+          [
+            4.0,
+            4.9750000000000005
+          ],
+          [
+            4.175,
+            5.550000000000001
+          ],
+          [
+            4.175,
+            5.8500000000000005
+          ],
+          [
+            4.025,
+            6.2
+          ],
+          [
+            3.6500000000000004,
+            6.175000000000001
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 53.07990862364131,
+        "medianVisitDurationSec": 2.9984495824462556,
+        "observedPresenceSec": 481.516941149505,
+        "p95VisitDurationSec": 208.5995052885184,
+        "pointCount": 2406,
+        "relativeIntensity": 0.2671848755910359,
+        "uniqueVisitors": 4,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.02170523016673246,
+      "statement": "Kehadiran tinggi di sekitar (3.24 m, 5.81 m) dengan area ID presence-05."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

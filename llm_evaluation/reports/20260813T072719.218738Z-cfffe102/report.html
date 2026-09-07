@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Evaluation Report</title>
+<style>
+body { margin: 0; padding: 32px; color: #172033; background: #f5f7fb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 1440px; margin: 0 auto; }
+.card { background: white; border: 1px solid #e1e6ef; border-radius: 14px; padding: 22px; margin: 18px 0; box-shadow: 0 2px 9px rgba(23,32,51,.05); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.metric { background: #f5f7fb; border-radius: 10px; padding: 14px; }
+.metric strong { display: block; font-size: 22px; margin-top: 6px; }
+.charts { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.charts img { display: block; width: 100%; height: auto; border: 1px solid #e1e6ef; border-radius: 10px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 900px; }
+th, td { border-bottom: 1px solid #e1e6ef; padding: 8px 10px; text-align: left; white-space: nowrap; }
+th { background: #f5f7fb; }
+code { background: #eef2f8; padding: 2px 5px; border-radius: 4px; }
+</style>
+</head>
+<body><main>
+<h1>LLM Evaluation Report</h1>
+<p>Generated <code>2026-08-13T07:56:06.768314Z</code> · Model <code>Qwen3-8B-Q4_K_M</code> · Package <code>72ebb6668052</code></p>
+<section class="card metrics">
+<div class="metric">Schema validity<strong>26/30 (86.7%)</strong></div>
+<div class="metric">Selected entity accuracy<strong>18/20 (90.0%)</strong></div>
+<div class="metric">Cold start<strong>58121.602 ms</strong></div>
+<div class="metric">Warm p50 / p95<strong>47345.775 ms / 114492.467 ms</strong></div>
+</section>
+<section class="card"><h2>Visualizations</h2><div class="charts">
+<img src="charts/quality.svg" alt="Quality metrics chart">
+<img src="charts/latency.svg" alt="Latency by case chart">
+<img src="charts/case_outcomes.svg" alt="Case outcomes chart">
+</div></section>
+<section class="card"><h2>Per-case results</h2><div class="table-wrap"><table><thead><tr><th>caseId</th><th>expectedArea</th><th>actualArea</th><th>schema</th><th>wallMs</th><th>pipelineMs</th><th>status</th></tr></thead><tbody><tr><td>flow-high-01</td><td>flow-01</td><td>flow-01</td><td>yes</td><td>58121.602</td><td>57726.675</td><td>ok</td></tr><tr><td>flow-high-02</td><td>flow-01</td><td>flow-01</td><td>yes</td><td>55748.632</td><td>55449.912</td><td>ok</td></tr><tr><td>flow-high-03</td><td>flow-01</td><td>flow-01</td><td>yes</td><td>45369.351</td><td>45073.460</td><td>ok</td></tr><tr><td>flow-low-01</td><td>flow-05</td><td>flow-05</td><td>yes</td><td>49906.864</td><td>49617.663</td><td>ok</td></tr><tr><td>presence-high-01</td><td>presence-01</td><td>low-presence-01</td><td>yes</td><td>111553.536</td><td>111249.532</td><td>ok</td></tr><tr><td>presence-high-02</td><td>presence-01</td><td>presence-01</td><td>yes</td><td>47345.775</td><td>47025.881</td><td>ok</td></tr><tr><td>crowd-high-01</td><td>crowd-02</td><td>crowd-02</td><td>yes</td><td>40142.071</td><td>39850.548</td><td>ok</td></tr><tr><td>crowd-high-02</td><td>crowd-01</td><td>crowd-01</td><td>yes</td><td>72222.915</td><td>71927.292</td><td>ok</td></tr><tr><td>low-flow-01</td><td>low-flow-01</td><td>low-flow-01</td><td>yes</td><td>48570.098</td><td>48278.051</td><td>ok</td></tr><tr><td>low-presence-01</td><td>low-presence-01</td><td>low-flow-02</td><td>yes</td><td>178664.044</td><td>178378.540</td><td>ok</td></tr><tr><td>low-flow-02</td><td>low-flow-02</td><td>low-flow-02</td><td>yes</td><td>46194.892</td><td>45907.268</td><td>ok</td></tr><tr><td>stop-dwell-01</td><td>stop-cluster-01</td><td>stop-cluster-01</td><td>yes</td><td>61346.247</td><td>61073.844</td><td>ok</td></tr><tr><td>stop-dwell-02</td><td>stop-cluster-01</td><td>stop-cluster-01</td><td>yes</td><td>52758.402</td><td>52477.064</td><td>ok</td></tr><tr><td>stop-dwell-03</td><td>stop-cluster-12</td><td>stop-cluster-12</td><td>yes</td><td>50820.689</td><td>50413.033</td><td>ok</td></tr><tr><td>table-usage-01</td><td>table-02</td><td>table-02</td><td>yes</td><td>43832.277</td><td>43545.632</td><td>ok</td></tr><tr><td>table-usage-02</td><td>table-02</td><td>table-02</td><td>yes</td><td>43660.283</td><td>43398.834</td><td>ok</td></tr><tr><td>table-usage-03</td><td>table-03</td><td>table-03</td><td>yes</td><td>45369.384</td><td>45089.750</td><td>ok</td></tr><tr><td>table-usage-04</td><td>table-03</td><td>table-03</td><td>yes</td><td>38937.871</td><td>38584.250</td><td>ok</td></tr><tr><td>table-usage-05</td><td>table-05</td><td>table-05</td><td>yes</td><td>46280.671</td><td>46016.100</td><td>ok</td></tr><tr><td>table-usage-06</td><td>table-03</td><td>table-03</td><td>yes</td><td>53607.725</td><td>53307.787</td><td>ok</td></tr><tr><td>global-01</td><td>none</td><td>none</td><td>yes</td><td>33379.419</td><td>33374.603</td><td>ok</td></tr><tr><td>global-02</td><td>none</td><td>none</td><td>yes</td><td>42109.824</td><td>42102.763</td><td>ok</td></tr><tr><td>global-03</td><td>none</td><td>none</td><td>yes</td><td>38219.110</td><td>38209.228</td><td>ok</td></tr><tr><td>global-04</td><td>none</td><td>none</td><td>yes</td><td>36362.094</td><td>36357.248</td><td>ok</td></tr><tr><td>global-05</td><td>none</td><td>none</td><td>no</td><td>53916.424</td><td>53911.235</td><td>invalid_schema</td></tr><tr><td>unsupported-01</td><td>none</td><td>none</td><td>yes</td><td>44959.607</td><td>44955.466</td><td>ok</td></tr><tr><td>unsupported-02</td><td>none</td><td>none</td><td>yes</td><td>43796.196</td><td>43789.792</td><td>ok</td></tr><tr><td>unsupported-03</td><td>none</td><td>table-01</td><td>no</td><td>53087.376</td><td>52803.474</td><td>invalid_schema</td></tr><tr><td>unsupported-04</td><td>none</td><td>crowd-01</td><td>no</td><td>74813.361</td><td>74514.999</td><td>invalid_schema</td></tr><tr><td>unsupported-05</td><td>none</td><td>presence-02</td><td>no</td><td>116451.755</td><td>116200.971</td><td>invalid_schema</td></tr></tbody></table></div></section>
+</main></body></html>

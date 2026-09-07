@@ -229,3 +229,15 @@ def test_saved_legacy_session_run_remains_loadable(tmp_path: Path) -> None:
     bundle = rag.load_saved_bundle(old_dir)
     assert bundle["legacy"] is True
     assert bundle["response"]["answer"] == "x"
+
+
+def test_metric_names_are_readable_without_changing_selection(tmp_path):
+    rag, _ = service(tmp_path, FakeGenerator(
+        "Meja 1: `visitCount` 20 dan uniqueVisitors 12. "
+        "[[SUPPORT:supported]] [[AREA_ID:table-01]]"
+    ))
+    result = rag.ask("Meja mana paling ramai?", show=False)
+    assert "visitCount" not in result["answer"]
+    assert "uniqueVisitors" not in result["answer"]
+    assert "jumlah kunjungan 20" in result["answer"]
+    assert result["selectedAreaId"] == "table-01"

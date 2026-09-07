@@ -1,0 +1,432 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Meja 3 memiliki nilai p95VisitDurationSec tertinggi sebesar 323.1888 detik.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074529.431685Z-4e075a06/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074529.431685Z-4e075a06/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074529.431685Z-4e075a06/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074529.431685Z-4e075a06/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074529.431685Z-4e075a06",
+    "runId": "20260813T074529.431685Z-4e075a06"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0042",
+    "72ebb6668052-v2-evidence-0040",
+    "72ebb6668052-v2-evidence-0038",
+    "72ebb6668052-v2-evidence-0041",
+    "72ebb6668052-v2-evidence-0039"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0042",
+      "72ebb6668052-v2-evidence-0040",
+      "72ebb6668052-v2-evidence-0038",
+      "72ebb6668052-v2-evidence-0041",
+      "72ebb6668052-v2-evidence-0039"
+    ],
+    "selectedAreaIdReportedByModel": "table-03",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik."
+  ],
+  "metricSummary": {
+    "interactionAreaM2": "8.63",
+    "meanVisitDurationSec": "65.4",
+    "medianVisitDurationSec": "7.99",
+    "p95VisitDurationSec": "323",
+    "tableAreaM2": "1.69",
+    "uniqueVisitors": "7",
+    "visitCount": "9"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which table has the highest 95th percentile visit duration?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "table-03",
+    "confidence": 1.0,
+    "confidenceBasis": "manual_verified_polygon",
+    "geometryM": {
+      "areaM2": 1.6931865510582709,
+      "centroid": [
+        6.767817761753073,
+        4.0014702278853225
+      ],
+      "points": [
+        [
+          6.301020408163266,
+          3.1029684601113168
+        ],
+        [
+          7.219387755102041,
+          3.075139146567718
+        ],
+        [
+          7.247217068645641,
+          4.8979591836734695
+        ],
+        [
+          6.301020408163266,
+          4.911873840445269
+        ]
+      ],
+      "type": "polygon"
+    },
+    "interactionGeometryM": {
+      "areaM2": 8.63357213204132,
+      "centroid": [
+        6.768768792479957,
+        4.0014248359764855
+      ],
+      "holes": [
+        [
+          [
+            7.247217068645641,
+            4.8979591836734695
+          ],
+          [
+            7.219387755102041,
+            3.075139146567718
+          ],
+          [
+            6.301020408163266,
+            3.1029684601113168
+          ],
+          [
+            6.301020408163266,
+            4.911873840445269
+          ]
+        ]
+      ],
+      "points": [
+        [
+          5.305926184562379,
+          5.010805565165647
+        ],
+        [
+          5.301020408163266,
+          4.911873840445269
+        ],
+        [
+          5.301020408163266,
+          3.1029684601113168
+        ],
+        [
+          5.3056518836442095,
+          3.0068357372914813
+        ],
+        [
+          5.319503408956777,
+          2.911593487168959
+        ],
+        [
+          5.342446678101251,
+          2.8181239340361337
+        ],
+        [
+          5.374269168700643,
+          2.7272928817801048
+        ],
+        [
+          5.414676110585043,
+          2.6399416939837352
+        ],
+        [
+          5.463293216233257,
+          2.5568795004160467
+        ],
+        [
+          5.519670147779758,
+          2.4788757021028425
+        ],
+        [
+          5.583284688472248,
+          2.406652844402739
+        ],
+        [
+          5.653547579939829,
+          2.3408799241049394
+        ],
+        [
+          5.729807980464398,
+          2.282166192544782
+        ],
+        [
+          5.811359493695561,
+          2.2310555121384983
+        ],
+        [
+          5.89744671196539,
+          2.1880213186123205
+        ],
+        [
+          5.9872722135926075,
+          2.153462235590565
+        ],
+        [
+          6.080003949360514,
+          2.1276983821645508
+        ],
+        [
+          6.174782949748079,
+          2.110968407645152
+        ],
+        [
+          6.270731281522497,
+          2.1034272809659353
+        ],
+        [
+          7.189098628461272,
+          2.0755979674223366
+        ],
+        [
+          7.288153689409706,
+          2.077506325195649
+        ],
+        [
+          7.386533775102833,
+          2.089206994744939
+        ],
+        [
+          7.4832732311926655,
+          2.110585127599146
+        ],
+        [
+          7.5774225070080785,
+          2.141430885691987
+        ],
+        [
+          7.668057475913985,
+          2.181441501037345
+        ],
+        [
+          7.754288506119689,
+          2.2302242475626435
+        ],
+        [
+          7.8352691929014835,
+          2.2873002959300437
+        ],
+        [
+          7.910204666527925,
+          2.35210941350828
+        ],
+        [
+          7.978359394340996,
+          2.424015463362343
+        ],
+        [
+          8.039064400411421,
+          2.502312648285419
+        ],
+        [
+          8.091723831903298,
+          2.5862324385844966
+        ],
+        [
+          8.13582080769557,
+          2.6749511156196317
+        ],
+        [
+          8.170922491852924,
+          2.767597857052917
+        ],
+        [
+          8.196684342147233,
+          2.863263284446006
+        ],
+        [
+          8.212853491927957,
+          2.9610083893068495
+        ],
+        [
+          8.219271232146623,
+          3.059873749971617
+        ],
+        [
+          8.247100545690223,
+          4.882693787077368
+        ],
+        [
+          8.243779198834561,
+          4.980807965639902
+        ],
+        [
+          8.230853560805858,
+          5.078123695414113
+        ],
+        [
+          8.208448201450251,
+          5.17370310351064
+        ],
+        [
+          8.176779050701828,
+          5.266625050707253
+        ],
+        [
+          8.13615131757444,
+          5.35599400885753
+        ],
+        [
+          8.086956548733198,
+          5.440948691474753
+        ],
+        [
+          8.029668854993504,
+          5.520670354314432
+        ],
+        [
+          7.964840342114389,
+          5.594390685959228
+        ],
+        [
+          7.89309578992156,
+          5.6613992123613714
+        ],
+        [
+          7.8151266310397025,
+          5.721050143981858
+        ],
+        [
+          7.73168428726354,
+          5.772768599537655
+        ],
+        [
+          7.643572927787855,
+          5.816056146376014
+        ],
+        [
+          7.551641719088499,
+          5.850495604080975
+        ],
+        [
+          7.456776641145536,
+          5.8757550650176595
+        ],
+        [
+          7.359891948879073,
+          5.891591093066673
+        ],
+        [
+          7.261921361087517,
+          5.897851069721048
+        ],
+        [
+          6.315724700605142,
+          5.911765726492847
+        ],
+        [
+          6.216731535813716,
+          5.908315201488678
+        ],
+        [
+          6.118565375743652,
+          5.895088039460294
+        ],
+        [
+          6.022189382857473,
+          5.872214019406307
+        ],
+        [
+          5.928549155297866,
+          5.839917570982187
+        ],
+        [
+          5.838563449101571,
+          5.798515572496839
+        ],
+        [
+          5.753115163776016,
+          5.748414241844357
+        ],
+        [
+          5.673042679684192,
+          5.690105150875698
+        ],
+        [
+          5.599131632231451,
+          5.624160402315517
+        ],
+        [
+          5.532107203562248,
+          5.551227016546078
+        ],
+        [
+          5.472627007397241,
+          5.472020583332613
+        ],
+        [
+          5.421274636821553,
+          5.387318240776554
+        ],
+        [
+          5.378553938330401,
+          5.297951050384023
+        ],
+        [
+          5.344884068312608,
+          5.204795843061985
+        ],
+        [
+          5.320595380475564,
+          5.1087666160455125
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "table",
+    "label": "Meja 3",
+    "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "metrics": {
+      "interactionAreaM2": 8.63357213204132,
+      "meanVisitDurationSec": 65.35801410130188,
+      "medianVisitDurationSec": 7.9947751490615815,
+      "p95VisitDurationSec": 323.188785400818,
+      "tableAreaM2": 1.6931865510582709,
+      "uniqueVisitors": 7,
+      "visitCount": 9
+    }
+  },
+  "selectedAreaId": "table-03",
+  "sessionId": "eval-table-usage-04",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 368,
+      "durationMs": 38582.120209001005,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6355,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 38584.25008300401
+  }
+}

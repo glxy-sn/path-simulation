@@ -1,0 +1,13 @@
+Okay, let's tackle this question. The user is asking, "Where is the named food counter located?" So first, I need to figure out what they mean by "named food counter." Since the data provided includes various areas with labels, maybe the food counter is one of those labeled areas.
+
+Looking at the areaCatalog, there are several entries. The first few are presence-01 to presence-08, then crowd-01 to crowd-03, flow-01 to flow-05, low-flow-01 to low-flow-02, stop-cluster entries, and finally table-01 to table-05. The tables (table-01 to table-05) have labels like "Meja 1," "Meja 2," etc., which might correspond to food counters. 
+
+The user mentioned "named," so maybe the food counter is one of these tables. However, the tables are labeled as "Meja" (table) in Indonesian. The question is about a "food counter," which could be a table where food is served. But the data doesn't explicitly mention food counters; it just labels them as tables. 
+
+Looking at the metrics for the tables, table-03 has a high meanVisitDurationSec of 65.358 seconds and a high uniqueVisitors count of 7. That might indicate a popular area, possibly a food counter. However, without explicit information about food counters, it's an assumption. 
+
+The other tables have varying visit durations and visitor counts. Table-02 has the highest uniqueVisitors at 12, which might suggest it's a busy area. But again, the data doesn't specify if these are food counters. 
+
+Since the user is asking for the location of a named food counter, and the data includes tables with labels, the answer would be that the food counter is located at one of the tables listed in the areaCatalog. However, without more specific information, the exact table can't be determined. 
+
+The relevant areas are the tables, so the answer should point to the table entries. The marker would be [[AREA_ID:table-01]] to [[AREA_ID:table-05]] as possible locations. But since the user might be referring to a specific one, but the data doesn't specify which is the food counter, the answer should mention the tables and note that the exact location isn't specified in the data.

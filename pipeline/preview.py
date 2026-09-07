@@ -11,6 +11,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from config import Config
+from model_registry import resolve_detection_model
 from models import (
     CalibrationPreviewResponse,
     PreviewCameraOut,
@@ -49,6 +50,7 @@ class _CachedCamera:
 class _CachedPreview:
     created_at: float
     global_time: float
+    detection_model: str
     cameras: list[_CachedCamera]
     inference_warnings: list[str]
 
@@ -56,24 +58,31 @@ class _CachedPreview:
 class CalibrationPreviewManager:
     def __init__(self, cfg=Config):
         self.cfg = cfg
-        self._detector = None
+        self._detectors: dict[str, object] = {}
         self._reid_tracker = None
         self._cache: dict[str, _CachedPreview] = {}
 
-    def _load_models(self, needs_reid: bool):
-        if self._detector is None:
+    def _load_models(self, detection_model: str, needs_reid: bool):
+        spec = resolve_detection_model(detection_model)
+        detector = self._detectors.get(spec.id)
+        if detector is None:
             try:
                 from ultralytics import YOLO
 
-                self._detector = YOLO(self.cfg.PREVIEW_YOLO_MODEL)
+                detector = YOLO(str(spec.path))
+                self._detectors[spec.id] = detector
             except Exception as exc:
                 raise RuntimeError(f"YOLO preview gagal dimuat: {exc}") from exc
         if needs_reid and self._reid_tracker is None:
             self._reid_tracker = make_tracker(self.cfg)
+        return detector, spec
 
     def sample(self, request) -> CalibrationPreviewResponse:
         needs_reid = len(request.cameras) > 1
-        self._load_models(needs_reid=needs_reid)
+        detector, detector_spec = self._load_models(
+            request.detectionModel,
+            needs_reid=needs_reid,
+        )
         loaded = []
         for camera in request.cameras:
             source_time = camera_source_time(camera, request.globalTimeSec)
@@ -81,7 +90,7 @@ class CalibrationPreviewManager:
 
         all_frames = [frame for item in loaded for frame in item["frames"]]
         try:
-            results = self._detector.predict(
+            results = detector.predict(
                 all_frames,
                 imgsz=self.cfg.PREVIEW_IMGSZ,
                 conf=self.cfg.CONF,
@@ -129,6 +138,7 @@ class CalibrationPreviewManager:
         self._cache[token] = _CachedPreview(
             created_at=time.monotonic(),
             global_time=float(request.globalTimeSec),
+            detection_model=detector_spec.id,
             cameras=cached_cameras,
             inference_warnings=inference_warnings,
         )

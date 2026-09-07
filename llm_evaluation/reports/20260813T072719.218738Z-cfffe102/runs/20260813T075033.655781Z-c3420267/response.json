@@ -1,0 +1,81 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Valid spatial observation ratio adalah **0.8741** (87.41%), dihitung sebagai rasio validObservationCount (25.373) terhadap rawObservationCount (29.026) dalam data kualitas. Nilai ini mencerminkan proporsi data observasi yang valid (tanpa anomali atau kesalahan) dibandingkan total data mentah.",
+  "artifacts": {
+    "floorplanOverlay": null,
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075033.655781Z-c3420267/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075033.655781Z-c3420267/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075033.655781Z-c3420267/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075033.655781Z-c3420267",
+    "runId": "20260813T075033.655781Z-c3420267"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0001",
+    "72ebb6668052-v2-evidence-0003",
+    "72ebb6668052-v2-evidence-0004",
+    "72ebb6668052-v2-evidence-0005",
+    "72ebb6668052-v2-evidence-0006"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0001",
+      "72ebb6668052-v2-evidence-0003",
+      "72ebb6668052-v2-evidence-0004",
+      "72ebb6668052-v2-evidence-0005",
+      "72ebb6668052-v2-evidence-0006"
+    ],
+    "selectedAreaIdReportedByModel": null,
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+    "Co-moving proxy tidak membuktikan hubungan sosial.",
+    "Area observasional dinamis; bukan nama tempat atau zona semantik."
+  ],
+  "metricSummary": {},
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "What is the valid spatial observation ratio?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": null,
+  "selectedAreaId": null,
+  "sessionId": "eval-global-05",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": false,
+      "completionTokens": 661,
+      "durationMs": 53909.03970799991,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6195,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 53911.2350409996
+  }
+}

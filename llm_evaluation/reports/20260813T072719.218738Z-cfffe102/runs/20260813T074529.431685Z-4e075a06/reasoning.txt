@@ -1,0 +1,9 @@
+Okay, let's tackle this question. The user is asking which table has the highest 95th percentile visit duration. First, I need to look through the provided data to find all the tables mentioned. From the areaCatalog, there are several entries under the "table" kind. Let me list them out:
+
+- table-01: p95VisitDurationSec=53.3907
+- table-02: p95VisitDurationSec=74.5215
+- table-03: p95VisitDurationSec=323.1888
+- table-04: p95VisitDurationSec=40.1293
+- table-05: p95VisitDurationSec=0.0
+
+Wait, table-05 has a p95 of 0.0. That might be because there are no visits, as the visitCount is 0. So, excluding that, the highest p95 is table-03 with 323.1888 seconds. Let me double-check the other tables to make sure I didn't miss any. The other tables have lower values. So the answer should be table-03. Also, the user mentioned "tables" in plural, so I need to confirm if there are other tables, but in the data provided, these are the only ones. The answer is table-03 with the highest p95 value. The relevant area ID is table-03.

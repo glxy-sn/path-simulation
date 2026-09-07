@@ -1,4 +1,14 @@
-# Local Analytics + RAG Notebooks
+# Local Analytics + RAG Outputs
+
+The curated handover notebooks now live in
+`project_handover/notebooks/`:
+
+- `trajectory_explanatory_analysis.ipynb`
+- `local_rag_qwen3_analysis.ipynb`
+
+Use `./scripts/open_analysis_notebooks.zsh` from `be/path-simulation/` to
+open them with the managed analysis environment. This folder retains runtime
+outputs and the `latest.json` pointer used by the notebooks.
 
 Environment dan model lokal disiapkan dengan:
 
@@ -14,14 +24,14 @@ pada penggunaan pertama dan tidak disimpan di repository.
 ## Urutan penggunaan
 
 1. Buka kedua notebook dengan `./scripts/open_analysis_notebooks.zsh`.
-2. Jalankan **Run All** pada `01_trajectory_explanatory_analysis.ipynb`.
+2. Jalankan **Run All** pada `trajectory_explanatory_analysis.ipynb`.
    Notebook otomatis memilih job lengkap terbaru. Override opsional:
    `FOODCOURT_JOB_ID=<jobId>` sebelum membuka Jupyter.
 3. Jika pertanyaan meja perlu didukung, gunakan canvas yang **embedded di notebook**:
    klik floorplan untuk setiap titik sudut (minimal tiga), lalu tekan
    **Tambah meja** dan **Simpan & rebuild**. Tanpa annotation, analysis lain
    tetap selesai.
-4. Jalankan **Run All** pada `02_local_llm_retrieval.ipynb`, lalu gunakan widget
+4. Jalankan **Run All** pada `local_rag_qwen3_analysis.ipynb`, lalu gunakan widget
    **Ask Qwen3**.
 
 Notebook pertama memperbarui `notebooks/output/latest.json`; notebook kedua

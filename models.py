@@ -6,6 +6,7 @@ Artifact besar (video, png, parquet) dikirim sebagai URI file://, bukan inline.
 """
 from typing import Optional
 from pydantic import BaseModel, Field
+from model_registry import DEFAULT_DETECTION_MODEL_ID
 
 
 # ---------- Request ----------
@@ -71,6 +72,7 @@ class JobOptions(BaseModel):
 class JobRequest(BaseModel):
     venue: VenueInput
     mode: str = "lengkap"           # "lengkap" | "cepat"
+    detectionModel: str = DEFAULT_DETECTION_MODEL_ID
     cameras: list[CameraInput] = Field(..., min_length=1)
     options: JobOptions = JobOptions()
 
@@ -184,6 +186,7 @@ class CalibrationPreviewRequest(BaseModel):
     venue: VenueInput
     cameras: list[CameraInput] = Field(..., min_length=1, max_length=2)
     globalTimeSec: float
+    detectionModel: str = DEFAULT_DETECTION_MODEL_ID
 
 
 class CalibrationReprojectRequest(BaseModel):

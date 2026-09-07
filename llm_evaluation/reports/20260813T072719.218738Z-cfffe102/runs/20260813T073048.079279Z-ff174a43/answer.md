@@ -1,0 +1,1 @@
+Area arus 5 memiliki rata-rata kecepatan terendah dengan nilai **0.675991 m/s**. Diantara semua area jenis *flow_hotspot* (Area arus 1 hingga Area arus 5), nilai ini terendah dibandingkan Area arus 1 (0.7257), Area arus 2 (0.7972), Area arus 3 (0.7094), dan Area arus 4 (0.6986).

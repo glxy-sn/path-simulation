@@ -1,0 +1,1 @@
+Meja 3 memiliki area interaksi terbesar dengan nilai interactionAreaM2 sebesar 8.63357 m². Dibandingkan dengan Meja 1 (8.63305 m²), Meja 2 (8.61924 m²), Meja 4 (7.97972 m²), dan Meja 5 (7.99474 m²), Meja 3 menempati urutan tertinggi. Metrik interactionAreaM2 secara eksplisit diukur untuk setiap meja dalam katalog area.

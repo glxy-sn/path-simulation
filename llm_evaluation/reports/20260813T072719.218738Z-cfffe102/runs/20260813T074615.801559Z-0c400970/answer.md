@@ -1,0 +1,1 @@
+Meja 5 memiliki visitCount=0, yang berarti tidak ada kunjungan yang tercatat. Dibandingkan dengan tabel lain (visitCount=28, 65, 9, 24), Meja 5 adalah satu-satunya dengan nilai 0. Metrik visitCount mengacu pada jumlah episode kunjungan, bukan jumlah orang terverifikasi. Data menunjukkan Meja 5 tidak memiliki aktivitas tercatat.

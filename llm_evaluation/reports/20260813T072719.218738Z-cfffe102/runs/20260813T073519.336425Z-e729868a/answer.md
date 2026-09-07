@@ -1,0 +1,1 @@
+Area keramaian 1 memiliki durasi terpanjang dalam observasi kepadatan dengan **26 detik** (metric: `observedCrowdedSeconds`). Dibandingkan Area keramaian 2 (19 detik) dan Area keramaian 3 (14 detik), Area keramaian 1 adalah area yang paling lama dalam keadaan terisi.

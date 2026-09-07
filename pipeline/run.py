@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 
 from config import Config
+from model_registry import resolve_detection_model
 from models import Artifacts, IdentityQuality, JobRequest, JobResult, OverlayVideo
 from .analytics import compute_analytics
 from .detect import detect_video, load_model
@@ -27,13 +28,14 @@ def _video_wh(path):
 
 def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
     cfg, cameras, venue = Config, req.cameras, req.venue
+    detector_spec = resolve_detection_model(req.detectionModel)
     camera_count = len(cameras)
     if camera_count > 1 and not cfg.WITH_REID:
         raise RuntimeError("Job multi-kamera mewajibkan OSNet ReID; PRISM_WITH_REID tidak boleh 0")
 
     print(
         f"[engine] detector={cfg.DEVICE} reid={cfg.REID_DEVICE} "
-        f"reid_on={cfg.WITH_REID} model={cfg.YOLO_MODEL} imgsz={cfg.IMGSZ} "
+        f"reid_on={cfg.WITH_REID} model={detector_spec.id} path={detector_spec.path} imgsz={cfg.IMGSZ} "
         f"proc_fps={cfg.PROC_FPS} batch={cfg.BATCH_SIZE}",
         flush=True,
     )
@@ -56,7 +58,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
         )
 
     progress("detection", 0.0)
-    model = load_model(cfg)
+    model = load_model(cfg, detector_spec.path)
     camera_detections = []
     for index, camera in enumerate(cameras):
         source_start = camera_source_start(camera)
@@ -130,6 +132,7 @@ def run_job(job_id: str, req: JobRequest, progress) -> JobResult:
             {
                 "associations": fusion.diagnostics,
                 "trackingWarnings": tracking_warnings,
+                "detectionModel": detector_spec.id,
                 "calibrations": calibration_diagnostics,
             },
             indent=2,

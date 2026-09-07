@@ -1,0 +1,327 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area dengan kehadiran terobservasi tertinggi adalah **Area kehadiran rendah 1** dengan **observedPresenceSec = 2541.89 detik**. Meskipun area ini dikategorikan sebagai \"low_presence_area\", metrik absolut kehadiran (waktu total yang tercatat) menunjukkan nilai tertinggi dibandingkan area lain. Area Area kehadiran 1 (presence_hotspot) memiliki observedPresenceSec = 1802.19 detik, yang lebih rendah.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073239.617105Z-261e4520/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073239.617105Z-261e4520/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073239.617105Z-261e4520/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073239.617105Z-261e4520/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073239.617105Z-261e4520",
+    "runId": "20260813T073239.617105Z-261e4520"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0008",
+    "72ebb6668052-v2-evidence-0011",
+    "72ebb6668052-v2-evidence-0005",
+    "72ebb6668052-v2-evidence-0012",
+    "72ebb6668052-v2-evidence-0007",
+    "72ebb6668052-v2-evidence-0009"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0008",
+      "72ebb6668052-v2-evidence-0011",
+      "72ebb6668052-v2-evidence-0005",
+      "72ebb6668052-v2-evidence-0012",
+      "72ebb6668052-v2-evidence-0007",
+      "72ebb6668052-v2-evidence-0009"
+    ],
+    "selectedAreaIdReportedByModel": "low-presence-01",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+    "Area observasional dinamis; bukan nama tempat atau zona semantik."
+  ],
+  "metricSummary": {
+    "meanDensity": "2.23",
+    "meanVisitDurationSec": "31.6",
+    "medianVisitDurationSec": "4",
+    "observedPresenceSec": "2.54e+03",
+    "observedSupportAreaM2": "32.8",
+    "p95VisitDurationSec": "245",
+    "pointCount": "1.27e+04",
+    "relativeIntensity": "0.00211",
+    "uniqueVisitors": "23",
+    "visitCount": "80"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Where is observed presence the highest?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "low-presence-01",
+    "confidence": 0.6556104871494522,
+    "confidenceBasis": "low_density_contour_inside_observed_support_envelope",
+    "geometryM": {
+      "areaM2": 32.813125,
+      "centroid": [
+        5.988527996292133,
+        3.7594798194320114
+      ],
+      "points": [
+        [
+          8.825000000000001,
+          7.45
+        ],
+        [
+          0.0,
+          3.325
+        ],
+        [
+          0.42500000000000004,
+          2.75
+        ],
+        [
+          0.625,
+          2.2
+        ],
+        [
+          0.525,
+          1.05
+        ],
+        [
+          0.7250000000000001,
+          0.05
+        ],
+        [
+          0.925,
+          0.65
+        ],
+        [
+          0.9750000000000001,
+          1.55
+        ],
+        [
+          1.075,
+          1.75
+        ],
+        [
+          1.475,
+          2.1
+        ],
+        [
+          1.425,
+          2.85
+        ],
+        [
+          1.5250000000000001,
+          3.0500000000000003
+        ],
+        [
+          1.85,
+          3.375
+        ],
+        [
+          2.25,
+          3.575
+        ],
+        [
+          2.75,
+          3.625
+        ],
+        [
+          2.95,
+          3.725
+        ],
+        [
+          3.1500000000000004,
+          3.725
+        ],
+        [
+          3.5250000000000004,
+          3.35
+        ],
+        [
+          3.6750000000000003,
+          2.95
+        ],
+        [
+          4.125,
+          2.5
+        ],
+        [
+          4.2250000000000005,
+          2.25
+        ],
+        [
+          4.175,
+          1.9500000000000002
+        ],
+        [
+          3.95,
+          1.725
+        ],
+        [
+          3.5500000000000003,
+          1.675
+        ],
+        [
+          3.25,
+          1.7750000000000001
+        ],
+        [
+          3.0250000000000004,
+          1.6
+        ],
+        [
+          3.075,
+          0.8
+        ],
+        [
+          3.4000000000000004,
+          0.025
+        ],
+        [
+          3.575,
+          0.8500000000000001
+        ],
+        [
+          3.75,
+          1.0250000000000001
+        ],
+        [
+          5.300000000000001,
+          1.175
+        ],
+        [
+          6.0,
+          1.5250000000000001
+        ],
+        [
+          6.425000000000001,
+          2.0
+        ],
+        [
+          7.0,
+          3.325
+        ],
+        [
+          7.2,
+          3.2750000000000004
+        ],
+        [
+          7.7250000000000005,
+          2.75
+        ],
+        [
+          7.625,
+          1.75
+        ],
+        [
+          7.825,
+          1.25
+        ],
+        [
+          8.35,
+          0.8250000000000001
+        ],
+        [
+          8.9,
+          0.775
+        ],
+        [
+          9.15,
+          0.875
+        ],
+        [
+          9.425,
+          1.1500000000000001
+        ],
+        [
+          9.525,
+          1.4000000000000001
+        ],
+        [
+          9.525,
+          1.9000000000000001
+        ],
+        [
+          9.175,
+          2.8000000000000003
+        ],
+        [
+          9.625,
+          3.6
+        ],
+        [
+          9.625,
+          4.3500000000000005
+        ],
+        [
+          9.525,
+          5.050000000000001
+        ],
+        [
+          9.275,
+          5.95
+        ],
+        [
+          9.175,
+          6.8500000000000005
+        ],
+        [
+          9.075000000000001,
+          7.15
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "low_presence_area",
+    "limitation": "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+    "metrics": {
+      "meanDensity": 2.227476641123843,
+      "meanVisitDurationSec": 31.60854994238057,
+      "medianVisitDurationSec": 3.9973875745307907,
+      "observedPresenceSec": 2541.8924766645387,
+      "observedSupportAreaM2": 32.813125,
+      "p95VisitDurationSec": 245.20987805616033,
+      "pointCount": 12717,
+      "relativeIntensity": 0.0021119232752830927,
+      "uniqueVisitors": 23,
+      "visitCount": 80
+    },
+    "timeRangeSec": {
+      "end": 542.6453632425611,
+      "start": 0.0
+    }
+  },
+  "selectedAreaId": "low-presence-01",
+  "sessionId": "eval-presence-high-01",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 1407,
+      "durationMs": 111247.3686250014,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6569,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 111249.53220800671
+  }
+}

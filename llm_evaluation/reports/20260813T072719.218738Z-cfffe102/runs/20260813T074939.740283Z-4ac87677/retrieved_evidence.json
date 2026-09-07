@@ -1,0 +1,324 @@
+{
+  "cards": [
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0044",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "crowd_bottleneck_timeseries.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Tidak ditemukannya kandidat bukan bukti bahwa hambatan tidak pernah terjadi di luar periode observasi.",
+      "metrics": {
+        "candidateCount": 0
+      },
+      "questionTypes": [
+        "bottleneck"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.2535851665320047,
+      "statement": "Tidak ada kandidat bottleneck yang memenuhi threshold persistence, density, dan penurunan speed pada job aktif."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0001",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "occupancy_timeseries.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": null,
+      "metrics": {
+        "binSeconds": 10,
+        "meanCount": 10.181818181818182,
+        "peakBinEndSec": 320.0,
+        "peakBinStartSec": 310.0,
+        "peakCount": 13
+      },
+      "questionTypes": [
+        "peak_occupancy",
+        "occupancy",
+        "peak_time"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0,
+      "statement": "Puncak okupansi adalah 13 track pada detik 310–320."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0002",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "track_summary.parquet",
+        "area_visits.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+      "metrics": {
+        "meanObservedDurationSec": 123.4789839412507,
+        "medianObservedDurationSec": 43.577467264885584,
+        "stopEpisodeCount": 306,
+        "totalStopDurationSec": 3591.94138746553
+      },
+      "questionTypes": [
+        "dwell_area",
+        "dwell",
+        "duration"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0,
+      "statement": "Median durasi teramati per track adalah 43.6 detik."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0003",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "group_episodes.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Co-moving proxy tidak membuktikan hubungan sosial.",
+      "metrics": {
+        "groupEpisodeCount": 3,
+        "maxObservedGroupSize": 2,
+        "soloObservationRatio": 0.9937082186394023
+      },
+      "questionTypes": [
+        "group_behavior",
+        "solo",
+        "group_size"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0,
+      "statement": "Rasio observasi solo adalah 99.4%; group terbesar yang teramati berisi 2 track."
+    },
+    {
+      "areaId": "presence-01",
+      "cardId": "72ebb6668052-v2-evidence-0004",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 4.951250000000001,
+        "centroid": [
+          5.06398215938736,
+          5.210878986787847
+        ],
+        "points": [
+          [
+            5.0,
+            6.775
+          ],
+          [
+            4.6000000000000005,
+            6.525
+          ],
+          [
+            4.2,
+            6.425000000000001
+          ],
+          [
+            4.025,
+            6.25
+          ],
+          [
+            4.175,
+            5.8500000000000005
+          ],
+          [
+            4.175,
+            5.550000000000001
+          ],
+          [
+            4.025,
+            4.95
+          ],
+          [
+            4.425,
+            4.15
+          ],
+          [
+            5.1000000000000005,
+            3.5250000000000004
+          ],
+          [
+            5.800000000000001,
+            3.575
+          ],
+          [
+            5.875,
+            3.85
+          ],
+          [
+            5.825,
+            4.65
+          ],
+          [
+            5.925000000000001,
+            4.95
+          ],
+          [
+            5.9750000000000005,
+            5.65
+          ],
+          [
+            5.825,
+            5.8500000000000005
+          ],
+          [
+            5.775,
+            6.75
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 48.57809787845469,
+        "medianVisitDurationSec": 14.444390087983777,
+        "observedPresenceSec": 1802.1863703338304,
+        "p95VisitDurationSec": 257.63215224052215,
+        "pointCount": 8995,
+        "relativeIntensity": 1.0,
+        "uniqueVisitors": 17,
+        "visitCount": 37
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0,
+      "statement": "Kehadiran tinggi di sekitar (5.06 m, 5.21 m) dengan area ID presence-01."
+    },
+    {
+      "areaId": "presence-02",
+      "cardId": "72ebb6668052-v2-evidence-0005",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.7075000000000002,
+        "centroid": [
+          6.461746583699365,
+          6.333250976085896
+        ],
+        "points": [
+          [
+            6.775,
+            7.050000000000001
+          ],
+          [
+            6.300000000000001,
+            7.075
+          ],
+          [
+            5.775,
+            6.75
+          ],
+          [
+            5.825,
+            5.8500000000000005
+          ],
+          [
+            5.95,
+            5.675000000000001
+          ],
+          [
+            6.300000000000001,
+            5.575
+          ],
+          [
+            6.65,
+            5.625
+          ],
+          [
+            7.125,
+            6.0
+          ],
+          [
+            7.2250000000000005,
+            6.300000000000001
+          ],
+          [
+            7.175000000000001,
+            6.65
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 68.75239987948083,
+        "medianVisitDurationSec": 5.596342604343192,
+        "observedPresenceSec": 620.781258132067,
+        "p95VisitDurationSec": 303.5616124098716,
+        "pointCount": 3095,
+        "relativeIntensity": 0.34446007824211644,
+        "uniqueVisitors": 6,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0,
+      "statement": "Kehadiran tinggi di sekitar (6.46 m, 6.33 m) dengan area ID presence-02."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

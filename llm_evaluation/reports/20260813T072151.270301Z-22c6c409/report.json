@@ -1,0 +1,60 @@
+{
+  "caseResultsFile": "case_results.jsonl",
+  "metadata": {
+    "backendRoot": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation",
+    "caseCount": 2,
+    "coldStartDefinition": "first case in this fresh evaluator process; subsequent cases are warm",
+    "config": {
+      "answerNumPredict": 4096,
+      "numCtx": 12288,
+      "topK": 6
+    },
+    "generatedAt": "2026-08-13T07:21:57.208265Z",
+    "gitCommit": "4ac46b69e7e755b51d7bef9c7f62bddfaed0ed96",
+    "language": "en",
+    "model": "Qwen3-8B-Q4_K_M",
+    "modelReadyAtSummary": false,
+    "modelState": "error",
+    "package": {
+      "areaCount": 39,
+      "fingerprint": "173b079829665ae886a86d594fb5a8be768361f019fa8f93fc688a768ec61f86",
+      "jobId": "72ebb6668052",
+      "schemaVersion": "2.0"
+    },
+    "runtime": "llama.cpp"
+  },
+  "metrics": {
+    "errors": {
+      "invalidSchemaCases": 0,
+      "runtimeErrorCases": 2
+    },
+    "latencyMs": {
+      "coldStartWall": 4070.032,
+      "pipelineP50": null,
+      "pipelineP95": null,
+      "warmPipelineP50": null,
+      "warmPipelineP95": null,
+      "warmWallP50": 1867.309,
+      "warmWallP95": 1867.309
+    },
+    "schemaValidity": {
+      "rate": 0.0,
+      "totalCases": 2,
+      "validCases": 0
+    },
+    "selectedEntityAccuracy": {
+      "areaCases": 2,
+      "correctCases": 0,
+      "rate": 0.0,
+      "unexpectedAreaSelectionCount": 0
+    },
+    "totalCases": 2
+  },
+  "schemaVersion": "1.0",
+  "visualizations": {
+    "caseOutcomes": "charts/case_outcomes.svg",
+    "html": "report.html",
+    "latency": "charts/latency.svg",
+    "quality": "charts/quality.svg"
+  }
+}

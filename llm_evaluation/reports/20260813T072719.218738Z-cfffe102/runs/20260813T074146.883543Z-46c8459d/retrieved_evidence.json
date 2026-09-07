@@ -1,0 +1,292 @@
+{
+  "cards": [
+    {
+      "areaId": "stop-cluster-08",
+      "cardId": "72ebb6668052-v2-evidence-0030",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 116.35995612905943,
+        "center": [
+          5.256197590359906,
+          4.2421922285161795
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 9,
+        "meanVisitDurationSec": 5.902269017102624,
+        "medianEpisodeSec": 7.794905770335134,
+        "medianVisitDurationSec": 2.398432544718503,
+        "p95VisitDurationSec": 8.794252663967834,
+        "totalDwellSec": 134.91183064041573,
+        "uniqueVisitors": 3,
+        "visitCount": 49
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.17678426376349507,
+      "statement": "Akumulasi berhenti di sekitar (5.26 m, 4.24 m) dengan area ID stop-cluster-08."
+    },
+    {
+      "areaId": "stop-cluster-07",
+      "cardId": "72ebb6668052-v2-evidence-0029",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": -164.4158627056929,
+        "center": [
+          1.9490480741194836,
+          1.2333313258027305
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 13,
+        "meanVisitDurationSec": 16.013941844027794,
+        "medianEpisodeSec": 9.994831941487519,
+        "medianVisitDurationSec": 6.596589081381751,
+        "p95VisitDurationSec": 54.81165836711756,
+        "totalDwellSec": 144.52526987390956,
+        "uniqueVisitors": 4,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16989379407156463,
+      "statement": "Akumulasi berhenti di sekitar (1.95 m, 1.23 m) dengan area ID stop-cluster-07."
+    },
+    {
+      "areaId": "stop-cluster-06",
+      "cardId": "72ebb6668052-v2-evidence-0028",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 88.13594140498539,
+        "center": [
+          1.7128970217929431,
+          0.10046653879325923
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 8,
+        "meanVisitDurationSec": 13.672930095954943,
+        "medianEpisodeSec": 8.995348747338753,
+        "medianVisitDurationSec": 2.5986563047867435,
+        "p95VisitDurationSec": 55.87111055291517,
+        "totalDwellSec": 169.71224636645817,
+        "uniqueVisitors": 2,
+        "visitCount": 15
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16975170961301067,
+      "statement": "Akumulasi berhenti di sekitar (1.71 m, 0.10 m) dengan area ID stop-cluster-06."
+    },
+    {
+      "areaId": "stop-cluster-09",
+      "cardId": "72ebb6668052-v2-evidence-0031",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 46.17474565077927,
+        "center": [
+          7.715144955793545,
+          4.926323554989846
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 10,
+        "meanVisitDurationSec": 7.240722492956993,
+        "medianEpisodeSec": 7.994775149061667,
+        "medianVisitDurationSec": 2.4983672340817833,
+        "p95VisitDurationSec": 32.48876751199932,
+        "totalDwellSec": 134.71196126168923,
+        "uniqueVisitors": 2,
+        "visitCount": 22
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16970872003411627,
+      "statement": "Akumulasi berhenti di sekitar (7.72 m, 4.93 m) dengan area ID stop-cluster-09."
+    },
+    {
+      "areaId": "stop-cluster-11",
+      "cardId": "72ebb6668052-v2-evidence-0033",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": -144.96846322070286,
+        "center": [
+          4.6512407610746935,
+          4.999075687505685
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 13,
+        "meanVisitDurationSec": 17.750583829281503,
+        "medianEpisodeSec": 5.597105887233056,
+        "medianVisitDurationSec": 5.597105887232971,
+        "p95VisitDurationSec": 71.90282098706112,
+        "totalDwellSec": 75.75943569753338,
+        "uniqueVisitors": 3,
+        "visitCount": 10
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16838428394289187,
+      "statement": "Akumulasi berhenti di sekitar (4.65 m, 5.00 m) dengan area ID stop-cluster-11."
+    },
+    {
+      "areaId": "stop-cluster-03",
+      "cardId": "72ebb6668052-v2-evidence-0025",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 146.12948174869638,
+        "center": [
+          0.7480857854247769,
+          4.0727489662309075
+        ],
+        "radiiM": [
+          0.35,
+          0.35
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+      "metrics": {
+        "episodeCount": 17,
+        "meanVisitDurationSec": 28.68125584725876,
+        "medianEpisodeSec": 10.593077072506759,
+        "medianVisitDurationSec": 19.0875256683847,
+        "p95VisitDurationSec": 73.56192484030375,
+        "totalDwellSec": 211.46180269268143,
+        "uniqueVisitors": 3,
+        "visitCount": 8
+      },
+      "questionTypes": [
+        "dwell_area",
+        "longest_stop_area",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.16801706390029494,
+      "statement": "Akumulasi berhenti di sekitar (0.75 m, 4.07 m) dengan area ID stop-cluster-03."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

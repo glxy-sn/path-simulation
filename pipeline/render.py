@@ -85,7 +85,9 @@ def _identity_label(cam_idx, track_id, cam_to_global, identity_confidence):
     return global_id, f"ID {global_id} · {suffix}", _gid_color(global_id)
 
 
-def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, cam_idx, cfg, out_path):
+def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, cam_idx, cfg, out_path, privacy=None):
+    from .privacy import PersonPrivacy
+    privacy = privacy or PersonPrivacy(cfg.DEVICE)
     per_frame = cam_info["per_frame"]
     if not per_frame:
         return
@@ -98,27 +100,30 @@ def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, 
     max_fi = max(fset)
     seek_accurate(cap, min_fi)   # frame-akurat -> overlay sesuai window slider
     idx = min_fi
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if idx > max_fi:
-            break
-        if idx in fset:
-            for box in per_frame[idx]:
-                tid, x1, y1, x2, y2 = box[:5]
-                _gid, label, color = _identity_label(
-                    cam_idx, tid, cam_to_global, identity_confidence
-                )
-                p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
-                cv2.rectangle(frame, p1, p2, color, 2)
-                cv2.putText(frame, label, (int(x1), int(y1) - 6),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                cv2.circle(frame, (int((x1 + x2) / 2), int(y2)), 4, (0, 165, 255), -1)  # titik kaki
-            vw.write(frame)
-        idx += 1
-    cap.release()
-    vw.release()
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if idx > max_fi:
+                break
+            if idx in fset:
+                frame = privacy.redact(frame)
+                for box in per_frame[idx]:
+                    tid, x1, y1, x2, y2 = box[:5]
+                    _gid, label, color = _identity_label(
+                        cam_idx, tid, cam_to_global, identity_confidence
+                    )
+                    p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
+                    cv2.rectangle(frame, p1, p2, color, 2)
+                    cv2.putText(frame, label, (int(x1), int(y1) - 6),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    cv2.circle(frame, (int((x1 + x2) / 2), int(y2)), 4, (0, 165, 255), -1)  # titik kaki
+                vw.write(frame)
+            idx += 1
+    finally:
+        cap.release()
+        vw.release()
     _transcode_h264(out_path)
 
 
@@ -203,11 +208,13 @@ def _bev_cell(global_tracks, venue, t, w, h, bg=None):
 
 def render_combined_video(cams, cam_det, cam_render, cam_to_global, identity_confidence,
                           global_tracks, venue, cfg,
-                          out_path, cell_w=480, cell_h=270, bg_path=None):
+                          out_path, cell_w=480, cell_h=270, bg_path=None, privacy=None):
     """
     Susun semua kamera (ID global) dalam grid + satu panel BEV fusion -> 1 video.
     Frame antar kamera disinkronkan per langkah waktu (relatif ke start trim).
     """
+    from .privacy import PersonPrivacy
+    privacy = privacy or PersonPrivacy(cfg.DEVICE)
     n = len(cams)
     if n == 0:
         return
@@ -237,41 +244,44 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, identity_con
     vw = _open_writer(out_path, cfg.PROC_FPS, (out_w, out_h))
     bev_bg = _load_bg(bg_path, cell_w, cell_h)           # floor map untuk panel BEV (sekali)
 
-    for k in range(steps):
-        t = k / cfg.PROC_FPS
-        cells = []
-        for r in readers:
-            target = r["proc"][k]
-            while r["pos"] < target:                     # maju ke frame target (grab cepat)
-                if not r["cap"].grab():
-                    break
+    try:
+        for k in range(steps):
+            t = k / cfg.PROC_FPS
+            cells = []
+            for r in readers:
+                target = r["proc"][k]
+                while r["pos"] < target:                     # maju ke frame target (grab cepat)
+                    if not r["cap"].grab():
+                        break
+                    r["pos"] += 1
+                ok, frame = r["cap"].read()
                 r["pos"] += 1
-            ok, frame = r["cap"].read()
-            r["pos"] += 1
-            if not ok or frame is None:
-                frame = np.zeros((cell_h, cell_w, 3), np.uint8)
-            else:
-                _draw_global_boxes(
-                    frame,
-                    r["per_frame"].get(target, []),
-                    r["idx"],
-                    cam_to_global,
-                    identity_confidence,
-                )
-                frame = cv2.resize(frame, (cell_w, cell_h))
-            cv2.putText(frame, f"C{r['idx'] + 1}", (8, 22),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cells.append(frame)
+                if not ok or frame is None:
+                    frame = np.zeros((cell_h, cell_w, 3), np.uint8)
+                else:
+                    frame = privacy.redact(frame)
+                    _draw_global_boxes(
+                        frame,
+                        r["per_frame"].get(target, []),
+                        r["idx"],
+                        cam_to_global,
+                        identity_confidence,
+                    )
+                    frame = cv2.resize(frame, (cell_w, cell_h))
+                cv2.putText(frame, f"C{r['idx'] + 1}", (8, 22),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cells.append(frame)
 
-        cells.append(_bev_cell(global_tracks, venue, t, cell_w, cell_h, bg=bev_bg))
+            cells.append(_bev_cell(global_tracks, venue, t, cell_w, cell_h, bg=bev_bg))
 
-        canvas = np.zeros((out_h, out_w, 3), np.uint8)
-        for p, cell in enumerate(cells):
-            rr, cc = divmod(p, cols)
-            canvas[rr * cell_h:(rr + 1) * cell_h, cc * cell_w:(cc + 1) * cell_w] = cell
-        vw.write(canvas)
+            canvas = np.zeros((out_h, out_w, 3), np.uint8)
+            for p, cell in enumerate(cells):
+                rr, cc = divmod(p, cols)
+                canvas[rr * cell_h:(rr + 1) * cell_h, cc * cell_w:(cc + 1) * cell_w] = cell
+            vw.write(canvas)
 
-    for r in readers:
-        r["cap"].release()
-    vw.release()
+    finally:
+        for r in readers:
+            r["cap"].release()
+        vw.release()
     _transcode_h264(out_path)

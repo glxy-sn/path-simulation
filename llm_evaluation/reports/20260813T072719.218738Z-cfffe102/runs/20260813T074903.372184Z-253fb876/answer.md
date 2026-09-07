@@ -1,0 +1,1 @@
+Jumlah global tracks yang teramati adalah 41. Angka ini diambil dari field `trackCount` dalam `analysisSummary`, yang merepresentasikan total jumlah tracks yang terdeteksi secara global dalam data. Metrik ini tidak tergantung pada area tertentu dan mencakup semua tracks yang valid dalam analisis.
