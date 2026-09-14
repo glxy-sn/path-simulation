@@ -20,6 +20,7 @@ struct ProcessingView: View {
     @State private var progress = 0.0
     @State private var shown = 0.0
     @State private var done = false
+    @State private var preparationMessage: String?
     @State private var errorMsg: String? = nil
 
     var body: some View {
@@ -28,7 +29,7 @@ struct ProcessingView: View {
                 SectionHeader(
                     title: "Processing",
                     subtitle: done ? "Analysis complete."
-                        : (errorMsg == nil ? "Running the pipeline on your footage…" : "Something went wrong.")
+                        : (errorMsg == nil ? (preparationMessage ?? "Running the pipeline on your footage…") : "Something went wrong.")
                 )
                 stagesPanel.frame(maxWidth: .infinity)
             }
@@ -80,10 +81,17 @@ struct ProcessingView: View {
                 switch update {
                 case .progress(let stage, let frac):
                     applyStage(stage, frac)
-                case .finished(let result):
+                case .finished(var result):
+                    applyStage("rendering", 0.99)
+                    result.preparedVisuals = try await PreparedResultVisuals.prepare(
+                        result, floorplanURL: session.usesScaledCanvas ? nil : session.floorPlanURL,
+                        widthM: session.venueWidthM, heightM: session.venueHeightM)
+                    try await AskDataPreparation.prepare(jobId: result.jobId, http: sidecar.http,
+                                                         zones: session.customZones) { preparationMessage = $0 }
+                    preparationMessage = nil
                     session.jobId = result.jobId
+                    await saveToHistory(result)
                     session.result = result
-                    saveToHistory(result)
                     progress = 1
                     for i in stages.indices { stages[i].state = .done }
                     done = true
@@ -94,7 +102,7 @@ struct ProcessingView: View {
         }
     }
 
-    private func saveToHistory(_ result: AnalysisResult) {
+    private func saveToHistory(_ result: AnalysisResult) async {
         let folder = UUID().uuidString
         let saved = SavedAnalysis(from: session, result: result)
         let floorSrc = session.usesScaledCanvas ? nil : session.floorPlanURL
@@ -116,13 +124,14 @@ struct ProcessingView: View {
         session.historyFolder = folder   // agar edit zona di Hasil ikut tersimpan
 
         let artsCopy = arts
-        Task.detached { await HistoryStore.downloadArtifacts(artsCopy, folder: folder) }
+        await Task.detached { await HistoryStore.downloadArtifacts(artsCopy, folder: folder) }.value
     }
 
     private func applyStage(_ name: String, _ fraction: Double) {
         progress = max(progress, fraction)
-        let order = ["detection", "tracking", "fusion", "analytics"]
-        let idx = order.firstIndex(of: name) ?? (name == "done" ? stages.count : 0)
+        let order = ["detection", "fusion", "analytics", "rendering"]
+        let normalizedStage = name == "tracking" ? "detection" : name
+        let idx = order.firstIndex(of: normalizedStage) ?? (name == "done" ? stages.count : 0)
         for i in stages.indices {
             stages[i].state = i < idx ? .done : (i == idx ? .active : .pending)
         }

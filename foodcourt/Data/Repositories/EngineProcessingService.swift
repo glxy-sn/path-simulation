@@ -27,7 +27,9 @@ struct EngineProcessingService: ProcessingService {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    guard await sidecar.waitUntilReady() else { throw EngineError.notReady }
+                    // Backend pertama kali perlu memuat torch dan bobot deteksi; sepuluh detik
+                    // bawaan terlalu pendek dan menolak analisis yang sebenarnya baik-baik saja.
+                    guard await sidecar.waitUntilReady(timeout: 180) else { throw EngineError.notReady }
                     let jobId = try await api.createJob(built)
 
                     while true {
@@ -80,6 +82,9 @@ struct EngineProcessingService: ProcessingService {
         func artifactURL(_ uri: String?) -> URL? {
             guard let uri else { return nil }
             guard uri.hasPrefix("file://") else { return URL(string: uri) }
+            if let local = URL(string: uri), FileManager.default.isReadableFile(atPath: local.path) {
+                return local
+            }
             let raw = String(uri.dropFirst("file://".count))
             let path = raw.removingPercentEncoding ?? raw
             var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
@@ -95,7 +100,7 @@ struct EngineProcessingService: ProcessingService {
         }
         let stops = dto.stopPoints.map { StopPoint(name: $0.label, dwellSeconds: $0.dwellSeconds,
                                                    point: CGPoint(x: $0.x, y: $0.y)) }
-        let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) }
+        let occ = dto.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count, second: $0.second) }
         let summary = VenueSummary(
             totalVisitors: dto.summary.totalVisitors,
             avgDwellSeconds: dto.summary.avgDwellSeconds,
@@ -140,7 +145,8 @@ struct EngineProcessingService: ProcessingService {
             blobs: blobs, paths: paths,
             identityQuality: quality,
             fusionDiagnosticsURL: artifactURL(dto.artifacts.fusionDiagnostics),
-            observations: observations
+            observations: observations,
+            heatmapGrid: dto.heatmapGrid
         )
     }
 }

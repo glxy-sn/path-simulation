@@ -103,10 +103,10 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Detection",         systemImage: "person.crop.rectangle"),
-        .init(name: "Tracking",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
+        .init(name: "Detection + tracking", systemImage: "person.crop.rectangle"),
         .init(name: "Multi-camera Fusion",             systemImage: "camera.metering.multispot"),
-        .init(name: "Analytics", systemImage: "chart.dots.scatter")
+        .init(name: "Analytics", systemImage: "chart.dots.scatter"),
+        .init(name: "Preparing video", systemImage: "video")
     ]
 }
 
@@ -151,6 +151,15 @@ struct OccupancyPoint: Identifiable {
     let id = UUID()
     let minute: Int
     let count: Int
+    /// Posisi bin dalam detik. Rekaman pendek dibagi lebih halus dari satu menit,
+    /// jadi `minute` saja akan menumpuk semua titik di angka yang sama.
+    var second: Int?
+
+    init(minute: Int, count: Int, second: Int? = nil) {
+        self.minute = minute
+        self.count = count
+        self.second = second
+    }
 }
 
 struct HeatBlob: Identifiable {

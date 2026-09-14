@@ -16,8 +16,8 @@ enum EngineError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network:            return "Could not connect to the engine."
-        case .notReady:           return "Engine is not ready. Make sure the server is running on :8765."
+        case .network:            return "Could not reach the analysis engine. It may still be starting up — try again in a moment."
+        case .notReady:           return "The analysis engine is still starting. Try again in a moment; if it keeps failing, check the message at the top of the window."
         case .http(let c, let m): return "HTTP \(c): \(m)"
         case .decoding(let e):    return "Could not read the response: \(e.localizedDescription)"
         case .job(let m):         return m

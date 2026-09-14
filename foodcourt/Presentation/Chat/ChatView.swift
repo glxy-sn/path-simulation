@@ -1,5 +1,42 @@
 import SwiftUI
 
+enum AskDataLayout {
+    static let panelWidth: CGFloat = 380
+}
+
+enum AskDataLanguage {
+    static func answer(_ value: String) -> String {
+        let text = clean(value)
+        let comparison = #"(?i)\b(?:dibanding\w*|daripada|ketimbang|versus|compared|than|whereas|sedangkan)\b|\barea\s+(?:lain\w*|kedua)\b|\blebih\s+(?:tinggi|rendah|lama|pendek|panjang|ramai|sepi|besar|kecil|sering|sedikit|banyak)\b"#
+        let boundary = try! NSRegularExpression(pattern: #"(?<=[.!?])\s+"#)
+        let paragraphs = text.components(separatedBy: "\n").map { paragraph in
+            let separated = boundary.stringByReplacingMatches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph), withTemplate: "\n")
+            return separated.components(separatedBy: "\n").filter {
+                $0.range(of: comparison, options: .regularExpression) == nil
+            }.joined(separator: " ")
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return paragraphs.isEmpty ? "Jawaban lama hanya berisi perbandingan. Kirim ulang pertanyaan untuk penjelasan satu area." : paragraphs
+    }
+
+    static func clean(_ value: String) -> String {
+        var text = value
+        let names = ["visitCount": "jumlah kunjungan", "uniqueVisitors": "perkiraan pengunjung unik",
+                     "totalDwellSec": "total waktu berada di area (detik)",
+                     "meanVisitDurationSec": "rata-rata lama kunjungan (detik)",
+                     "relativeIntensity": "tingkat keramaian relatif", "trackCount": "jumlah jejak anonim"]
+        for (key, label) in names { text = text.replacingOccurrences(of: key, with: label) }
+        for pattern in [#"(?i)\b(?:flow\s+area|area(?:\s+(?:flow|arus|kepadatan|kehadiran))?)(?:\s+(?:nomor|no\.?))?\s*[-#:]?\s*\d+\b"#,
+                        #"(?i)\b(?:flow|presence|density|stop)[-_]\d+\b"#] {
+            text = text.replacingOccurrences(of: pattern, with: "area yang terlihat pada gambar", options: .regularExpression)
+        }
+        for pattern in [#"\b[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+\b"#,
+                        #"\b[a-z]+(?:[A-Z][a-zA-Z0-9]*)+\b"#] {
+            text = text.replacingOccurrences(of: pattern, with: "indikator pada data", options: .regularExpression)
+        }
+        return text.replacingOccurrences(of: "`", with: "")
+    }
+}
+
 // MARK: - API models
 
 struct ExplanatoryStatusDTO: Decodable {
@@ -97,11 +134,11 @@ struct ResultsChatContainer: View {
                 onOpenMedia: openMedia,
                 onClose: closeChat
             )
-            .frame(width: 420)
+            .frame(width: AskDataLayout.panelWidth)
             .transition(.move(edge: .trailing).combined(with: .opacity))
         } else {
             LegacyChatUnavailable(onClose: closeChat)
-                .frame(width: 420)
+                .frame(width: AskDataLayout.panelWidth)
         }
     }
 
@@ -259,6 +296,57 @@ final class HistoryChatViewModel {
 
     var isReady: Bool { status?.state == "ready" && status?.modelReady == true }
 
+    /// Backend sudah lama mengirim alasan kegagalan lewat `error`/`modelError`,
+    /// tetapi tidak ada satu pun tempat yang menampilkannya. Akibatnya layar
+    /// hanya diam dengan tombol kirim mati, tanpa petunjuk apa pun.
+    var blockedReason: String? {
+        guard let status else { return nil }
+        if status.state == "error" {
+            return status.error ?? "Analysis package failed to build."
+        }
+        if status.modelState == "error" || status.modelError != nil {
+            return status.modelError ?? "The language model failed to load."
+        }
+        return nil
+    }
+
+    /// `error` tidak akan berubah sendiri, jadi memungut status tiap detik
+    /// selamanya hanya membebani backend tanpa hasil.
+    var isBlocked: Bool { blockedReason != nil }
+
+    /// Kenapa tombol kirim mati. Sebelumnya keadaan ini tidak pernah dijelaskan,
+    /// jadi tombol abu-abu tampak seperti aplikasi yang rusak.
+    var disabledReason: String? {
+        if isAnswering { return "Answering your previous question…" }
+        guard let status else { return "Connecting to the analysis engine…" }
+        if status.state != "ready" {
+            let percent = Int((status.progress * 100).rounded())
+            return status.state == "building"
+                ? "Preparing this analysis for questions… \(percent)%"
+                : "This analysis is not ready for questions yet (\(status.state))."
+        }
+        if !status.modelReady {
+            return "Loading the language model… (\(status.modelState))"
+        }
+        return nil
+    }
+
+    func rebuild() async {
+        do {
+            status = try await api.build(jobId: jobId)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        // Loop pemungutan di view sudah berhenti waktu status jadi error, jadi
+        // percobaan ulang harus memungut statusnya sendiri sampai selesai.
+        while !Task.isCancelled && !isReady && !isBlocked {
+            try? await Task.sleep(for: .seconds(1))
+            await pollStatus()
+        }
+    }
+
     func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -279,7 +367,7 @@ final class HistoryChatViewModel {
     }
 
     func pollStatus() async {
-        guard status?.state != "ready" else { return }
+        guard !isReady, !isBlocked else { return }
         do { status = try await api.status(jobId: jobId) }
         catch { errorMessage = error.localizedDescription }
     }
@@ -381,6 +469,7 @@ struct HistoryChatInspector: View {
         VStack(spacing: 0) {
             header
             Divider()
+            blockedBanner
             if let active = viewModel.active {
                 conversation(active)
             } else {
@@ -390,7 +479,7 @@ struct HistoryChatInspector: View {
         .background(.regularMaterial)
         .task {
             await viewModel.load()
-            while !Task.isCancelled && !viewModel.isReady {
+            while !Task.isCancelled && !viewModel.isReady && !viewModel.isBlocked {
                 try? await Task.sleep(for: .seconds(1))
                 await viewModel.pollStatus()
             }
@@ -605,6 +694,7 @@ struct HistoryChatInspector: View {
                 }
             }
             errorNote
+            composerNote
             Divider()
             composer
         }
@@ -635,6 +725,14 @@ struct HistoryChatInspector: View {
                 .padding(.vertical, 9)
                 .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: Radius.m))
                 .onSubmit { Task { await viewModel.send() } }
+                // `axis: .vertical` membuat Return menyisipkan baris baru dan
+                // `onSubmit` tidak pernah terpanggil, sehingga tombol Enter
+                // terasa mati total. Return dikirim, Shift+Return tetap baris baru.
+                .onKeyPress(.return, phases: .down) { press in
+                    guard !press.modifiers.contains(.shift) else { return .ignored }
+                    Task { await viewModel.send() }
+                    return .handled
+                }
             Button { Task { await viewModel.send() } } label: {
                 Image(systemName: "paperplane.fill")
                     .frame(width: 22, height: 22)
@@ -645,6 +743,58 @@ struct HistoryChatInspector: View {
                 .disabled(!viewModel.isReady || viewModel.isAnswering || viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(Space.m)
+    }
+
+    /// Ditampilkan ketika paket penjelasan atau model gagal disiapkan. Tanpa ini
+    /// pengguna hanya melihat tombol kirim yang mati tanpa sebab.
+    @ViewBuilder private var blockedBanner: some View {
+        if let reason = viewModel.blockedReason {
+            VStack(alignment: .leading, spacing: Space.s) {
+                HStack(alignment: .firstTextBaseline, spacing: Space.s) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Chat is unavailable for this analysis")
+                            .font(.callout.weight(.semibold))
+                        Text(reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        // Status kegagalan tersimpan di disk dan tidak pernah
+                        // dicoba ulang sendiri, jadi pesan lama tetap tampil
+                        // walau penyebabnya sudah diperbaiki oleh pembaruan.
+                        Text("This message may be left over from an earlier attempt. Press Try Again to rebuild it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Button("Try Again") { Task { await viewModel.rebuild() } }
+                    .controlSize(.small)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Space.m)
+            .background(Color.orange.opacity(0.10))
+            Divider()
+        }
+    }
+
+    @ViewBuilder private var composerNote: some View {
+        // Saat jawaban sedang dibuat, input sudah nonaktif sehingga status ini
+        // hanya menduplikasi keadaan dan menambah bar loading di atas composer.
+        // Tetap tampilkan alasan lain, misalnya model belum siap atau chat gagal.
+        if viewModel.blockedReason == nil,
+           !viewModel.isAnswering,
+           let reason = viewModel.disabledReason {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(reason)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, Space.m)
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     @ViewBuilder private var errorNote: some View {
@@ -683,7 +833,7 @@ private struct AssistantBubble: View {
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 7) {
-                Text(displayAttributedText)
+                markdownBody
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -695,24 +845,85 @@ private struct AssistantBubble: View {
     }
 
     private var displayText: String {
-        guard let areaId = exchange.selectedAreaId,
-              let label = exchange.selectedAreaLabel,
-              !label.isEmpty else { return exchange.text }
-        return exchange.text
-            .replacingOccurrences(of: "Table with ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: "Area with ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: "ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: areaId, with: label, options: .caseInsensitive)
+        var text = exchange.text
+        if let areaId = exchange.selectedAreaId, !areaId.isEmpty {
+            text = text.replacingOccurrences(of: areaId, with: "area yang terlihat pada gambar", options: .caseInsensitive)
+        }
+        return AskDataLanguage.answer(text)
     }
 
-    private var displayAttributedText: AttributedString {
+    /// Qwen menjawab dengan paragraf plus daftar berbutir. `interpretedSyntax: .full`
+    /// mengurai strukturnya tetapi membuang batas antar-blok begitu semuanya
+    /// dijejalkan ke satu `Text`, sehingga paragraf saling menempel. Jadi blok
+    /// dipisah sendiri dan tiap blok dirender terpisah.
+    private var markdownBody: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(markdownBlocks.enumerated()), id: \.offset) { _, block in
+                if block.isBullet {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("\u{2022}")
+                        Text(inlineMarkdown(block.text))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    Text(inlineMarkdown(block.text))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private var markdownBlocks: [MarkdownBlock] {
+        var blocks: [MarkdownBlock] = []
+        var paragraph: [String] = []
+
+        func flushParagraph() {
+            let joined = paragraph.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            if !joined.isEmpty { blocks.append(MarkdownBlock(text: joined, isBullet: false)) }
+            paragraph.removeAll()
+        }
+
+        for rawLine in displayText.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty {
+                flushParagraph()
+            } else if let bullet = line.bulletContent {
+                flushParagraph()
+                blocks.append(MarkdownBlock(text: bullet, isBullet: true))
+            } else {
+                paragraph.append(line)
+            }
+        }
+        flushParagraph()
+        return blocks
+    }
+
+    private func inlineMarkdown(_ text: String) -> AttributedString {
         (try? AttributedString(
-            markdown: displayText,
+            markdown: text,
             options: .init(
-                interpretedSyntax: .full,
+                interpretedSyntax: .inlineOnlyPreservingWhitespace,
                 failurePolicy: .returnPartiallyParsedIfPossible
             )
-        )) ?? AttributedString(displayText)
+        )) ?? AttributedString(text)
+    }
+}
+
+private struct MarkdownBlock {
+    let text: String
+    let isBullet: Bool
+}
+
+private extension String {
+    /// Isi butir untuk baris "- teks", "* teks", atau "1. teks"; nil kalau bukan butir.
+    var bulletContent: String? {
+        for marker in ["- ", "* ", "\u{2022} "] where hasPrefix(marker) {
+            return String(dropFirst(marker.count))
+        }
+        if let ordered = range(of: "^[0-9]+[.)]\\s+", options: .regularExpression) {
+            return String(self[ordered.upperBound...])
+        }
+        return nil
     }
 }
 
@@ -733,9 +944,9 @@ private struct ImageBubble: View {
                 .frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: Radius.s))
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(media.caption).font(.callout.weight(.semibold))
+                        Text("Area yang terlihat pada gambar").font(.callout.weight(.semibold))
                         if let metric = media.metricSummary?.sorted(by: { $0.key < $1.key }).first {
-                            Text("\(metric.key): \(metric.value)").font(.caption).foregroundStyle(.secondary)
+                            Text(AskDataLanguage.clean("\(metric.key): \(metric.value)")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()

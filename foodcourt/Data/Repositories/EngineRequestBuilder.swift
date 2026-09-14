@@ -22,7 +22,8 @@ enum EngineRequestBuilder {
                     ),
                     verified: $0.verified
                 )
-            }
+            },
+            floorBounds: session.floorBounds
         )
     }
 

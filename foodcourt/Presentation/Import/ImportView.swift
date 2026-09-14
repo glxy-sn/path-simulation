@@ -147,16 +147,10 @@ private struct ImportInspector: View {
                 field("Venue name") {
                     TextField("e.g. Campus Food Court", text: $session.venueName).textFieldStyle(.roundedBorder)
                 }
-                field("Type") {
-                    Picker("", selection: $session.venueType) {
-                        ForEach(VenueType.allCases) { Text($0.displayName).tag($0) }
-                    }.labelsHidden()
-                }
                 HStack(spacing: Space.s) {
                     field("Width (m)") { TextField("10", text: $session.widthM).textFieldStyle(.roundedBorder) }
                     field("Length (m)") { TextField("7.5", text: $session.heightM).textFieldStyle(.roundedBorder) }
                 }
-                InfoNote(text: "Venue size sets the scale. Without it, dwell time and distance are meaningless.")
             }
             .card()
         }

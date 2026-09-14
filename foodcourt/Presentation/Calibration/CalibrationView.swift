@@ -101,6 +101,10 @@ struct CalibrationView: View {
                         .frame(height: 360 * scale)
 
                     inspector
+                    FloorBoundsEditor(image: session.usesScaledCanvas ? nil : floorPlanImage) {
+                        personDetectionRefreshToken = UUID()
+                    }
+                        .frame(height: 420 * scale)
 
                     if session.allCalibrated {
                         TableAnnotationEditor(

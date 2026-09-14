@@ -35,6 +35,7 @@ struct SavedAnalysis: Codable {
     var paths: [SPath]
     /// Opsional agar riwayat yang dibuat sebelum data observasi/zona custom tetap dapat dibuka.
     var observations: [[Double]]?
+    var heatmapGrid: HeatmapGrid? = nil
     var customZones: [SCustomZone]?
     var identityQuality: SIdentityQuality?
     // artifact (nama file relatif di dalam folder; nil kalau tak ada)
@@ -45,11 +46,15 @@ struct SavedAnalysis: Codable {
     var overlays: [SOverlay]
     var floorPlanFile: String?
     var tables: [STable]?
+    var floorBounds: FloorBounds? = nil
 
     struct SZone: Codable { var code: String; var visits: Int; var share: Double
         var x: Double; var y: Double; var w: Double; var h: Double; var color: UInt }
     struct SStop: Codable { var name: String; var dwell: Int; var x: Double = 0; var y: Double = 0 }
-    struct SOcc: Codable { var minute: Int; var count: Int }
+    /// `second` opsional supaya riwayat lama tetap terbaca. Tanpa menyimpannya,
+    /// rekaman pendek kehilangan resolusi detik begitu dibuka dari Riwayat dan
+    /// grafiknya kosong lagi.
+    struct SOcc: Codable { var minute: Int; var count: Int; var second: Int? }
     struct SBlob: Codable { var x: Double; var y: Double; var intensity: Double; var radius: Double }
     struct SPath: Codable { var hue: Double; var pts: [[Double]] }   // [x,y,t]
     struct SCustomZone: Codable { var id: UUID? = nil; var name: String; var x: Double; var y: Double
@@ -86,7 +91,7 @@ extension SavedAnalysis {
                                     x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height,
                                     color: $0.colorHex) }
         stops = r.stops.map { SStop(name: $0.name, dwell: $0.dwellSeconds, x: $0.point.x, y: $0.point.y) }
-        occupancy = r.occupancy.map { SOcc(minute: $0.minute, count: $0.count) }
+        occupancy = r.occupancy.map { SOcc(minute: $0.minute, count: $0.count, second: $0.second) }
         blobs = r.blobs.map { SBlob(x: $0.x, y: $0.y, intensity: $0.intensity, radius: $0.radius) }
         paths = r.paths.map { p in
             var pts: [[Double]] = []
@@ -95,6 +100,7 @@ extension SavedAnalysis {
             }
             return SPath(hue: p.hue, pts: pts)
         }
+        heatmapGrid = r.heatmapGrid
         observations = r.observations.map { [Double($0.trackId), Double($0.point.x), Double($0.point.y), $0.t] }
         customZones = s.customZones.map { SCustomZone(id: $0.id, name: $0.name, x: $0.rect.minX, y: $0.rect.minY,
                                                       w: $0.rect.width, h: $0.rect.height, color: $0.colorHex) }
@@ -115,6 +121,7 @@ extension SavedAnalysis {
         fusionDiagnosticsFile = r.fusionDiagnosticsURL != nil ? "fusion_diagnostics.json" : nil
         overlays = r.overlayVideos.enumerated().map { i, ov in SOverlay(cam: ov.cam, file: "overlay_\(i).mp4") }
         floorPlanFile = (!s.usesScaledCanvas && s.floorPlanURL != nil) ? "floorplan\(Self.ext(s.floorPlanURL))" : nil
+        floorBounds = s.floorBounds
         tables = s.tableAnnotations.map {
             STable(id: $0.id, label: $0.label, x: $0.rectNormalized.minX, y: $0.rectNormalized.minY,
                    width: $0.rectNormalized.width, height: $0.rectNormalized.height, verified: $0.verified)
@@ -139,6 +146,7 @@ struct LoadedAnalysis {
     var floorPlanURL: URL?
     var cameraCount: Int
     var durationSec: Double
+    var floorBounds: FloorBounds = FloorBounds()
     var tables: [TableAnnotation]
 }
 
@@ -171,13 +179,37 @@ enum HistoryStore {
     /// Async (detached): unduh artifact video/heatmap dari server ke folder app.
     static func downloadArtifacts(_ items: [(name: String, url: URL)], folder: String) async {
         let dir = folderURL(folder)
+        var failures: [String] = []
         for item in items {
+            let target = dir.appendingPathComponent(item.name)
             do {
-                let (data, _) = try await URLSession.shared.data(from: item.url)
-                try data.write(to: dir.appendingPathComponent(item.name))
+                if item.url.isFileURL {
+                    // Artefak engine ada di disk yang sama. Menyalinnya lewat
+                    // URLSession berarti memuat seluruh video ke memori dulu —
+                    // untuk rekaman panjang itu ratusan megabita sekaligus.
+                    if FileManager.default.fileExists(atPath: target.path) {
+                        try FileManager.default.removeItem(at: target)
+                    }
+                    try FileManager.default.copyItem(at: item.url, to: target)
+                } else {
+                    let (temporary, response) = try await URLSession.shared.download(from: item.url)
+                    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                        throw URLError(.badServerResponse)
+                    }
+                    if FileManager.default.fileExists(atPath: target.path) {
+                        try FileManager.default.removeItem(at: target)
+                    }
+                    try FileManager.default.moveItem(at: temporary, to: target)
+                }
             } catch {
-                // artifact gagal diunduh -> lewati; load nanti graceful (file tak ada)
+                // Kegagalan di sini dulu ditelan diam-diam, dan akibatnya baru
+                // muncul jauh kemudian sebagai panel video hitam tanpa sebab.
+                failures.append("\(item.name): \(error.localizedDescription)")
             }
+        }
+        if !failures.isEmpty {
+            let note = "Artefak berikut gagal disalin ke riwayat:\n" + failures.joined(separator: "\n")
+            try? note.write(to: dir.appendingPathComponent("artifacts-error.txt"), atomically: true, encoding: .utf8)
         }
     }
 
@@ -205,7 +237,7 @@ enum HistoryStore {
                                   peakOccupancy: s.peakOccupancy, captureRate: s.captureRate),
             zones: zones,
             stops: s.stops.map { StopPoint(name: $0.name, dwellSeconds: $0.dwell, point: CGPoint(x: $0.x, y: $0.y)) },
-            occupancy: s.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count) },
+            occupancy: s.occupancy.map { OccupancyPoint(minute: $0.minute, count: $0.count, second: $0.second) },
             heatmapURL: fileURL(s.heatmapFile),
             pathVideoURL: fileURL(s.pathVideoFile),
             combinedVideoURL: fileURL(s.combinedVideoFile),
@@ -229,7 +261,8 @@ enum HistoryStore {
             fusionDiagnosticsURL: fileURL(s.fusionDiagnosticsFile),
             observations: (s.observations ?? []).compactMap {
                 $0.count >= 4 ? TrackObservation(trackId: Int($0[0]), point: CGPoint(x: $0[1], y: $0[2]), t: $0[3]) : nil
-            }
+            },
+            heatmapGrid: s.heatmapGrid
         )
         let customZones = (loadZones(folder: folder) ?? (s.customZones ?? []).map {
             CustomZone(id: $0.id ?? UUID(), name: $0.name,
@@ -245,6 +278,7 @@ enum HistoryStore {
             floorPlanURL: fileURL(s.floorPlanFile),
             cameraCount: s.cameraCount,
             durationSec: s.durationSec,
+            floorBounds: s.floorBounds ?? FloorBounds(),
             tables: (s.tables ?? []).map {
                 TableAnnotation(id: $0.id, label: $0.label,
                                 rectNormalized: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height),

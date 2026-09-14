@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import CoreGraphics
+import AppKit
 
 struct SessionCamera: Identifiable, Hashable {
     let id = UUID()
@@ -62,6 +63,8 @@ struct AnalysisResult {
     var identityQuality: IdentityQualitySummary?
     var fusionDiagnosticsURL: URL?
     var observations: [TrackObservation] = []
+    var heatmapGrid: HeatmapGrid? = nil
+    var preparedVisuals: PreparedResultVisuals? = nil
 }
 
 /// Rectangle meja terverifikasi dalam koordinat floorplan ternormalisasi.
@@ -110,6 +113,7 @@ final class AnalysisSession {
     var floorPlanPixelSize: PixelSize?
     /// Pilihan sumber yang aktif. Berkas denah tetap disimpan saat pengguna beralih ke canvas.
     var usesScaledCanvas = true
+    var floorBounds = FloorBounds()
     var tableAnnotations: [TableAnnotation] = []
 
     // Trim global
@@ -174,6 +178,7 @@ final class AnalysisSession {
         cameras = []
         floorPlanURL = nil; floorPlanName = nil; floorPlanPixelSize = nil; usesScaledCanvas = true
         tableAnnotations = []
+        floorBounds = FloorBounds()
         jobId = nil; stage = ""; progress = 0
         isProcessing = false; errorMessage = nil; result = nil
         customZones = []

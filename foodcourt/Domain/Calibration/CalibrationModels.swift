@@ -174,6 +174,7 @@ struct CalibrationProfile: Codable {
     var cameras: [CameraCalibrationProfile]
     /// Optional menjaga profil schema 1/2 tetap dapat didekode.
     var tables: [TableAnnotation]?
+    var floorBounds: FloorBounds? = nil
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -187,6 +188,7 @@ struct CalibrationProfile: Codable {
         case homographyWorldToFloor = "H_world_to_floor"
         case cameras
         case tables
+        case floorBounds
     }
 }
 

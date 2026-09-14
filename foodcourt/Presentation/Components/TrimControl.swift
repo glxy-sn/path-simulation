@@ -135,9 +135,6 @@ struct GlobalTrimCard: View {
                 }
             }
 
-            Text("All previews follow global time; offsets are applied per camera source.")
-                .font(.caption2).foregroundStyle(.tertiary)
-
             RangeSlider(lower: $startSec, upper: $endSec, minSec: minSec, maxSec: maxSec,
                         onScrub: { t in if let t { controller.scrub(to: t) } })
 

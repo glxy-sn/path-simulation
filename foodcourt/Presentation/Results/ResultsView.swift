@@ -27,6 +27,9 @@ struct ResultsView: View {
     @Environment(\.uiScale) private var scale
     @Environment(AnalysisSession.self) private var session
     @Environment(AppRouter.self) private var router
+    @Environment(Sidecar.self) private var sidecar
+    @State private var reloadingVisual = false
+    @State private var reloadMessage: String?
     @State private var visual: ResultVisual = .boundingBox
 
     // Data: hasil engine bila ada, kalau tidak pakai contoh.
@@ -34,6 +37,15 @@ struct ResultsView: View {
     private var zones: [ZoneRank] { session.result?.zones ?? SampleResult.zones }
     private var stops: [StopPoint] { session.result?.stops ?? SampleResult.stops }
     private var occupancy: [OccupancyPoint] { session.result?.occupancy ?? SampleResult.occupancy }
+
+    /// Rekaman pendek dibagi per detik; yang panjang tetap per menit.
+    private var occupancyUsesSeconds: Bool {
+        occupancy.contains { $0.second != nil } && (occupancy.last?.second ?? 0) < 180
+    }
+    private var occupancyAxisLabel: String { occupancyUsesSeconds ? "second" : "minute" }
+    private func occupancyX(_ point: OccupancyPoint) -> Int {
+        occupancyUsesSeconds ? (point.second ?? point.minute * 60) : point.minute
+    }
 
     private var heatmapURL: URL? { session.result?.heatmapURL }
     private var pathVideoURL: URL? { session.result?.pathVideoURL }
@@ -45,8 +57,7 @@ struct ResultsView: View {
 
     /// Floor map untuk background Zona (kalau user pakai floor plan, bukan canvas).
     private var floorMapImage: NSImage? {
-        guard !session.usesScaledCanvas, let url = session.floorPlanURL else { return nil }
-        return NSImage(contentsOf: url)
+        session.result?.preparedVisuals?.floorplan
     }
 
     private var blobs: [HeatBlob] {
@@ -111,6 +122,11 @@ struct ResultsView: View {
             .spad(Space.xl, [.horizontal, .top])
             .padding(.bottom, Space.xl)
         }
+        .overlay { if reloadingVisual { ProgressView("Preparing visualization…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+        .disabled(reloadingVisual)
+        .alert("Visualization", isPresented: Binding(get: { reloadMessage != nil }, set: { if !$0 { reloadMessage = nil } })) {
+            Button("OK") { reloadMessage = nil }
+        } message: { Text(reloadMessage ?? "") }
         .onChange(of: session.customZones) { _, zones in
             if let folder = session.historyFolder { HistoryStore.saveZones(folder: folder, zones) }
         }
@@ -135,6 +151,12 @@ struct ResultsView: View {
                 }
                 .buttonStyle(.bordered).controlSize(.large)
             }
+            Menu {
+                Button("Reload Detail Path Simulation") { reloadVisualization(path: true) }
+                Button("Reload Heatmap") { reloadVisualization(path: false) }
+            } label: { Image(systemName: "ellipsis.circle") }
+            .menuStyle(.borderlessButton).fixedSize()
+            .disabled(session.result == nil || reloadingVisual)
             Button("Export", systemImage: "square.and.arrow.up") { exportBundle() }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .tint(Theme.accentFill)
@@ -148,6 +170,55 @@ struct ResultsView: View {
                 .controlSize(.large)
                 .help("Open Ask Data panel")
             }
+        }
+    }
+
+    private struct PathReloadRequest: Encodable {
+        let jobId: String?
+        let widthM: Double
+        let heightM: Double
+        let floorPlanPath: String?
+        let observations: [[Double]]
+    }
+    private struct PathReloadResponse: Decodable { let path: String; let sampled: Bool }
+
+    private func reloadVisualization(path: Bool) {
+        guard !reloadingVisual, var result = session.result else { return }
+        reloadingVisual = true
+        Task { @MainActor in
+            defer { reloadingVisual = false }
+            do {
+                if path {
+                    guard await sidecar.ensureRunning() else { throw URLError(.cannotConnectToHost) }
+                    let request = PathReloadRequest(jobId: result.jobId ?? session.jobId,
+                        widthM: session.venueWidthM, heightM: session.venueHeightM,
+                        floorPlanPath: session.usesScaledCanvas ? nil : session.floorPlanURL?.path,
+                        observations: result.observations.map { [Double($0.trackId), Double($0.point.x), Double($0.point.y), $0.t] })
+                    let response: PathReloadResponse = try await sidecar.http.post("/visualizations/path", body: request, timeout: 900)
+                    guard let url = URL(string: response.path), url.isFileURL else { throw URLError(.badURL) }
+                    if let folder = session.historyFolder {
+                        let directory = HistoryStore.folderURL(folder)
+                        let name = "paths-reloaded-" + UUID().uuidString + ".mp4"
+                        let target = directory.appendingPathComponent(name)
+                        try FileManager.default.copyItem(at: url, to: target)
+                        let metadata = directory.appendingPathComponent("result.json")
+                        let oldData = try Data(contentsOf: metadata)
+                        guard var object = try JSONSerialization.jsonObject(with: oldData) as? [String: Any] else { throw URLError(.cannotDecodeContentData) }
+                        object["pathVideoFile"] = name
+                        try oldData.write(to: directory.appendingPathComponent("result-before-reload-" + UUID().uuidString + ".json"), options: .atomic)
+                        try JSONSerialization.data(withJSONObject: object).write(to: metadata, options: .atomic)
+                        result.pathVideoURL = target
+                    } else { result.pathVideoURL = url }
+                    reloadMessage = response.sampled ? "Path updated using saved observation samples. Original history and video are preserved." : "Path updated. Original history and video are preserved."
+                } else {
+                    let grid = result.heatmapGrid?.isValid == true ? result.heatmapGrid! : HeatmapGrid.fromSavedObservations(result.observations)
+                    guard let traffic = grid.image(mode: 0), let spent = grid.image(mode: 1) else { throw URLError(.cannotDecodeContentData) }
+                    result.preparedVisuals = PreparedResultVisuals(floorplan: result.preparedVisuals?.floorplan,
+                        footTraffic: traffic, timeSpent: spent, pathSummary: result.preparedVisuals?.pathSummary)
+                    reloadMessage = "Heatmap updated from saved data."
+                }
+                session.result = result
+            } catch { reloadMessage = error.localizedDescription }
         }
     }
 
@@ -357,13 +428,11 @@ struct ResultsView: View {
                     .frame(height: min(400, max(300, 360 * scale)))
                     .frame(maxWidth: .infinity)
                 case .path:
-                    PathTab(paths: paths, trajectories: trajectories, flow: flowField,
-                            stops: stops, background: floorMapImage,
-                            widthM: session.venueWidthM, heightM: session.venueHeightM)
+                    PreparedPathTab(videoURL: pathVideoURL, summary: session.result?.preparedVisuals?.pathSummary)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                 case .heatmap:
-                    HeatmapTab(observations: observations, fallbackBlobs: blobs, background: floorMapImage)
+                    HeatmapTab(visuals: session.result?.preparedVisuals)
                         .aspectRatio(venueAspect, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                 case .zona:
@@ -456,17 +525,27 @@ struct ResultsView: View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("Occupancy Over Time").font(.headline)
             Chart(occupancy) { point in
-                AreaMark(x: .value("Minute", point.minute), y: .value("People", point.count))
+                AreaMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
                     .foregroundStyle(LinearGradient(
                         colors: [Theme.accent.opacity(0.35), Theme.accent.opacity(0.02)],
                         startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Minute", point.minute), y: .value("People", point.count))
+                LineMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
                     .foregroundStyle(Theme.accent)
                     .interpolationMethod(.catmullRom)
+                // Tanpa titik, rekaman yang hanya menghasilkan satu bin tampil
+                // sebagai grafik kosong karena garis butuh dua titik.
+                PointMark(x: .value(occupancyAxisLabel, occupancyX(point)), y: .value("People", point.count))
+                    .foregroundStyle(Theme.accent)
+                    .symbolSize(occupancy.count > 1 ? 18 : 60)
             }
-            .chartXAxisLabel("minute")
+            .chartXAxisLabel(occupancyAxisLabel)
             .chartYAxisLabel("people")
             .frame(minHeight: 220)
+            if occupancy.count == 1 {
+                Text("The recording is too short to show a trend; this is the whole clip as one sample.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .card()
     }
@@ -477,10 +556,11 @@ struct ResultsView: View {
 /// AVPlayerView (AppKit) → punya tombol full-screen + Picture-in-Picture bawaan.
 private struct PlayerView: NSViewRepresentable {
     let player: AVPlayer
+    var showsControls = true
     func makeNSView(context: Context) -> AVPlayerView {
         let v = AVPlayerView()
         v.player = player
-        v.controlsStyle = .floating
+        v.controlsStyle = showsControls ? .floating : .none
         v.videoGravity = .resizeAspect
         v.allowsPictureInPicturePlayback = true
         if #available(macOS 13.0, *) {
@@ -495,13 +575,24 @@ private struct PlayerView: NSViewRepresentable {
 
 private struct FileVideoPlayer: View {
     let url: URL
+    let autoplay: Bool
     @State private var player: AVPlayer
-    init(url: URL) {
+    @State private var looper: AVPlayerLooper?
+    init(url: URL, autoplay: Bool = false) {
         self.url = url
-        _player = State(initialValue: AVPlayer(url: url))
+        self.autoplay = autoplay
+        if autoplay {
+            let queue = AVQueuePlayer()
+            _player = State(initialValue: queue)
+            _looper = State(initialValue: AVPlayerLooper(player: queue, templateItem: AVPlayerItem(url: url)))
+        } else {
+            _player = State(initialValue: AVPlayer(url: url))
+            _looper = State(initialValue: nil)
+        }
     }
     var body: some View {
-        PlayerView(player: player)
+        PlayerView(player: player, showsControls: !autoplay)
+            .onAppear { if autoplay { player.play() } }
             .onDisappear { player.pause() }
     }
 }
@@ -522,71 +613,87 @@ private struct FileImage: View {
 
 // MARK: - Heatmap 2 opsi (jumlah orang vs lama singgah)
 
-/// Bangun blob heatmap dari observasi.
-/// mode 0 = jumlah ORANG unik (traffic); 1 = LAMA singgah (∝ waktu); 2 = GABUNGAN (keduanya dinormalisasi).
-func Foodcourt_heatBlobs(_ obs: [TrackObservation], mode: Int, top: Int = 40) -> [HeatBlob] {
-    guard !obs.isEmpty else { return [] }
-    let GW = 56, GH = 42
-    var count = [Double](repeating: 0, count: GW * GH)
-    var tracks = Array(repeating: Set<Int>(), count: GW * GH)
-    for o in obs {
-        let cx = min(GW - 1, max(0, Int(o.point.x * Double(GW))))
-        let cy = min(GH - 1, max(0, Int(o.point.y * Double(GH))))
-        let idx = cy * GW + cx
-        count[idx] += 1
-        tracks[idx].insert(o.trackId)
-    }
-    let traffic = tracks.map { Double($0.count) }
-    let dwell = count
-    func norm(_ a: [Double]) -> [Double] { let m = a.max() ?? 1; return m > 0 ? a.map { $0 / m } : a }
-
-    var work: [Double]
-    switch mode {
-    case 1:  work = dwell
-    case 2:  let nt = norm(traffic), nd = norm(dwell); work = zip(nt, nd).map { 0.5 * $0 + 0.5 * $1 }
-    default: work = traffic
-    }
-    let maxv = work.max() ?? 1
-    guard maxv > 0 else { return [] }
-    var blobs: [HeatBlob] = []
-    for _ in 0..<top {
-        guard let idx = work.indices.max(by: { work[$0] < work[$1] }), work[idx] > 0 else { break }
-        let cx = idx % GW, cy = idx / GW
-        blobs.append(HeatBlob(x: (Double(cx) + 0.5) / Double(GW),
-                              y: (Double(cy) + 0.5) / Double(GH),
-                              intensity: work[idx] / maxv, radius: 0.06))
-        for dy in -1...1 { for dx in -1...1 {
-            let nx = cx + dx, ny = cy + dy
-            if nx >= 0, nx < GW, ny >= 0, ny < GH { work[ny * GW + nx] = 0 }
-        }}
-    }
-    return blobs
-}
-
 private struct HeatmapTab: View {
-    let observations: [TrackObservation]
-    let fallbackBlobs: [HeatBlob]
-    var background: NSImage? = nil
-    @State private var mode = 2   // default: gabungan (Activity)
-
+    let visuals: PreparedResultVisuals?
+    @State private var mode = 0
     var body: some View {
-        let blobs = observations.isEmpty ? fallbackBlobs
-                                         : Foodcourt_heatBlobs(observations, mode: mode)
         ZStack(alignment: .top) {
-            HeatmapView(blobs: blobs, background: background)
-                .overlay(alignment: .bottomTrailing) { HeatmapLegend().padding(Space.s) }
-
+            ZStack {
+                if let background = visuals?.floorplan { Image(nsImage: background).resizable() }
+                else { Color(hex: 0x0F1524) }
+                if let image = mode == 0 ? visuals?.footTraffic : visuals?.timeSpent {
+                    Image(decorative: image, scale: 1).resizable().interpolation(.high)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) { HeatmapLegend(relative: true).padding(Space.s) }
+            .help("Colors rank measured cell values across the whole floor plan. Faded edges show transparency, not lower activity.")
             Picker("", selection: $mode) {
-                Text("Activity").tag(2)
                 Text("Foot Traffic").tag(0)
                 Text("Time Spent").tag(1)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 340)
-            .padding(6)
-            .background(.ultraThinMaterial, in: Capsule())
-            .padding(Space.s)
+            .pickerStyle(.segmented).frame(width: 340).padding(6)
+            .background(.ultraThinMaterial, in: Capsule()).padding(Space.s)
         }
+    }
+}
+
+private struct PreparedPathTab: View {
+    let videoURL: URL?
+    let summary: CGImage?
+    @State private var mode = 0
+    var body: some View {
+        ZStack(alignment: .top) {
+            if mode == 0 {
+                if let videoURL { FileVideoPlayer(url: videoURL, autoplay: true).id(videoURL) }
+                else {
+                    ContentUnavailableView("Path video unavailable", systemImage: "video.slash",
+                                           description: Text("Re-analyze this recording to generate its final video."))
+                }
+            } else if let summary {
+                Image(decorative: summary, scale: 1).resizable()
+            } else {
+                ContentUnavailableView("Path video unavailable", systemImage: "video.slash",
+                                       description: Text("Re-analyze this recording to generate its final video."))
+            }
+            Picker("", selection: $mode) {
+                Text("Detail").tag(0)
+                Text("Summary").tag(1)
+            }
+            .pickerStyle(.segmented).frame(width: 220).padding(6)
+            .background(.ultraThinMaterial, in: Capsule()).padding(Space.s)
+        }
+    }
+}
+
+struct PreparedResultVisuals {
+    let floorplan: NSImage?
+    let footTraffic: CGImage?
+    let timeSpent: CGImage?
+    let pathSummary: CGImage?
+
+    @MainActor
+    static func prepare(_ result: AnalysisResult, floorplanURL: URL?, widthM: Double, heightM: Double) async throws -> PreparedResultVisuals {
+        // This runs at the processing/loading gate, never in a Results view body.
+        await Task.yield()
+        let background = floorplanURL.flatMap { NSImage(contentsOf: $0) }
+        let grid = result.heatmapGrid?.isValid == true ? result.heatmapGrid! : HeatmapGrid.fromSavedObservations(result.observations)
+        let traffic = grid.image(mode: 0), spent = grid.image(mode: 1)
+        await Task.yield()
+        let trajectories = Dictionary(grouping: result.observations, by: \.trackId).values
+            .map { $0.sorted { $0.t < $1.t }.map(\.point) }.filter { $0.count >= 2 }
+        let aspect = max(heightM,0.1)/max(widthM,0.1)
+        let imageWidth = min(1200.0, 1600.0/aspect)
+        let view = PathSummary(trajectories: trajectories, flow: Foodcourt_flowField(trajectories),
+                               background: background, densePaths: result.paths.map(\.points),
+                               widthM: widthM, heightM: heightM)
+            .overlay(StopPinsLayer(stops: result.stops))
+            .frame(width: imageWidth, height: imageWidth*aspect)
+        let renderer = ImageRenderer(content: view)
+        guard let traffic, let spent, let summary = renderer.cgImage else {
+            throw NSError(domain: "PreparedResultVisuals", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Unable to prepare result visualizations. Please try again."])
+        }
+        return PreparedResultVisuals(floorplan: background, footTraffic: traffic, timeSpent: spent, pathSummary: summary)
     }
 }
 
@@ -822,42 +929,6 @@ func Foodcourt_smoothPath(_ pts: [CGPoint], sigma: Double = 2.4) -> [CGPoint] {
             sy += Double(pts[j].y) * weight
         }
         return CGPoint(x: sx / norm, y: sy / norm)
-    }
-}
-
-private struct PathTab: View {
-    let paths: [PathTrace]
-    let trajectories: [[CGPoint]]
-    let flow: [FlowArrow]
-    let stops: [StopPoint]
-    var background: NSImage? = nil
-    var widthM: Double = 10
-    var heightM: Double = 7.5
-    @State private var mode = 0   // 0 = detail, 1 = ringkasan
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Group {
-                if mode == 0 {
-                    PathContent(paths: paths, background: background)
-                } else {
-                    PathSummary(trajectories: trajectories, flow: flow, background: background,
-                                densePaths: paths.map { $0.points },
-                                widthM: widthM, heightM: heightM)
-                }
-            }
-            .overlay(StopPinsLayer(stops: stops))
-
-            Picker("", selection: $mode) {
-                Text("Detail").tag(0)
-                Text("Summary").tag(1)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 220)
-            .padding(6)
-            .background(.ultraThinMaterial, in: Capsule())
-            .padding(Space.s)
-        }
     }
 }
 
@@ -1141,100 +1212,18 @@ private struct BoundingBoxContent: View {
     }
 }
 
-// MARK: - Konten video: path simulation
-
-private struct PathContent: View {
-    let paths: [PathTrace]
-    var background: NSImage? = nil
-
-    private var span: (lo: Double, hi: Double) {
-        let all = paths.flatMap { $0.times }
-        guard let lo = all.min(), let hi = all.max(), hi > lo else { return (0, 1) }
-        return (lo, hi)
-    }
-
-    var body: some View {
-        let (lo, hi) = span
-        GeometryReader { geo in
-            ZStack {
-                if let background {
-                    Image(nsImage: background).resizable().allowsHitTesting(false)
-                } else {
-                    Theme.canvasBackground
-                    Canvas { ctx, size in
-                        var grid = Path()
-                        let cols = 10, rows = 6
-                        for c in 0...cols { let x = size.width * CGFloat(c)/CGFloat(cols)
-                            grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
-                        for r in 0...rows { let y = size.height * CGFloat(r)/CGFloat(rows)
-                            grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y)) }
-                        ctx.stroke(grid, with: .color(Theme.canvasGrid), lineWidth: 1)
-                    }
-                }
-
-                TimelineView(.animation) { tl in
-                    Canvas { ctx, size in
-                        let loop = 10.0   // detik nyata untuk satu putaran
-                        let phase = tl.date.timeIntervalSinceReferenceDate
-                            .truncatingRemainder(dividingBy: loop) / loop
-                        let cursor = lo + phase * (hi - lo)
-                        draw(ctx, size, cursor: cursor, phase: phase)
-                    }
-                }
-            }
-        }
-    }
-
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize, cursor: Double, phase: Double) {
-        for trace in paths {
-            let n = trace.points.count
-            guard n >= 2 else { continue }
-            // berapa titik yang sudah "terlihat" sampai cursor
-            let upto: Int
-            if trace.times.count == n {
-                upto = max(1, trace.times.filter { $0 <= cursor }.count)
-            } else {
-                upto = max(1, Int(phase * Double(n)))
-            }
-            let vis = Array(trace.points.prefix(upto))
-            let color = Color(hue: trace.hue, saturation: 0.85, brightness: 0.95)
-
-            // jejak (diputus di lompatan besar)
-            var g = Path()
-            var started = false
-            for (a, b) in zip(vis, vis.dropFirst()) {
-                if hypot(b.x - a.x, b.y - a.y) > 0.15 { started = false; continue }
-                let pa = CGPoint(x: a.x * size.width, y: a.y * size.height)
-                let pb = CGPoint(x: b.x * size.width, y: b.y * size.height)
-                if !started { g.move(to: pa); started = true }
-                g.addLine(to: pb)
-            }
-            ctx.stroke(g, with: .color(color.opacity(0.85)),
-                       style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-
-            // kepala (titik bergerak)
-            if let head = vis.last {
-                let p = CGPoint(x: head.x * size.width, y: head.y * size.height)
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)),
-                         with: .color(color))
-                ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)),
-                           with: .color(.white), lineWidth: 1.5)
-            }
-        }
-    }
-}
-
 // MARK: - Heatmap + legend
 
 private struct HeatmapLegend: View {
+    var relative = false
     var body: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
                 HStack(spacing: Space.s) {
-                    Text("Low").font(.caption2).foregroundStyle(.white.opacity(0.8))
-                    LinearGradient(stops: Theme.heatStops, startPoint: .leading, endPoint: .trailing)
+                    Text(relative ? "Low · relative" : "Low").font(.caption2).foregroundStyle(.white.opacity(0.8))
+                    LinearGradient(colors: relative ? [Color(hex: 0x3B82F6), Color(hex: 0x22C55E), Color(hex: 0xFACC15), Color(hex: 0xEF4444)] : Theme.heatStops.map(\.color), startPoint: .leading, endPoint: .trailing)
                         .frame(width: 80, height: 8).clipShape(Capsule())
                     Text("High").font(.caption2).foregroundStyle(.white.opacity(0.8))
                 }

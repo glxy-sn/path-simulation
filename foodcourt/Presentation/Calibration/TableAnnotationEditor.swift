@@ -61,8 +61,6 @@ struct TableAnnotationEditor: View {
                         Text(message).font(.caption).foregroundStyle(.orange)
                     }
                     Spacer()
-                    Text("Seat capacity is not computed because it is not present in the data.")
-                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(width: 230)
             }
