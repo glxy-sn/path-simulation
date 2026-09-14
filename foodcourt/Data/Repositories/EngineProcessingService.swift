@@ -82,6 +82,9 @@ struct EngineProcessingService: ProcessingService {
         func artifactURL(_ uri: String?) -> URL? {
             guard let uri else { return nil }
             guard uri.hasPrefix("file://") else { return URL(string: uri) }
+            if let local = URL(string: uri), FileManager.default.isReadableFile(atPath: local.path) {
+                return local
+            }
             let raw = String(uri.dropFirst("file://".count))
             let path = raw.removingPercentEncoding ?? raw
             var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
@@ -142,7 +145,8 @@ struct EngineProcessingService: ProcessingService {
             blobs: blobs, paths: paths,
             identityQuality: quality,
             fusionDiagnosticsURL: artifactURL(dto.artifacts.fusionDiagnostics),
-            observations: observations
+            observations: observations,
+            heatmapGrid: dto.heatmapGrid
         )
     }
 }

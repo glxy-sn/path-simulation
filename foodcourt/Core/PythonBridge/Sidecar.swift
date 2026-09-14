@@ -167,10 +167,18 @@ final class Sidecar {
         // Bundel gemuk menyimpan bobot di dalam .app; build ramping mengunduhnya
         // ke Application Support. Yang di dalam .app menang supaya bundel lama
         // tetap berperilaku persis seperti sebelumnya.
-        let searchRoots = [
+        var searchRoots = [
             root.appendingPathComponent("models", isDirectory: true),
             AssetInstaller.modelsRoot,
+            root,
         ]
+        // Development build (Xcode Debug): bundle_backend.sh hanya menyalin .py,
+        // bukan file .pt. Tambahkan path sumber development agar bobot model yang
+        // ada di be/path-simulation/models/ tetap ditemukan.
+        if let devRoot = developmentBackendSource() {
+            searchRoots.append(devRoot.appendingPathComponent("models", isDirectory: true))
+            searchRoots.append(devRoot)
+        }
         func locate(_ filename: String) -> URL? {
             searchRoots
                 .map { $0.appendingPathComponent(filename) }
@@ -195,6 +203,18 @@ final class Sidecar {
         }
 
         return environment
+    }
+
+    /// Path sumber development be/path-simulation, diturunkan dari #filePath.
+    /// Nil pada build distribusi di mana source code tidak tersedia.
+    private func developmentBackendSource() -> URL? {
+        let uiRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let candidate = uiRoot.deletingLastPathComponent()
+            .appendingPathComponent("be/path-simulation", isDirectory: true)
+        return FileManager.default.fileExists(atPath:
+            candidate.appendingPathComponent("server.py").path) ? candidate : nil
     }
 
 }

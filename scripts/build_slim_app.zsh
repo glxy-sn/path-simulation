@@ -60,8 +60,8 @@ rsync -a \
 # menyimpan model besar saja, jadi checkpoint ReID tetap ikut di bundle.
 info "Menyalin bobot ReID…"
 mkdir -p "$RES/backend/models"
-[[ -f "$BACKEND/osnet_x0_25_msmt17.pt" ]] || fail "osnet_x0_25_msmt17.pt tidak ada di $BACKEND"
-cp "$BACKEND/osnet_x0_25_msmt17.pt" "$RES/backend/models/osnet_x0_25_msmt17.pt"
+[[ -f "$BACKEND/models/osnet_x0_25_msmt17.pt" ]] || fail "osnet_x0_25_msmt17.pt tidak ada di $BACKEND/models"
+cp "$BACKEND/models/osnet_x0_25_msmt17.pt" "$RES/backend/models/osnet_x0_25_msmt17.pt"
 
 # Alamat manifest ditanam di Info.plist supaya aplikasi tahu harus mengunduh
 # runtime dan seluruh model ke Application Support pada setup pertama.

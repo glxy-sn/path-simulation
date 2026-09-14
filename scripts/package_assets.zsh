@@ -40,7 +40,7 @@ fi
 # diunggah ke storage aset; YOLO11s dan Qwen tetap diunduh dari sumber resminya.
 YOLO_BASE="$BACKEND/yolo11s.pt"
 YOLO_FINETUNED="$BACKEND/models/yolo11s-finetuned-stage2-caviar.pt"
-OSNET="$BACKEND/osnet_x0_25_msmt17.pt"
+OSNET="$BACKEND/models/osnet_x0_25_msmt17.pt"
 PRIVACY_NAME="deeplabv3_mobilenet_v3_large-fc3c493d.pth"
 PRIVACY_MODEL="$BACKEND/models/$PRIVACY_NAME"
 [[ -f "$PRIVACY_MODEL" ]] || fail "Model privasi tidak ada di $PRIVACY_MODEL"

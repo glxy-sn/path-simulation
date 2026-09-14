@@ -46,7 +46,8 @@ enum CalibrationProfileStore {
             homographyFloorToWorld: floorToWorld,
             homographyWorldToFloor: worldToFloor,
             cameras: profiles,
-            tables: session.tableAnnotations
+            tables: session.tableAnnotations,
+            floorBounds: session.floorBounds
         )
     }
 
@@ -109,6 +110,7 @@ enum CalibrationProfileStore {
         session.floorPlanURL = profile.floorplan.usesCanvas ? nil : floorPlanURL
         session.floorPlanName = profile.floorplan.usesCanvas ? nil : profile.floorplan.sourceName
         session.floorPlanPixelSize = profile.floorplan.usesCanvas ? nil : profile.floorplan.pixelSize
+        session.floorBounds = profile.floorBounds ?? FloorBounds()
         session.tableAnnotations = profile.tables ?? []
         // Nama tempat ikut tersimpan di profil tetapi selama ini tidak pernah dibaca
         // balik. Isi hanya kalau sesi masih kosong supaya ketikan pengguna menang.

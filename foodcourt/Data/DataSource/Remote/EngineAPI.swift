@@ -25,6 +25,7 @@ struct VenueDTO: Codable {
     let type: String
     let floorPlanPath: String?
     let tables: [TableAnnotationDTO]?
+    var floorBounds: FloorBounds? = nil
 }
 
 struct CalibrationDTO: Codable {
@@ -112,6 +113,7 @@ struct IdentityQualityDTO: Codable {
 }
 
 struct JobResultDTO: Codable {
+    var heatmapGrid: HeatmapGrid? = nil
     let jobId: String
     let venue: VenueDTO
     let summary: SummaryDTO

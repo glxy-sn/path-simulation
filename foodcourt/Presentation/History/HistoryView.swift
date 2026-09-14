@@ -18,6 +18,9 @@ struct HistoryView: View {
     // Session TERPISAH untuk melihat riwayat — tidak mengganggu analisis yang sedang berjalan.
     @State private var viewerSession = AnalysisSession()
     @State private var selectedFolder: String?
+    @State private var isPreparing = false
+    @State private var preparationMessage = "Preparing visualizations…"
+    @State private var preparationError: String?
 
     var body: some View {
         Group {
@@ -31,8 +34,13 @@ struct HistoryView: View {
                 .environment(router)
             } else {
                 historyList
+                    .disabled(isPreparing)
+                    .overlay { if isPreparing { ProgressView(preparationMessage).padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
             }
         }
+        .alert("Unable to open analysis", isPresented: Binding(get: { preparationError != nil }, set: { if !$0 { preparationError = nil } })) {
+            Button("OK") { preparationError = nil }
+        } message: { Text(preparationError ?? "") }
     }
 
     private var historyList: some View {
@@ -66,8 +74,25 @@ struct HistoryView: View {
     }
 
     private func open(_ rec: AnalysisRecord) {
-        guard load(into: viewerSession, folder: rec.folder) else { return }
-        selectedFolder = rec.folder
+        guard !isPreparing else { return }
+        isPreparing = true
+        preparationMessage = "Preparing visualizations…"
+        Task { @MainActor in
+            defer { isPreparing = false }
+            await Task.yield()
+            guard load(into: viewerSession, folder: rec.folder), var result = viewerSession.result else { return }
+            do {
+                result.preparedVisuals = try await PreparedResultVisuals.prepare(
+                    result, floorplanURL: viewerSession.usesScaledCanvas ? nil : viewerSession.floorPlanURL,
+                    widthM: viewerSession.venueWidthM, heightM: viewerSession.venueHeightM)
+                preparationMessage = "Preparing Ask Data…"
+                guard await sidecar.ensureRunning() else { throw URLError(.cannotConnectToHost) }
+                try await AskDataPreparation.prepare(jobId: viewerSession.jobId, http: sidecar.http,
+                                                     zones: viewerSession.customZones) { preparationMessage = $0 }
+                viewerSession.result = result
+                selectedFolder = rec.folder
+            } catch { preparationError = error.localizedDescription }
+        }
     }
 
     @discardableResult
@@ -82,6 +107,7 @@ struct HistoryView: View {
         s.jobId = loaded.jobId
         s.floorPlanURL = loaded.floorPlanURL
         s.customZones = loaded.customZones
+        s.floorBounds = loaded.floorBounds
         s.tableAnnotations = loaded.tables
         s.result = loaded.result
         s.trimStartSec = 0

@@ -1,5 +1,42 @@
 import SwiftUI
 
+enum AskDataLayout {
+    static let panelWidth: CGFloat = 380
+}
+
+enum AskDataLanguage {
+    static func answer(_ value: String) -> String {
+        let text = clean(value)
+        let comparison = #"(?i)\b(?:dibanding\w*|daripada|ketimbang|versus|compared|than|whereas|sedangkan)\b|\barea\s+(?:lain\w*|kedua)\b|\blebih\s+(?:tinggi|rendah|lama|pendek|panjang|ramai|sepi|besar|kecil|sering|sedikit|banyak)\b"#
+        let boundary = try! NSRegularExpression(pattern: #"(?<=[.!?])\s+"#)
+        let paragraphs = text.components(separatedBy: "\n").map { paragraph in
+            let separated = boundary.stringByReplacingMatches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph), withTemplate: "\n")
+            return separated.components(separatedBy: "\n").filter {
+                $0.range(of: comparison, options: .regularExpression) == nil
+            }.joined(separator: " ")
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return paragraphs.isEmpty ? "Jawaban lama hanya berisi perbandingan. Kirim ulang pertanyaan untuk penjelasan satu area." : paragraphs
+    }
+
+    static func clean(_ value: String) -> String {
+        var text = value
+        let names = ["visitCount": "jumlah kunjungan", "uniqueVisitors": "perkiraan pengunjung unik",
+                     "totalDwellSec": "total waktu berada di area (detik)",
+                     "meanVisitDurationSec": "rata-rata lama kunjungan (detik)",
+                     "relativeIntensity": "tingkat keramaian relatif", "trackCount": "jumlah jejak anonim"]
+        for (key, label) in names { text = text.replacingOccurrences(of: key, with: label) }
+        for pattern in [#"(?i)\b(?:flow\s+area|area(?:\s+(?:flow|arus|kepadatan|kehadiran))?)(?:\s+(?:nomor|no\.?))?\s*[-#:]?\s*\d+\b"#,
+                        #"(?i)\b(?:flow|presence|density|stop)[-_]\d+\b"#] {
+            text = text.replacingOccurrences(of: pattern, with: "area yang terlihat pada gambar", options: .regularExpression)
+        }
+        for pattern in [#"\b[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+\b"#,
+                        #"\b[a-z]+(?:[A-Z][a-zA-Z0-9]*)+\b"#] {
+            text = text.replacingOccurrences(of: pattern, with: "indikator pada data", options: .regularExpression)
+        }
+        return text.replacingOccurrences(of: "`", with: "")
+    }
+}
+
 // MARK: - API models
 
 struct ExplanatoryStatusDTO: Decodable {
@@ -97,11 +134,11 @@ struct ResultsChatContainer: View {
                 onOpenMedia: openMedia,
                 onClose: closeChat
             )
-            .frame(width: 420)
+            .frame(width: AskDataLayout.panelWidth)
             .transition(.move(edge: .trailing).combined(with: .opacity))
         } else {
             LegacyChatUnavailable(onClose: closeChat)
-                .frame(width: 420)
+                .frame(width: AskDataLayout.panelWidth)
         }
     }
 
@@ -330,7 +367,7 @@ final class HistoryChatViewModel {
     }
 
     func pollStatus() async {
-        guard status?.state != "ready", !isBlocked else { return }
+        guard !isReady, !isBlocked else { return }
         do { status = try await api.status(jobId: jobId) }
         catch { errorMessage = error.localizedDescription }
     }
@@ -808,14 +845,11 @@ private struct AssistantBubble: View {
     }
 
     private var displayText: String {
-        guard let areaId = exchange.selectedAreaId,
-              let label = exchange.selectedAreaLabel,
-              !label.isEmpty else { return exchange.text }
-        return exchange.text
-            .replacingOccurrences(of: "Table with ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: "Area with ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: "ID \(areaId)", with: label, options: .caseInsensitive)
-            .replacingOccurrences(of: areaId, with: label, options: .caseInsensitive)
+        var text = exchange.text
+        if let areaId = exchange.selectedAreaId, !areaId.isEmpty {
+            text = text.replacingOccurrences(of: areaId, with: "area yang terlihat pada gambar", options: .caseInsensitive)
+        }
+        return AskDataLanguage.answer(text)
     }
 
     /// Qwen menjawab dengan paragraf plus daftar berbutir. `interpretedSyntax: .full`
@@ -910,9 +944,9 @@ private struct ImageBubble: View {
                 .frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: Radius.s))
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(media.caption).font(.callout.weight(.semibold))
+                        Text("Area yang terlihat pada gambar").font(.callout.weight(.semibold))
                         if let metric = media.metricSummary?.sorted(by: { $0.key < $1.key }).first {
-                            Text("\(metric.key): \(metric.value)").font(.caption).foregroundStyle(.secondary)
+                            Text(AskDataLanguage.clean("\(metric.key): \(metric.value)")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     Spacer()

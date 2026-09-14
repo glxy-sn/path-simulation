@@ -68,8 +68,13 @@ rsync -a \
 info "Menyalin bobot model…"
 mkdir -p "$RES/backend/models"
 for w in $MODELS; do
-  [[ -f "$BACKEND/$w" ]] || fail "Bobot $w tidak ada di $BACKEND"
-  cp "$BACKEND/$w" "$RES/backend/models/$w"
+  if [[ -f "$BACKEND/models/$w" ]]; then
+    cp "$BACKEND/models/$w" "$RES/backend/models/$w"
+  elif [[ -f "$BACKEND/$w" ]]; then
+    cp "$BACKEND/$w" "$RES/backend/models/$w"
+  else
+    fail "Bobot $w tidak ada di $BACKEND atau $BACKEND/models"
+  fi
 done
 
 PRIVACY_NAME="deeplabv3_mobilenet_v3_large-fc3c493d.pth"

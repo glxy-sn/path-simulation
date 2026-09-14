@@ -103,10 +103,10 @@ struct ProcessingStage: Identifiable {
 
 extension ProcessingStage {
     static let pipeline: [ProcessingStage] = [
-        .init(name: "Detection",         systemImage: "person.crop.rectangle"),
-        .init(name: "Tracking",             systemImage: "point.topleft.down.to.point.bottomright.curvepath"),
+        .init(name: "Detection + tracking", systemImage: "person.crop.rectangle"),
         .init(name: "Multi-camera Fusion",             systemImage: "camera.metering.multispot"),
-        .init(name: "Analytics", systemImage: "chart.dots.scatter")
+        .init(name: "Analytics", systemImage: "chart.dots.scatter"),
+        .init(name: "Preparing video", systemImage: "video")
     ]
 }
 
