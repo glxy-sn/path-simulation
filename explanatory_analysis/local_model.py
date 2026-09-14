@@ -5,6 +5,7 @@ import re
 import shutil
 import threading
 import uuid
+from .context_budget import fit_messages
 from pathlib import Path
 from typing import Any, Callable
 
@@ -130,12 +131,29 @@ class LocalModelRuntime:
         self.ensure_ready()
         with self._lock:
             started_state = self._state
-            response = self._llm.create_chat_completion(
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=0.2,
-                top_p=0.8,
-            )
+            context_size = self._llm.n_ctx()
+            max_tokens = min(max_tokens, max(256, context_size // 3))
+            # Count using the loaded model tokenizer, reserve chat-template overhead.
+            def count(items):
+                return sum(len(self._llm.tokenize(item["content"].encode("utf-8"), special=True))
+                           for item in items) + 512
+            budget = context_size - max_tokens
+            prepared = fit_messages(messages, count, budget)
+            for attempt in range(4):
+                try:
+                    response = self._llm.create_chat_completion(
+                        messages=prepared,
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                        top_p=0.8,
+                    )
+                    break
+                except ValueError as error:
+                    # The actual chat template is authoritative. Retry only context overflow.
+                    if not re.search(r"exceed.*context|context.*exceed", str(error), re.I) or attempt == 3:
+                        raise
+                    budget = int(budget * 0.7)
+                    prepared = fit_messages(messages, count, budget)
             choice = (response.get("choices") or [{}])[0]
             message = choice.get("message") or {}
             content, thinking = self._split_thinking(

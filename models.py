@@ -5,7 +5,7 @@ Skema request/response. Cocok dengan yang dikirim app Swift:
 Artifact besar (video, png, parquet) dikirim sebagai URI file://, bukan inline.
 """
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from model_registry import DEFAULT_DETECTION_MODEL_ID
 
 
@@ -30,6 +30,19 @@ class TableAnnotationInput(BaseModel):
     verified: bool = True
 
 
+class FloorBounds(BaseModel):
+    left: float = Field(0, ge=0, le=1)
+    top: float = Field(0, ge=0, le=1)
+    right: float = Field(1, ge=0, le=1)
+    bottom: float = Field(1, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.left >= self.right or self.top >= self.bottom:
+            raise ValueError("Floor bounds must have positive width and height")
+        return self
+
+
 class VenueInput(BaseModel):
     widthM: float
     heightM: float
@@ -37,6 +50,7 @@ class VenueInput(BaseModel):
     type: str = ""
     floorPlanPath: str | None = None      # path gambar denah (opsional) untuk background
     tables: list[TableAnnotationInput] = Field(default_factory=list)
+    floorBounds: FloorBounds | None = None
 
 
 class CalibrationInput(BaseModel):
@@ -157,7 +171,17 @@ class IdentityQuality(BaseModel):
     calibrationWarnings: list[str] = Field(default_factory=list)
 
 
+class HeatmapGrid(BaseModel):
+    width: int
+    height: int
+    footTraffic: list[float]
+    timeSpent: list[float]
+    trackCount: int
+    observationCount: int
+
+
 class JobResult(BaseModel):
+    heatmapGrid: HeatmapGrid | None = None
     jobId: str
     venue: VenueInput
     summary: Summary

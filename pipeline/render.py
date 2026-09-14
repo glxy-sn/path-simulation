@@ -6,8 +6,6 @@ Tahap RENDER: hasilkan artifact yang ditampilkan di layar Hasil.
 Video adalah bagian termahal; bisa dimatikan lewat options.renderVideos.
 """
 import os
-import shutil
-import subprocess
 import math
 import numpy as np
 import cv2
@@ -15,34 +13,16 @@ import cv2
 from .detect import seek_accurate
 from .timing import camera_source_start
 
+from .video_writer import VideoWriter
+from .path_selection import select_detail_paths, synchronize_detail_paths, detail_path_groups
+
+BOX_LABEL_FONT_SCALE = 0.38
+PATH_VIDEO_DURATION_SEC = 10
+PATH_VIDEO_FPS = 30
+
+
 def _open_writer(path, fps, size):
-    # mp4v = frame benar & andal di OpenCV. (avc1 di macOS sering korup/hijau.)
-    return cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
-
-
-def _transcode_h264(path):
-    """Kalau ffmpeg tersedia, ubah ke H.264 (yuv420p) supaya bisa diputar di browser."""
-    ff = shutil.which("ffmpeg")
-    if not ff:
-        return
-    src = str(path)
-    tmp = src + ".h264.mp4"
-    try:
-        r = subprocess.run(
-            [ff, "-y", "-i", src, "-c:v", "libx264", "-pix_fmt", "yuv420p",
-             "-movflags", "+faststart", "-loglevel", "error", tmp],
-            timeout=1800,
-        )
-        if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 0:
-            os.replace(tmp, src)
-        elif os.path.exists(tmp):
-            os.remove(tmp)
-    except Exception:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except Exception:
-                pass
+    return VideoWriter(path, fps, size)
 
 
 def _load_bg(path, w, h):
@@ -77,15 +57,11 @@ def render_heatmap(heat: np.ndarray, out_path, out_w: int = 720, bg_path=None):
 def _identity_label(cam_idx, track_id, cam_to_global, identity_confidence):
     global_id = cam_to_global.get((cam_idx, track_id))
     if global_id is None:
-        return None, "unassigned", (145, 145, 145)
-    quality = identity_confidence.get(global_id, {"score": None, "level": "singleCamera"})
-    level = quality["level"]
-    score = quality.get("score")
-    suffix = "Single Camera" if level == "singleCamera" else f"{level.title()} {score:.2f}"
-    return global_id, f"ID {global_id} · {suffix}", _gid_color(global_id)
+        return None, f"C{cam_idx + 1}-L{int(track_id)}", (145, 145, 145)
+    return global_id, f"ID {global_id}", _gid_color(global_id)
 
 
-def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, cam_idx, cfg, out_path, privacy=None):
+def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, cam_idx, cfg, out_path, privacy=None, on_frame=None):
     from .privacy import PersonPrivacy
     privacy = privacy or PersonPrivacy(cfg.DEVICE)
     per_frame = cam_info["per_frame"]
@@ -100,68 +76,100 @@ def render_bbox_video(video_path, cam_info, cam_to_global, identity_confidence, 
     max_fi = max(fset)
     seek_accurate(cap, min_fi)   # frame-akurat -> overlay sesuai window slider
     idx = min_fi
+    pending, indices = [], []
+    rendered = 0
+    def flush():
+        nonlocal rendered
+        if not pending:
+            return
+        for fi, frame in zip(indices, privacy.redact_batch(pending)):
+            _draw_global_boxes(frame, per_frame.get(fi, []), cam_idx, cam_to_global, identity_confidence)
+            for box in per_frame.get(fi, []):
+                _, x1, _, x2, y2 = box[:5]
+                cv2.circle(frame, (int((x1+x2)/2),int(y2)), 4, (0,165,255), -1)
+            vw.write(frame)
+            rendered += 1
+            if on_frame:
+                on_frame(rendered, len(fset))
+        pending.clear()
+        indices.clear()
     try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if idx > max_fi:
-                break
-            if idx in fset:
-                frame = privacy.redact(frame)
-                for box in per_frame[idx]:
-                    tid, x1, y1, x2, y2 = box[:5]
-                    _gid, label, color = _identity_label(
-                        cam_idx, tid, cam_to_global, identity_confidence
-                    )
-                    p1, p2 = (int(x1), int(y1)), (int(x2), int(y2))
-                    cv2.rectangle(frame, p1, p2, color, 2)
-                    cv2.putText(frame, label, (int(x1), int(y1) - 6),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                    cv2.circle(frame, (int((x1 + x2) / 2), int(y2)), 4, (0, 165, 255), -1)  # titik kaki
-                vw.write(frame)
+        while idx <= max_fi:
+            if idx not in fset:
+                if not cap.grab():
+                    raise RuntimeError("Video ended during rendering")
+            else:
+                ret, frame = cap.read()
+                if not ret:
+                    raise RuntimeError("Video frame unavailable during rendering")
+                pending.append(frame)
+                indices.append(idx)
+                if len(pending) >= max(1,int(os.getenv("PRISM_PRIVACY_BATCH","2"))):
+                    flush()
             idx += 1
+        flush()
     finally:
         cap.release()
         vw.release()
-    _transcode_h264(out_path)
 
 
-def render_path_video(global_tracks, venue, cfg, out_path, canvas_w: int = 900, bg_path=None):
-    W, Hm = float(venue.widthM), float(venue.heightM)
-    canvas_h = max(1, int(canvas_w * Hm / max(W, 1e-6)))
+class TrailRenderer:
+    """Project once and append each segment once, instead of redrawing history."""
+    def __init__(self, global_tracks, venue, w, h, background, thickness=1):
+        self.canvas = background.copy()
+        self.thickness = thickness
+        self.tracks = {}
+        self.positions = {}
+        W, H = float(venue.widthM), float(venue.heightM)
+        for gid, obs in global_tracks.items():
+            ordered = sorted(obs)
+            self.tracks[gid] = [(t, (int(np.clip(x/W,0,1)*(w-1)),
+                                      int(np.clip(y/H,0,1)*(h-1)))) for t,x,y in ordered]
+            self.positions[gid] = 0
+        self.colors = {gid: _gid_color(gid) for gid in self.tracks}
 
-    allt = [o[0] for obs in global_tracks.values() for o in obs]
-    if not allt:
+    def advance(self, time, labels=False):
+        for gid, points in self.tracks.items():
+            pos = self.positions[gid]
+            while pos < len(points) and points[pos][0] <= time:
+                if pos:
+                    cv2.line(self.canvas, points[pos-1][1], points[pos][1], self.colors[gid], getattr(self, "widths", {}).get(gid, self.thickness))
+                pos += 1
+            self.positions[gid] = pos
+        frame = self.canvas.copy()
+        for gid, points in self.tracks.items():
+            pos = self.positions[gid]
+            if pos:
+                point = points[pos-1][1]
+                cv2.circle(frame, point, 3 if labels else 5, self.colors[gid], -1)
+                if labels:
+                    cv2.putText(frame,str(gid),(point[0]+3,point[1]),cv2.FONT_HERSHEY_SIMPLEX,0.35,self.colors[gid],1)
+        return frame
+
+
+def render_path_video(global_tracks, venue, cfg, out_path, canvas_w=900, bg_path=None, on_frame=None):
+    canvas_h = max(1, int(canvas_w * float(venue.heightM) / max(float(venue.widthM), 1e-6)))
+    times = [o[0] for obs in global_tracks.values() for o in obs]
+    if not times:
         return
-    tmin, tmax = min(allt), max(allt)
-    binsec = 1.0 / cfg.PROC_FPS
-    nb = int((tmax - tmin) / binsec) + 1
-
-    def to_px(x, y):
-        return (int(np.clip(x / W, 0, 1) * canvas_w), int(np.clip(y / Hm, 0, 1) * canvas_h))
-
-    tracks = {g: sorted(o) for g, o in global_tracks.items()}
-    colors = {}
-    for g in tracks:
-        rng = np.random.RandomState(int(g) % 9973)
-        colors[g] = tuple(int(v) for v in rng.randint(60, 230, size=3))
-
-    vw = _open_writer(out_path, cfg.PROC_FPS, (canvas_w, canvas_h))
     bg = _load_bg(bg_path, canvas_w, canvas_h)
-    trail = bg.copy() if bg is not None else np.full((canvas_h, canvas_w, 3), 245, np.uint8)
-    for b in range(nb):
-        t = tmin + b * binsec
-        frame = trail.copy()
-        for g, obs in tracks.items():
-            pts = [to_px(x, y) for (tt, x, y) in obs if tt <= t]
-            for k in range(1, len(pts)):
-                cv2.line(trail, pts[k - 1], pts[k], colors[g], 2)      # jejak permanen
-            if pts:
-                cv2.circle(frame, pts[-1], 5, colors[g], -1)           # posisi saat ini
-        vw.write(frame)
-    vw.release()
-    _transcode_h264(out_path)
+    if bg is None:
+        bg = np.full((canvas_h,canvas_w,3),245,np.uint8)
+    groups = detail_path_groups(global_tracks, venue)
+    selected = synchronize_detail_paths({i+1: g["observations"] for i,g in enumerate(groups)},
+                                        PATH_VIDEO_DURATION_SEC, PATH_VIDEO_DURATION_SEC * PATH_VIDEO_FPS)
+    trail = TrailRenderer(selected, venue, canvas_w, canvas_h, bg, thickness=2)
+    trail.widths = {i+1: 2+round(4*g["count"]/max([v["count"] for v in groups], default=1)) for i,g in enumerate(groups)}
+    writer = _open_writer(out_path,PATH_VIDEO_FPS,(canvas_w,canvas_h))
+    steps = PATH_VIDEO_DURATION_SEC * PATH_VIDEO_FPS
+    try:
+        for index in range(steps):
+            frame = trail.advance(PATH_VIDEO_DURATION_SEC*index/max(1,steps-1), labels=False)
+            writer.write(frame)
+            if on_frame:
+                on_frame(index+1,steps)
+    finally:
+        writer.release()
 
 
 # ============================================================
@@ -173,13 +181,13 @@ def _gid_color(gid):
     return tuple(int(v) for v in rng.randint(60, 230, size=3))
 
 
-def _draw_global_boxes(frame, boxes, cam_idx, cam_to_global, identity_confidence):
+def _draw_global_boxes(frame, boxes, cam_idx, cam_to_global, identity_confidence, thickness=4):
     for box in boxes:
         tid, x1, y1, x2, y2 = box[:5]
         _gid, label, c = _identity_label(cam_idx, tid, cam_to_global, identity_confidence)
-        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), c, 2)
+        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), c, thickness)
         cv2.putText(frame, label, (int(x1), max(12, int(y1) - 5)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, BOX_LABEL_FONT_SCALE, c, 1)
 
 
 def _bev_cell(global_tracks, venue, t, w, h, bg=None):
@@ -208,7 +216,7 @@ def _bev_cell(global_tracks, venue, t, w, h, bg=None):
 
 def render_combined_video(cams, cam_det, cam_render, cam_to_global, identity_confidence,
                           global_tracks, venue, cfg,
-                          out_path, cell_w=480, cell_h=270, bg_path=None, privacy=None):
+                          out_path, cell_w=480, cell_h=270, bg_path=None, privacy=None, on_frame=None):
     """
     Susun semua kamera (ID global) dalam grid + satu panel BEV fusion -> 1 video.
     Frame antar kamera disinkronkan per langkah waktu (relatif ke start trim).
@@ -244,44 +252,47 @@ def render_combined_video(cams, cam_det, cam_render, cam_to_global, identity_con
     vw = _open_writer(out_path, cfg.PROC_FPS, (out_w, out_h))
     bev_bg = _load_bg(bg_path, cell_w, cell_h)           # floor map untuk panel BEV (sekali)
 
+    bev_background = ((bev_bg.astype(np.float32)*0.45).astype(np.uint8) if bev_bg is not None
+                      else np.full((cell_h,cell_w,3),12,np.uint8))
+    trail = TrailRenderer(global_tracks, venue, cell_w, cell_h, bev_background)
     try:
         for k in range(steps):
             t = k / cfg.PROC_FPS
-            cells = []
+            frames = []
             for r in readers:
                 target = r["proc"][k]
-                while r["pos"] < target:                     # maju ke frame target (grab cepat)
+                while r["pos"] < target:
                     if not r["cap"].grab():
-                        break
+                        raise RuntimeError("Video ended before scheduled frame")
                     r["pos"] += 1
                 ok, frame = r["cap"].read()
                 r["pos"] += 1
-                if not ok or frame is None:
-                    frame = np.zeros((cell_h, cell_w, 3), np.uint8)
-                else:
-                    frame = privacy.redact(frame)
-                    _draw_global_boxes(
-                        frame,
-                        r["per_frame"].get(target, []),
-                        r["idx"],
-                        cam_to_global,
-                        identity_confidence,
-                    )
-                    frame = cv2.resize(frame, (cell_w, cell_h))
-                cv2.putText(frame, f"C{r['idx'] + 1}", (8, 22),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                if not ok:
+                    raise RuntimeError("Video frame unavailable during privacy rendering")
+                frames.append(frame)
+            redacted = privacy.redact_batch(frames)
+            cells = []
+            for r, frame in zip(readers, redacted):
+                sx, sy = cell_w/frame.shape[1], cell_h/frame.shape[0]
+                boxes = [(box[0],box[1]*sx,box[2]*sy,box[3]*sx,box[4]*sy)
+                         for box in r["per_frame"].get(r["proc"][k], [])]
+                frame = cv2.resize(frame, (cell_w,cell_h))
+                _draw_global_boxes(frame, boxes, r["idx"], cam_to_global, identity_confidence, thickness=3)
+                cv2.putText(frame,f"C{r['idx']+1}",(8,22),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,255),2)
                 cells.append(frame)
-
-            cells.append(_bev_cell(global_tracks, venue, t, cell_w, cell_h, bg=bev_bg))
+            bev = trail.advance(t, labels=True)
+            cv2.putText(bev,"BEV (fusion)",(8,22),cv2.FONT_HERSHEY_SIMPLEX,0.6,(240,240,240),2)
+            cells.append(bev)
 
             canvas = np.zeros((out_h, out_w, 3), np.uint8)
             for p, cell in enumerate(cells):
                 rr, cc = divmod(p, cols)
                 canvas[rr * cell_h:(rr + 1) * cell_h, cc * cell_w:(cc + 1) * cell_w] = cell
             vw.write(canvas)
+            if on_frame:
+                on_frame(k+1,steps)
 
     finally:
         for r in readers:
             r["cap"].release()
         vw.release()
-    _transcode_h264(out_path)

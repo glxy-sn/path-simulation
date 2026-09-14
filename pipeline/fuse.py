@@ -2,12 +2,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import combinations, islice
+from bisect import bisect_left, bisect_right
+from contextvars import ContextVar
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from .tracklet import Tracklet, appearance_similarity
+from .tracklet import Tracklet, appearance_similarity as _raw_similarity
+
+_similarity_cache = ContextVar("fusion_similarity_cache", default=None)
+
+
+def appearance_similarity(a, b, minimum_samples):
+    cache = _similarity_cache.get()
+    if cache is None:
+        return _raw_similarity(a, b, minimum_samples)
+    key = (min(id(a),id(b)), max(id(a),id(b)), minimum_samples)
+    if key not in cache:
+        value = _raw_similarity(a,b,minimum_samples)
+        if len(cache) >= 8192:
+            cache.pop(next(iter(cache)))
+        cache[key] = (a,b,value)
+    return cache[key][2]
+
 
 
 @dataclass
@@ -84,8 +102,15 @@ def _hungarian(records: list[dict], left_count: int, right_count: int) -> set[in
 def _local_candidates(tracklets: list[Tracklet], cfg) -> list[dict]:
     records = []
     interval = 1.0 / max(float(cfg.PROC_FPS), 1e-6)
+    ordered = sorted(enumerate(tracklets), key=lambda item:item[1].start_time)
+    starts = [item.start_time for _,item in ordered]
     for row, first in enumerate(tracklets):
-        for column, second in enumerate(tracklets):
+        lo = bisect_left(starts,first.end_time)
+        hi = bisect_right(starts,first.end_time+cfg.LOCAL_STITCH_MAX_GAP_SEC)
+        if hi < len(ordered):
+            records.append(_candidate_record(first,ordered[hi][1],"local",
+                reason="gapTooLong", skippedPairs=len(ordered)-hi))
+        for column, second in sorted(ordered[lo:hi],key=lambda item:item[0]):
             if first is second:
                 continue
             gap = second.start_time - first.end_time
@@ -188,10 +213,46 @@ def _overlap_distances(a: Tracklet, b: Tracklet) -> tuple[float, float] | None:
     return float(np.median(distances)), float(np.percentile(distances, 95))
 
 
+class _TimeIndex:
+    """Balanced interval tree for candidate lookup without scanning past tracks."""
+    def __init__(self, tracklets):
+        ordered = sorted(enumerate(tracklets), key=lambda item:item[1].start_time)
+        def build(items):
+            if not items:
+                return None
+            middle = len(items)//2
+            left, right = build(items[:middle]), build(items[middle+1:])
+            item = items[middle]
+            end = max(item[1].end_time, left[3] if left else float('-inf'),
+                      right[3] if right else float('-inf'))
+            return (item,left,right,end)
+        self.root = build(ordered)
+
+    def query(self, start, end):
+        found = []
+        def visit(node):
+            if node is None or node[3] < start:
+                return
+            (index,tracklet),left,right,_ = node
+            visit(left)
+            if tracklet.start_time <= end:
+                if tracklet.end_time >= start:
+                    found.append((index,tracklet))
+                visit(right)
+        visit(self.root)
+        return found
+
+
 def _overlap_records(left: list[Tracklet], right: list[Tracklet], cfg) -> list[dict]:
     records = []
+    index = _TimeIndex(right)
     for row, a in enumerate(left):
-        for column, b in enumerate(right):
+        candidates = [(column,b) for column,b in index.query(a.start_time,a.end_time)
+                      if min(a.end_time,b.end_time)-max(a.start_time,b.start_time) >= cfg.OVERLAP_MIN_SEC]
+        if len(candidates) < len(right) and right:
+            records.append(_candidate_record(a,right[0],"overlap",reason="overlapTooShort",
+                                             skippedPairs=len(right)-len(candidates)))
+        for column, b in sorted(candidates,key=lambda item:item[0]):
             overlap = min(a.end_time, b.end_time) - max(a.start_time, b.start_time)
             similarity = appearance_similarity(a, b, cfg.REID_MIN_SAMPLES)
             geometry = _overlap_distances(a, b)
@@ -256,7 +317,8 @@ def _handover_record(a: Tracklet, b: Tracklet, cfg) -> dict:
     gap = second.start_time - first.end_time
     distance = float(np.linalg.norm(np.subtract(first.end_position, second.start_position)))
     speed = distance / max(gap, 1.0 / max(float(cfg.PROC_FPS), 1e-6))
-    similarity = appearance_similarity(first, second, cfg.REID_MIN_SAMPLES)
+    similarity = (appearance_similarity(first, second, cfg.REID_MIN_SAMPLES)
+                  if 0 <= gap <= cfg.HANDOVER_MAX_GAP_SEC else None)
     reason = "eligible"
     if gap < 0:
         reason = "tracksOverlap"
@@ -350,7 +412,7 @@ def _weighted_global_track(members: list[Tracklet], fps: float):
     return output
 
 
-def fuse_tracklets(tracklets: list[Tracklet], cfg) -> FusionResult:
+def _fuse_tracklets(tracklets: list[Tracklet], cfg) -> FusionResult:
     stitched, diagnostics, local_stitches = stitch_local_tracklets(tracklets, cfg)
     kept, filtered = [], []
     for tracklet in stitched:
@@ -404,9 +466,22 @@ def fuse_tracklets(tracklets: list[Tracklet], cfg) -> FusionResult:
         overlap_merges += 1
 
     handover_records = []
-    for a, b in combinations(kept, 2):
-        if a.camera_idx != b.camera_idx and min(a.end_time, b.end_time) <= max(a.start_time, b.start_time):
-            handover_records.append(_handover_record(a, b, cfg))
+    ordered = sorted(enumerate(kept), key=lambda item:item[1].start_time)
+    starts = [item.start_time for _,item in ordered]
+    candidates = {}
+    for i, a in enumerate(kept):
+        lo = bisect_left(starts,a.end_time)
+        hi = bisect_right(starts,a.end_time+cfg.HANDOVER_MAX_GAP_SEC)
+        for j, b in ordered[lo:hi]:
+            if i != j and a.camera_idx != b.camera_idx:
+                key = (min(i,j),max(i,j))
+                candidates[key] = (kept[key[0]],kept[key[1]])
+        # Compact diagnostics for temporally impossible candidates.
+        far = next((b for _,b in islice(ordered,hi,None) if b.camera_idx != a.camera_idx),None)
+        if far is not None:
+            handover_records.append(_handover_record(a,far,cfg))
+    for _, (a,b) in sorted(candidates.items()):
+        handover_records.append(_handover_record(a,b,cfg))
 
     # Freeze overlap components while selecting directed handovers. This permits a
     # linear A->B->C chain, while one component can never fan out to two successors.
@@ -493,3 +568,11 @@ def fuse_tracklets(tracklets: list[Tracklet], cfg) -> FusionResult:
         unmatched_tracklets=len(kept) - len(matched_indices),
         filtered_tracklets=len(filtered),
     )
+
+
+def fuse_tracklets(tracklets, cfg):
+    token = _similarity_cache.set({})
+    try:
+        return _fuse_tracklets(tracklets, cfg)
+    finally:
+        _similarity_cache.reset(token)

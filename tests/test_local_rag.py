@@ -72,7 +72,7 @@ def service(tmp_path: Path, generator: FakeGenerator | None = None) -> tuple[Loc
     [
         ("area paling jarang dilewati", "Area Arus Sepi memiliki intensitas terendah. [[SUPPORT:supported]] [[AREA_ID:flow-05]]", "flow-05"),
         ("meja mana yang paling ramai", "Meja 1 paling ramai berdasarkan 20 kunjungan dan 12 track unik. [[SUPPORT:supported]] [[AREA_ID:table-01]]", "table-01"),
-        ("meja mana yang cocok buat main catur", "Meja 2 memberi area dan dwell lebih besar, tetapi kenyamanan tidak diukur CCTV. [[SUPPORT:partially_supported]] [[AREA_ID:table-02]]", "table-02"),
+        ("meja mana yang cocok buat main catur", "Meja 2 memiliki luas 2 meter persegi. Kenyamanan tidak diukur CCTV. [[SUPPORT:partially_supported]] [[AREA_ID:table-02]]", "table-02"),
     ],
 )
 def test_general_qwen_reasoning_owns_answer_and_area_selection(
@@ -167,10 +167,10 @@ def test_length_limited_completion_is_not_saved_as_a_partial_answer(tmp_path: Pa
 def test_internal_area_ids_are_replaced_with_user_facing_labels(tmp_path: Path) -> None:
     rag, _ = service(
         tmp_path,
-        FakeGenerator("table-01 lebih ramai daripada table-02. [[SUPPORT:supported]] [[AREA_ID:table-01]]"),
+        FakeGenerator("table-01 memiliki 20 kunjungan. table-01 lebih ramai daripada table-02. [[SUPPORT:supported]] [[AREA_ID:table-01]]"),
     )
     result = rag.ask("bandingkan meja", show=False)
-    assert result["answer"] == "Meja 1 lebih ramai daripada Meja 2."
+    assert result["answer"] == "Meja 1 memiliki 20 kunjungan."
 
 
 def test_unclosed_thinking_block_is_not_treated_as_visible_answer() -> None:
@@ -241,3 +241,15 @@ def test_metric_names_are_readable_without_changing_selection(tmp_path):
     assert "uniqueVisitors" not in result["answer"]
     assert "jumlah kunjungan 20" in result["answer"]
     assert result["selectedAreaId"] == "table-01"
+
+
+def test_comparison_removed_without_damaging_numbers():
+    from explanatory_analysis.rag import sanitize_public_text
+    text = "Area ini memiliki 1.208 kunjungan dan durasi 28,5 detik. Meski durasinya lebih pendek dibanding area yang terlihat pada gambar, kunjungannya lebih tinggi."
+    assert sanitize_public_text(text) == "Area ini memiliki 1.208 kunjungan dan durasi 28,5 detik."
+
+
+def test_comparison_only_answer_is_rejected(tmp_path):
+    rag, _ = service(tmp_path, FakeGenerator("Area ini lebih ramai daripada area lain. [[SUPPORT:supported]] [[AREA_ID:flow-01]]"))
+    with pytest.raises(RuntimeError, match="tidak menghasilkan jawaban"):
+        rag.ask("area mana", show=False)

@@ -47,7 +47,7 @@ class Config:
     IOU = float(os.getenv("PRISM_IOU", "0.70"))
     PERSON_CLASS = 0
 
-    REID_WEIGHTS = os.getenv("PRISM_REID", "osnet_x0_25_msmt17.pt")
+    REID_WEIGHTS = os.getenv("PRISM_REID", str(Path(__file__).with_name("models") / "osnet_x0_25_msmt17.pt"))
     WITH_REID = os.getenv("PRISM_WITH_REID", "1") != "0"
     REID_DEVICE = os.getenv("PRISM_REID_DEVICE", "cpu")
     REID_SAMPLE_CONF = float(os.getenv("PRISM_REID_SAMPLE_CONF", "0.5"))
@@ -63,6 +63,11 @@ class Config:
     PREVIEW_CACHE_TTL_SEC = float(os.getenv("PRISM_PREVIEW_CACHE_TTL", "600"))
     PREVIEW_CACHE_MAX = int(os.getenv("PRISM_PREVIEW_CACHE_MAX", "8"))
 
+    # Quality-preserving defaults. Lower-resolution/sampling variants remain opt-in.
+    TORCH_THREADS = max(1, int(os.getenv("PRISM_TORCH_THREADS", "1")))
+    CAMERA_CACHE = os.getenv("PRISM_CAMERA_CACHE", "1") != "0"
+    CAMERA_CACHE_MB = max(1, int(os.getenv("PRISM_CAMERA_CACHE_MB", "512")))
+    REID_REFRESH_SEC = max(0.0, float(os.getenv("PRISM_REID_REFRESH_SEC", "0")))
     PROC_FPS = float(os.getenv("PRISM_PROC_FPS", "5"))
     BATCH_SIZE = int(os.getenv("PRISM_BATCH", "8"))
     MAX_DURATION_SEC = float(os.getenv("PRISM_MAX_DURATION_SEC", "600"))

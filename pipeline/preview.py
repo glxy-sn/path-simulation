@@ -341,6 +341,8 @@ class CalibrationPreviewManager:
                     if item.camera_idx == camera_index and item.local_track_id == detection.local_id
                 )
                 _time, world_x, world_y, _confidence = tracklet.floor_observations[0]
+                from .bounds import clamp_world
+                world_x, world_y = clamp_world(world_x, world_y, venue)
                 assigned = identity.get((camera_index, detection.local_id))
                 if assigned:
                     global_id, score, level = assigned
@@ -473,14 +475,14 @@ class CalibrationPreviewManager:
             p1 = (int(x1 * width), int(y1 * height))
             p2 = (int(x2 * width), int(y2 * height))
             color = (90, 190, 90) if marker.globalId is not None else (150, 150, 150)
-            cv2.rectangle(output, p1, p2, color, max(2, width // 900))
-            suffix = "" if marker.identityScore is None else f" {marker.identityScore:.2f}"
+            cv2.rectangle(output, p1, p2, color, max(4, width // 350))
+            label = f"ID {marker.globalId}" if marker.globalId is not None else f"C{marker.cameraIndex + 1}-L{marker.localId}"
             cv2.putText(
                 output,
-                marker.identityLabel + suffix,
+                label,
                 (p1[0], max(18, p1[1] - 7)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.5, width / 2300.0),
+                max(0.38, width / 3000.0),
                 color,
                 max(1, width // 1200),
             )

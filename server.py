@@ -272,6 +272,44 @@ def index():
     return page.read_text(encoding="utf-8")
 
 
+
+
+@app.post("/visualizations/path")
+def reload_path_visualization(payload: dict):
+    """Render a new artifact. Never replace the analysis or original video."""
+    import uuid
+    import math
+    from types import SimpleNamespace
+    from pipeline.render import render_path_video
+    try:
+        width, height = float(payload["widthM"]), float(payload["heightM"])
+        if not all(math.isfinite(v) and 0 < v <= 1000 for v in (width, height)):
+            raise ValueError("Ukuran denah tidak valid")
+        tracks = {}
+        job_id = payload.get("jobId")
+        parquet = explanatory_manager.job_dir(job_id) / "trajectories.parquet" if job_id else None
+        if parquet and parquet.is_file():
+            import pandas as pd
+            frame = pd.read_parquet(parquet)
+            tracks = {int(gid): list(group[["t", "x", "y"]].itertuples(index=False, name=None))
+                      for gid, group in frame.groupby("id")}
+        else:
+            for gid, x, y, t in payload.get("observations", []):
+                if all(math.isfinite(float(v)) for v in (gid,x,y,t)):
+                    tracks.setdefault(int(gid), []).append((float(t),float(x)*width,float(y)*height))
+        if not tracks:
+            raise ValueError("Data lintasan tidak tersedia pada riwayat ini. Data lama tetap aman.")
+        destination = Path(Config.WORKDIR) / "visualization-reloads" / (uuid.uuid4().hex + ".mp4")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        render_path_video(tracks, SimpleNamespace(widthM=width,heightM=height), Config, destination,
+                          canvas_w=900, bg_path=payload.get("floorPlanPath"))
+        if not destination.is_file():
+            raise RuntimeError("Video baru gagal dibuat")
+        return {"path": destination.as_uri(), "sampled": not bool(parquet and parquet.is_file())}
+    except (ValueError, KeyError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=Config.HOST, port=Config.PORT)
