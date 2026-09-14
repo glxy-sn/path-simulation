@@ -1,0 +1,416 @@
+{
+  "cards": [
+    {
+      "areaId": "crowd-03",
+      "cardId": "72ebb6668052-v2-evidence-0015",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 162.3054053354272,
+        "center": [
+          4.943860182430499,
+          4.513124942779541
+        ],
+        "radiiM": [
+          0.47482673942920584,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 10.720792600106734,
+        "medianVisitDurationSec": 4.397426193119216,
+        "observedCrowdedSeconds": 14,
+        "p95VisitDurationSec": 28.98105991534856,
+        "peakConcurrentTracks": 2,
+        "uniqueVisitors": 3,
+        "visitCount": 36
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.12196091946494729,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (4.94 m, 4.51 m) dengan area ID crowd-03."
+    },
+    {
+      "areaId": "crowd-02",
+      "cardId": "72ebb6668052-v2-evidence-0014",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": -155.54123950823893,
+        "center": [
+          5.427262783050537,
+          6.221031043932247
+        ],
+        "radiiM": [
+          0.4,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 7.844272832327153,
+        "medianVisitDurationSec": 4.89716542598444,
+        "observedCrowdedSeconds": 19,
+        "p95VisitDurationSec": 21.03843973425103,
+        "peakConcurrentTracks": 3,
+        "uniqueVisitors": 10,
+        "visitCount": 26
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.12160784753639661,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (5.43 m, 6.22 m) dengan area ID crowd-02."
+    },
+    {
+      "areaId": "crowd-01",
+      "cardId": "72ebb6668052-v2-evidence-0013",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 95.93796607416523,
+        "center": [
+          5.4012208020298305,
+          5.150262742214535
+        ],
+        "radiiM": [
+          0.4,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 20.819322267474192,
+        "medianVisitDurationSec": 8.295124419215654,
+        "observedCrowdedSeconds": 26,
+        "p95VisitDurationSec": 79.4089397751184,
+        "peakConcurrentTracks": 1,
+        "uniqueVisitors": 8,
+        "visitCount": 26
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.12021712913171193,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (5.40 m, 5.15 m) dengan area ID crowd-01."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0002",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "track_summary.parquet",
+        "area_visits.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+      "metrics": {
+        "meanObservedDurationSec": 123.4789839412507,
+        "medianObservedDurationSec": 43.577467264885584,
+        "stopEpisodeCount": 306,
+        "totalStopDurationSec": 3591.94138746553
+      },
+      "questionTypes": [
+        "dwell_area",
+        "dwell",
+        "duration"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.0748807791678932,
+      "statement": "Median durasi teramati per track adalah 43.6 detik."
+    },
+    {
+      "areaId": "low-flow-01",
+      "cardId": "72ebb6668052-v2-evidence-0021",
+      "confidence": 0.6556104871494522,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 5.948048780487804,
+        "centroid": [
+          8.193485964362427,
+          4.924037291230566
+        ],
+        "points": [
+          [
+            8.425,
+            7.45
+          ],
+          [
+            7.634756097560978,
+            6.359756097560978
+          ],
+          [
+            7.800000000000001,
+            6.425000000000001
+          ],
+          [
+            7.925000000000001,
+            6.25
+          ],
+          [
+            7.875,
+            5.75
+          ],
+          [
+            7.275,
+            5.3500000000000005
+          ],
+          [
+            7.025,
+            4.9
+          ],
+          [
+            7.025,
+            4.3500000000000005
+          ],
+          [
+            7.175000000000001,
+            3.9000000000000004
+          ],
+          [
+            7.425000000000001,
+            3.45
+          ],
+          [
+            7.9,
+            3.125
+          ],
+          [
+            8.35,
+            3.1750000000000003
+          ],
+          [
+            8.9,
+            3.475
+          ],
+          [
+            9.125,
+            3.7
+          ],
+          [
+            9.225,
+            4.0
+          ],
+          [
+            8.825000000000001,
+            6.6000000000000005
+          ],
+          [
+            8.675,
+            7.1000000000000005
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+      "metrics": {
+        "meanDensity": 0.6626475143907534,
+        "meanSpeedMps": 0.8258390128911874,
+        "meanVisitDurationSec": 67.84455022328724,
+        "medianVisitDurationSec": 5.796211983069725,
+        "observedSupportAreaM2": 5.948048780487804,
+        "p95VisitDurationSec": 331.10361279838907,
+        "pointCount": 392,
+        "relativeIntensity": 0.008223067460455712,
+        "totalPathLengthM": 64.75869340362338,
+        "uniqueVisitors": 8,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "low_flow",
+        "quiet_area",
+        "least_traversed_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.05317452222772933,
+      "statement": "Kandidat arus pergerakan rendah di sekitar (8.19 m, 4.92 m) dengan area ID low-flow-01."
+    },
+    {
+      "areaId": "low-flow-02",
+      "cardId": "72ebb6668052-v2-evidence-0022",
+      "confidence": 0.6556104871494522,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 4.82625,
+        "centroid": [
+          1.315017698351032,
+          4.322245963912629
+        ],
+        "points": [
+          [
+            0.9750000000000001,
+            0.05
+          ],
+          [
+            2.4250000000000003,
+            7.45
+          ],
+          [
+            2.075,
+            7.2
+          ],
+          [
+            1.925,
+            6.65
+          ],
+          [
+            1.5250000000000001,
+            6.4
+          ],
+          [
+            1.475,
+            6.0
+          ],
+          [
+            1.0250000000000001,
+            5.3500000000000005
+          ],
+          [
+            0.775,
+            4.7
+          ],
+          [
+            0.35000000000000003,
+            4.425
+          ],
+          [
+            0.17500000000000002,
+            4.2
+          ],
+          [
+            0.17500000000000002,
+            3.95
+          ],
+          [
+            0.625,
+            3.4000000000000004
+          ],
+          [
+            0.8250000000000001,
+            2.5
+          ],
+          [
+            1.075,
+            2.15
+          ],
+          [
+            1.0250000000000001,
+            1.55
+          ],
+          [
+            1.125,
+            1.3
+          ],
+          [
+            1.125,
+            1.0
+          ],
+          [
+            0.9750000000000001,
+            0.5
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+      "metrics": {
+        "meanDensity": 0.7119507055495254,
+        "meanSpeedMps": 0.8083324715320397,
+        "meanVisitDurationSec": 23.98445084365979,
+        "medianVisitDurationSec": 10.29327300441689,
+        "observedSupportAreaM2": 4.826250000000001,
+        "p95VisitDurationSec": 72.42266938156246,
+        "pointCount": 94,
+        "relativeIntensity": 0.008834891179868706,
+        "totalPathLengthM": 15.879551053374877,
+        "uniqueVisitors": 5,
+        "visitCount": 10
+      },
+      "questionTypes": [
+        "low_flow",
+        "quiet_area",
+        "least_traversed_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.05242204121829723,
+      "statement": "Kandidat arus pergerakan rendah di sekitar (1.32 m, 4.32 m) dengan area ID low-flow-02."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

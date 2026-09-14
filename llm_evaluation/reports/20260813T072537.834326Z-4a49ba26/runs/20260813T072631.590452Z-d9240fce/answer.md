@@ -1,0 +1,1 @@
+Area dengan intensitas aliran tertinggi adalah **Area arus 1** dengan **relativeIntensity=1.0**. Metrik ini dihitung berdasarkan normalisasi data aliran, dan Area arus 1 memiliki nilai relativeIntensity tertinggi dibandingkan semua area lainnya (Area arus 2: 0.312, Area arus 3: 0.283, dll.).

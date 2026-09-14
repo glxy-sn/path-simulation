@@ -24,6 +24,26 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from .local_model import MODEL_DISPLAY_NAME, get_model_runtime
 
 
+def remove_comparisons(text: str) -> str:
+    # Split at sentence boundaries, not decimal/thousands separators.
+    comparison = r"\b(?:dibanding\w*|daripada|ketimbang|versus|compared|than|whereas|sedangkan)\b|\barea\s+(?:lain\w*|kedua)\b|\blebih\s+(?:tinggi|rendah|lama|pendek|panjang|ramai|sepi|besar|kecil|sering|sedikit|banyak)\b"
+    paragraphs = []
+    for paragraph in text.split("\n"):
+        sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+        paragraphs.append(" ".join(sentence for sentence in sentences if not re.search(comparison, sentence, re.I)))
+    return "\n".join(paragraphs).strip()
+
+
+def sanitize_public_text(text: str) -> str:
+    text = re.sub(r"\b(?:(?:flow|arus|density|kepadatan|stop|presence)\s+area|area(?:\s+(?:flow|arus|kepadatan|kehadiran))?)(?:\s+(?:nomor|no\.?))?\s*[-#:]?\s*\d+\b",
+                  "area yang terlihat pada gambar", text, flags=re.I)
+    text = re.sub(r"\b(?:flow|presence|density|stop)[-_]\d+\b", "area yang terlihat pada gambar", text, flags=re.I)
+    # Unknown code identifiers must not leak even when the model ignores the prompt.
+    text = re.sub(r"\b[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+\b", "indikator pada data", text)
+    text = re.sub(r"\b[a-z]+(?:[A-Z][a-zA-Z0-9]*)+\b", "indikator pada data", text)
+    return remove_comparisons(text.replace("`", ""))
+
+
 @dataclass(frozen=True)
 class RAGConfig:
     backend_root: Path
@@ -236,7 +256,8 @@ class LocalRAG:
     def _hide_internal_area_ids(self, text: str) -> str:
         visible = text
         for area_id in sorted(self.area_by_id, key=len, reverse=True):
-            label = self._area_label(self.area_by_id[area_id]) or "area tersebut"
+            label = (self._area_label(self.area_by_id[area_id]) if self.area_by_id[area_id].get("kind") == "table"
+                     else "area yang terlihat pada gambar")
             visible = re.sub(rf"(?<![\w-]){re.escape(area_id)}(?![\w-])", label, visible, flags=re.I)
         return visible
 
@@ -280,13 +301,26 @@ class LocalRAG:
         system = (
             "/think\nAnda adalah analis data CCTV spasial. Jawab pertanyaan pengguna dalam Bahasa Indonesia "
             "dengan melakukan penalaran sendiri atas seluruh areaCatalog, retrievedEvidence, capability, dan konteks percakapan. "
+            "Jika contextCoverage menyatakan konteks dikurangi, batasi kesimpulan pada bukti tersedia dan jangan klaim perbandingan menyeluruh. "
             "Tidak ada daftar intent atau jawaban yang sudah ditentukan oleh backend. Untuk pertanyaan perbandingan, tentukan objek "
-            "yang dimaksud dari bahasa pengguna, bandingkan semua objek sejenis di areaCatalog, pilih metrik yang paling relevan, "
+            "yang dimaksud dari bahasa pengguna, nilai objek sejenis secara internal dari areaCatalog, pilih satu objek dan metrik yang relevan, "
             "dan sebutkan dasar angkanya. Jika istilah seperti ramai dapat berarti beberapa hal, jelaskan interpretasi metrik yang dipakai "
             "atau bandingkan visitCount dan uniqueVisitors. visitCount adalah jumlah episode kunjungan; uniqueVisitors adalah jumlah ID track "
             "anonim unik, bukan jumlah orang terverifikasi. Jangan mengarang metrik, kondisi, atau kesimpulan yang tidak ada di data. "
             "CCTV tidak membuktikan identitas orang, kenyamanan, kebisingan, kepuasan, pembelian, atau sebab-akibat kecuali data memang "
             "menyediakannya. Jawab ringkas tetapi cukup menjelaskan alasan. Jangan tampilkan proses berpikir internal. "
+            "Semua penjelasan dan alasan yang dibaca pengguna wajib menggunakan bahasa sehari-hari yang mudah dipahami orang awam. "
+            "Jangan sebut nomor area, flow area, atau ID area dalam teks pengguna. Gunakan frasa area yang terlihat pada gambar. "
+            "Jawaban pengguna hanya boleh membahas satu area terpilih yang ditunjukkan gambar. Jangan menulis perbandingan dengan area lain, "
+            "jangan menyebut angka atau kelebihan area kedua. Bandingkan secara internal bila perlu, tetapi tampilkan hanya pilihan akhir "
+            "beserta bukti milik area tersebut dan keterbatasannya. "
+            "Parafrase istilah dalam bukti, jangan salin nama variabel, key JSON, nama file, atau istilah kode ke dalam jawaban. "
+            "Contoh: visitCount menjadi jumlah kunjungan, uniqueVisitors menjadi jumlah pengunjung yang dibedakan oleh sistem "
+            "(perkiraan dari jejak anonim), meanVisitDurationSec menjadi rata-rata lama kunjungan dalam detik, "
+            "totalDwellSec menjadi total waktu yang dihabiskan, relativeIntensity menjadi tingkat keramaian relatif. "
+            "Jelaskan arti ukuran lain secara natural juga. Pertahankan angka, satuan, ketidakpastian, dan batas bukti. "
+            "Misalnya: Area yang terlihat pada gambar memiliki 20 kunjungan dan rata-rata waktu kunjungan 30 detik. "
+            "Aturan bahasa ini tidak mengubah format marker kontrol berikut. "
             "Pada akhir jawaban, tulis marker [[SUPPORT:supported]], [[SUPPORT:partially_supported]], atau [[SUPPORT:unsupported]] "
             "sesuai kecukupan data, lalu [[AREA_ID:id-yang-persis]] jika satu area paling relevan untuk highlight; gunakan [[AREA_ID:none]] "
             "jika tidak ada satu area. Marker bukan bagian dari jawaban pengguna."
@@ -327,6 +361,22 @@ class LocalRAG:
             flags=re.I,
         ).strip()
         answer = self._hide_internal_area_ids(answer)
+        # Guard common metric names if the model copies evidence despite the prompt.
+        metric_labels = {
+            "visitCount": "jumlah kunjungan",
+            "uniqueVisitors": "jumlah pengunjung yang dibedakan oleh sistem berdasarkan jejak anonim",
+            "meanVisitDurationSec": "rata-rata lama kunjungan (detik)",
+            "totalDwellSec": "total waktu yang dihabiskan (detik)",
+            "relativeIntensity": "tingkat keramaian relatif",
+            "totalPathLengthM": "total jarak pergerakan (meter)",
+            "tableAreaM2": "luas meja (meter persegi)",
+            "interactionAreaM2": "luas area sekitar meja (meter persegi)",
+            "trackCount": "jumlah jejak anonim",
+        }
+        for name, label in metric_labels.items():
+            answer = re.sub(r"(?<!\w)`?" + re.escape(name) + r"`?(?!\w)", label, answer)
+
+        answer = sanitize_public_text(answer)
         if not answer:
             raise RuntimeError("Qwen3-8B tidak menghasilkan jawaban yang dapat ditampilkan.")
         selected_id = None
@@ -389,8 +439,8 @@ class LocalRAG:
             "question": question,
             "supportLevel": support_level,
             "dataGrounding": "grounded" if evidence or self.package.areas else "general_knowledge",
-            "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
-            "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+            "interpretation": "Jawaban menggunakan hasil pengamatan pada area yang relevan dengan pertanyaan Anda.",
+            "assumption": "Area dipilih berdasarkan data pengamatan yang tersedia. Penjelasan tidak memastikan niat atau pengalaman pengunjung.",
             "alternativeInterpretations": [],
             "answer": answer,
             "selectedAreaId": selected_id,
@@ -612,7 +662,7 @@ class LocalRAG:
                 axis.axvline(x, color="#c7ccd4", alpha=0.25, linewidth=0.6, zorder=0)
             for y in np.arange(0, height + 0.001, max(0.5, height / 10)):
                 axis.axhline(y, color="#c7ccd4", alpha=0.25, linewidth=0.6, zorder=0)
-        self._draw_geometry(axis, area["geometryM"], color, self._area_label(area) or "Area terpilih")
+        self._draw_geometry(axis, area["geometryM"], color, "Area yang terlihat pada gambar")
         if area.get("interactionGeometryM"):
             self._draw_geometry(axis, area["interactionGeometryM"], "#2a9d8f", "interaction zone", alpha=0.12, dashed=True)
         axis.set(xlim=(0, width), ylim=(height, 0), aspect="equal")

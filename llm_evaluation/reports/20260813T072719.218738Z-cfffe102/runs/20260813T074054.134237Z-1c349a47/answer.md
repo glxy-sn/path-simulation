@@ -1,0 +1,1 @@
+Area berhenti 1 memiliki akumulasi waktu tinggal terbesar dengan totalDwellSec=532.712 detik. Metrik ini secara langsung mencerminkan jumlah total waktu yang dihabiskan di area tersebut, berdasarkan data dari areaCatalog.

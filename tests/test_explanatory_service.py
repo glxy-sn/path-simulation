@@ -103,3 +103,14 @@ def test_custom_zone_update_increments_revision_and_forces_rebuild(tmp_path: Pat
     assert persisted["contextRevision"] == 2
     assert persisted["customZones"][0]["id"] == "zone-fixed"
     assert build_calls == [("job-a", True)]
+
+
+def test_unchanged_zones_reuse_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("explanatory_service.Config.WORKDIR", tmp_path)
+    directory = write_job(tmp_path, "job-a")
+    manager = ExplanatoryManager()
+    manager._ensure_context(directory)
+    monkeypatch.setattr(manager, "status", lambda job_id: {"state": "ready"})
+    monkeypatch.setattr(manager, "build", lambda *args, **kwargs: pytest.fail("Unchanged zones must not rebuild"))
+    assert manager.update_context("job-a", AnalysisContextUpdate(customZones=[]))["state"] == "ready"
+    assert json.loads((directory / "analysis-context.json").read_text())["contextRevision"] == 1

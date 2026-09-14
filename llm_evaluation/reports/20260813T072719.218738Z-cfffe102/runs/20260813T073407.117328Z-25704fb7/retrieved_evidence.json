@@ -1,0 +1,242 @@
+{
+  "cards": [
+    {
+      "areaId": "crowd-03",
+      "cardId": "72ebb6668052-v2-evidence-0015",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 162.3054053354272,
+        "center": [
+          4.943860182430499,
+          4.513124942779541
+        ],
+        "radiiM": [
+          0.47482673942920584,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 10.720792600106734,
+        "medianVisitDurationSec": 4.397426193119216,
+        "observedCrowdedSeconds": 14,
+        "p95VisitDurationSec": 28.98105991534856,
+        "peakConcurrentTracks": 2,
+        "uniqueVisitors": 3,
+        "visitCount": 36
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.1582736904405709,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (4.94 m, 4.51 m) dengan area ID crowd-03."
+    },
+    {
+      "areaId": "crowd-02",
+      "cardId": "72ebb6668052-v2-evidence-0014",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": -155.54123950823893,
+        "center": [
+          5.427262783050537,
+          6.221031043932247
+        ],
+        "radiiM": [
+          0.4,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 7.844272832327153,
+        "medianVisitDurationSec": 4.89716542598444,
+        "observedCrowdedSeconds": 19,
+        "p95VisitDurationSec": 21.03843973425103,
+        "peakConcurrentTracks": 3,
+        "uniqueVisitors": 10,
+        "visitCount": 26
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.1578154945088918,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (5.43 m, 6.22 m) dengan area ID crowd-02."
+    },
+    {
+      "areaId": "crowd-01",
+      "cardId": "72ebb6668052-v2-evidence-0013",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "angleDeg": 95.93796607416523,
+        "center": [
+          5.4012208020298305,
+          5.150262742214535
+        ],
+        "radiiM": [
+          0.4,
+          0.4
+        ],
+        "type": "ellipse"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+      "metrics": {
+        "meanVisitDurationSec": 20.819322267474192,
+        "medianVisitDurationSec": 8.295124419215654,
+        "observedCrowdedSeconds": 26,
+        "p95VisitDurationSec": 79.4089397751184,
+        "peakConcurrentTracks": 1,
+        "uniqueVisitors": 8,
+        "visitCount": 26
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "crowd_zone",
+        "local_occupancy"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.15601070216033677,
+      "statement": "Okupansi lokal bersamaan tinggi di sekitar (5.40 m, 5.15 m) dengan area ID crowd-01."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0003",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "group_episodes.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Co-moving proxy tidak membuktikan hubungan sosial.",
+      "metrics": {
+        "groupEpisodeCount": 3,
+        "maxObservedGroupSize": 2,
+        "soloObservationRatio": 0.9937082186394023
+      },
+      "questionTypes": [
+        "group_behavior",
+        "solo",
+        "group_size"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08076441695466301,
+      "statement": "Rasio observasi solo adalah 99.4%; group terbesar yang teramati berisi 2 track."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0001",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "occupancy_timeseries.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": null,
+      "metrics": {
+        "binSeconds": 10,
+        "meanCount": 10.181818181818182,
+        "peakBinEndSec": 320.0,
+        "peakBinStartSec": 310.0,
+        "peakCount": 13
+      },
+      "questionTypes": [
+        "peak_occupancy",
+        "occupancy",
+        "peak_time"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08024551968727156,
+      "statement": "Puncak okupansi adalah 13 track pada detik 310–320."
+    },
+    {
+      "areaId": null,
+      "cardId": "72ebb6668052-v2-evidence-0002",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "track_summary.parquet",
+        "area_visits.parquet"
+      ],
+      "geometryM": null,
+      "jobId": "72ebb6668052",
+      "limitation": "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+      "metrics": {
+        "meanObservedDurationSec": 123.4789839412507,
+        "medianObservedDurationSec": 43.577467264885584,
+        "stopEpisodeCount": 306,
+        "totalStopDurationSec": 3591.94138746553
+      },
+      "questionTypes": [
+        "dwell_area",
+        "dwell",
+        "duration"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.06733065824171662,
+      "statement": "Median durasi teramati per track adalah 43.6 detik."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

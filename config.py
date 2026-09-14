@@ -3,6 +3,10 @@
 import os
 from pathlib import Path
 
+from model_registry import DEFAULT_DETECTION_MODEL_ID, resolve_detection_model
+
+DEFAULT_YOLO_MODEL = resolve_detection_model(DEFAULT_DETECTION_MODEL_ID).path
+
 
 def _default_device() -> str:
     if os.getenv("PRISM_DEVICE"):
@@ -37,13 +41,13 @@ class Config:
     DEVICE = _default_device()
     HALF = False
 
-    YOLO_MODEL = os.getenv("PRISM_YOLO", "yolo11x.pt")
+    YOLO_MODEL = os.getenv("PRISM_YOLO", str(DEFAULT_YOLO_MODEL))
     IMGSZ = int(os.getenv("PRISM_IMGSZ", "1920"))
     CONF = float(os.getenv("PRISM_CONF", "0.10"))
     IOU = float(os.getenv("PRISM_IOU", "0.70"))
     PERSON_CLASS = 0
 
-    REID_WEIGHTS = os.getenv("PRISM_REID", "osnet_x0_25_msmt17.pt")
+    REID_WEIGHTS = os.getenv("PRISM_REID", str(Path(__file__).with_name("models") / "osnet_x0_25_msmt17.pt"))
     WITH_REID = os.getenv("PRISM_WITH_REID", "1") != "0"
     REID_DEVICE = os.getenv("PRISM_REID_DEVICE", "cpu")
     REID_SAMPLE_CONF = float(os.getenv("PRISM_REID_SAMPLE_CONF", "0.5"))
@@ -51,12 +55,19 @@ class Config:
     REID_MAX_SAMPLES = int(os.getenv("PRISM_REID_MAX_SAMPLES", "12"))
     REID_MIN_SAMPLES = int(os.getenv("PRISM_REID_MIN_SAMPLES", "3"))
 
-    PREVIEW_YOLO_MODEL = os.getenv("PRISM_PREVIEW_YOLO", "yolo11s.pt")
+    PREVIEW_YOLO_MODEL = os.getenv(
+        "PRISM_PREVIEW_YOLO", str(DEFAULT_YOLO_MODEL)
+    )
     PREVIEW_IMGSZ = int(os.getenv("PRISM_PREVIEW_IMGSZ", "960"))
     PREVIEW_SAMPLE_DELTA_SEC = float(os.getenv("PRISM_PREVIEW_DELTA", "0.5"))
     PREVIEW_CACHE_TTL_SEC = float(os.getenv("PRISM_PREVIEW_CACHE_TTL", "600"))
     PREVIEW_CACHE_MAX = int(os.getenv("PRISM_PREVIEW_CACHE_MAX", "8"))
 
+    # Quality-preserving defaults. Lower-resolution/sampling variants remain opt-in.
+    TORCH_THREADS = max(1, int(os.getenv("PRISM_TORCH_THREADS", "1")))
+    CAMERA_CACHE = os.getenv("PRISM_CAMERA_CACHE", "1") != "0"
+    CAMERA_CACHE_MB = max(1, int(os.getenv("PRISM_CAMERA_CACHE_MB", "512")))
+    REID_REFRESH_SEC = max(0.0, float(os.getenv("PRISM_REID_REFRESH_SEC", "0")))
     PROC_FPS = float(os.getenv("PRISM_PROC_FPS", "5"))
     BATCH_SIZE = int(os.getenv("PRISM_BATCH", "8"))
     MAX_DURATION_SEC = float(os.getenv("PRISM_MAX_DURATION_SEC", "600"))

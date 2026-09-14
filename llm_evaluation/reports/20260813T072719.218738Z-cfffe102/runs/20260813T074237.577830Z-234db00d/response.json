@@ -1,0 +1,121 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area berhenti 12 memiliki medianVisitDurationSec tertinggi sebesar 27.6825 detik.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074237.577830Z-234db00d/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074237.577830Z-234db00d/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074237.577830Z-234db00d/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074237.577830Z-234db00d/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074237.577830Z-234db00d",
+    "runId": "20260813T074237.577830Z-234db00d"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0030",
+    "72ebb6668052-v2-evidence-0029",
+    "72ebb6668052-v2-evidence-0028",
+    "72ebb6668052-v2-evidence-0031",
+    "72ebb6668052-v2-evidence-0033"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0030",
+      "72ebb6668052-v2-evidence-0029",
+      "72ebb6668052-v2-evidence-0028",
+      "72ebb6668052-v2-evidence-0031",
+      "72ebb6668052-v2-evidence-0033"
+    ],
+    "selectedAreaIdReportedByModel": "stop-cluster-12",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik."
+  ],
+  "metricSummary": {
+    "episodeCount": "7",
+    "meanVisitDurationSec": "27.7",
+    "medianEpisodeSec": "6.4",
+    "medianVisitDurationSec": "27.7",
+    "p95VisitDurationSec": "45",
+    "totalDwellSec": "50.2",
+    "uniqueVisitors": "2",
+    "visitCount": "2"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which stop cluster has the longest median visit duration?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "stop-cluster-12",
+    "confidence": 0.7648789016743609,
+    "confidenceBasis": "hdbscan_episode_support",
+    "geometryM": {
+      "angleDeg": 102.84238723230374,
+      "center": [
+        6.356302768326982,
+        5.942856590740928
+      ],
+      "radiiM": [
+        0.35,
+        0.35
+      ],
+      "type": "ellipse"
+    },
+    "kind": "stop_cluster",
+    "limitation": "Cluster berhenti tidak membuktikan aktivitas, antrean, atau preferensi pengunjung.",
+    "metrics": {
+      "episodeCount": 7,
+      "meanVisitDurationSec": 27.682481415793426,
+      "medianEpisodeSec": 6.396692442552023,
+      "medianVisitDurationSec": 27.682481415793426,
+      "p95VisitDurationSec": 45.040621742242934,
+      "totalDwellSec": 50.177198071357395,
+      "uniqueVisitors": 2,
+      "visitCount": 2
+    },
+    "timeRangeSec": {
+      "end": 466.35885838980784,
+      "start": 85.14435533750682
+    }
+  },
+  "selectedAreaId": "stop-cluster-12",
+  "sessionId": "eval-stop-dwell-03",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 605,
+      "durationMs": 50410.88695899816,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6465,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 50413.03312499076
+  }
+}

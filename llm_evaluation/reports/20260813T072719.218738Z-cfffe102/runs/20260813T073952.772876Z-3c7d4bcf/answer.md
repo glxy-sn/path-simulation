@@ -1,0 +1,1 @@
+Area arus rendah 2 memiliki totalPathLengthM sebesar 15.88 meter, yang lebih pendek dibandingkan Area arus rendah 1 (64.76 meter). Metrik totalPathLengthM langsung tersedia untuk kedua area low-flow dalam areaCatalog.

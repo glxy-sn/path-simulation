@@ -187,7 +187,10 @@ class ExplanatoryManager:
     def update_context(self, job_id: str, update: AnalysisContextUpdate) -> dict[str, Any]:
         directory = self._assert_job(job_id)
         context = self._ensure_context(directory)
-        context["customZones"] = [zone.model_dump() for zone in update.customZones]
+        zones = [zone.model_dump() for zone in update.customZones]
+        if context.get("customZones", []) == zones:
+            return self.status(job_id)
+        context["customZones"] = zones
         context["contextRevision"] = int(context.get("contextRevision") or 1) + 1
         _atomic(directory / "analysis-context.json", context)
         _atomic(self._status_path(directory), {
@@ -322,7 +325,7 @@ class ChatSessionManager:
                         "mimeType": "image/png",
                         "artifactURL": url,
                         "thumbnailURL": url,
-                        "caption": str(area.get("label") or result.get("selectedAreaId") or "Area floorplan"),
+                        "caption": "Area yang terlihat pada gambar",
                         "width": width,
                         "height": height,
                         "selectedAreaId": result.get("selectedAreaId"),

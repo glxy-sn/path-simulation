@@ -1,0 +1,432 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Meja 5 memiliki visitCount=0, yang berarti tidak ada kunjungan yang tercatat. Dibandingkan dengan tabel lain (visitCount=28, 65, 9, 24), Meja 5 adalah satu-satunya dengan nilai 0. Metrik visitCount mengacu pada jumlah episode kunjungan, bukan jumlah orang terverifikasi. Data menunjukkan Meja 5 tidak memiliki aktivitas tercatat.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074615.801559Z-0c400970/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074615.801559Z-0c400970/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074615.801559Z-0c400970/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074615.801559Z-0c400970/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074615.801559Z-0c400970",
+    "runId": "20260813T074615.801559Z-0c400970"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0042",
+    "72ebb6668052-v2-evidence-0040",
+    "72ebb6668052-v2-evidence-0038",
+    "72ebb6668052-v2-evidence-0041",
+    "72ebb6668052-v2-evidence-0039",
+    "72ebb6668052-v2-evidence-0021"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0042",
+      "72ebb6668052-v2-evidence-0040",
+      "72ebb6668052-v2-evidence-0038",
+      "72ebb6668052-v2-evidence-0041",
+      "72ebb6668052-v2-evidence-0039",
+      "72ebb6668052-v2-evidence-0021"
+    ],
+    "selectedAreaIdReportedByModel": "table-05",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui."
+  ],
+  "metricSummary": {
+    "interactionAreaM2": "7.99",
+    "meanVisitDurationSec": "0",
+    "medianVisitDurationSec": "0",
+    "p95VisitDurationSec": "0",
+    "tableAreaM2": "1.04",
+    "uniqueVisitors": "0",
+    "visitCount": "0"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which table has no observed visits?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "table-05",
+    "confidence": 1.0,
+    "confidenceBasis": "manual_verified_polygon",
+    "geometryM": {
+      "areaM2": 1.0422439341734333,
+      "centroid": [
+        5.261112424636481,
+        1.2950944652598002
+      ],
+      "points": [
+        [
+          4.325139146567718,
+          1.0296846011131722
+        ],
+        [
+          6.175788497217068,
+          1.0018552875695734
+        ],
+        [
+          6.217532467532468,
+          1.558441558441558
+        ],
+        [
+          4.325139146567718,
+          1.5862708719851577
+        ]
+      ],
+      "type": "polygon"
+    },
+    "interactionGeometryM": {
+      "areaM2": 7.994735586254212,
+      "centroid": [
+        5.2613320711513865,
+        1.2981229896645508
+      ],
+      "holes": [
+        [
+          [
+            6.217532467532468,
+            1.558441558441558
+          ],
+          [
+            6.175788497217068,
+            1.0018552875695734
+          ],
+          [
+            4.325139146567718,
+            1.0296846011131722
+          ],
+          [
+            4.325139146567718,
+            1.5862708719851577
+          ]
+        ]
+      ],
+      "points": [
+        [
+          3.3300449229668314,
+          1.6852025967055362
+        ],
+        [
+          3.325139146567718,
+          1.5862708719851577
+        ],
+        [
+          3.325139146567718,
+          1.0296846011131722
+        ],
+        [
+          3.3298627449450957,
+          0.9326027574289667
+        ],
+        [
+          3.3439889153139672,
+          0.8364380650233604
+        ],
+        [
+          3.367384204963466,
+          0.7420990106663695
+        ],
+        [
+          3.39982759398914,
+          0.650476833966162
+        ],
+        [
+          3.441012583311471,
+          0.562437107653124
+        ],
+        [
+          3.49055009023299,
+          0.4788115603439691
+        ],
+        [
+          3.5479721241790685,
+          0.400390219037851
+        ],
+        [
+          3.61273620789696,
+          0.3279139455758606
+        ],
+        [
+          3.6842305023451396,
+          0.26206743757344486
+        ],
+        [
+          3.7617795868571138,
+          0.20347275994731595
+        ],
+        [
+          3.844650839973346,
+          0.1526834681457896
+        ],
+        [
+          3.9320613606603345,
+          0.11017937860154936
+        ],
+        [
+          4.023185364530714,
+          0.07636203581140133
+        ],
+        [
+          4.1171619851908385,
+          0.05155091886640717
+        ],
+        [
+          4.213103407014986,
+          0.035980423270051465
+        ],
+        [
+          4.310103252514254,
+          0.029797646557801927
+        ],
+        [
+          6.160752603163604,
+          0.001968333014203183
+        ],
+        [
+          6.261378718689059,
+          0.005524863469026586
+        ],
+        [
+          6.36113709795045,
+          0.019182454829104523
+        ],
+        [
+          6.459016364159158,
+          0.042802642827151516
+        ],
+        [
+          6.5540241914708455,
+          0.07614595976069627
+        ],
+        [
+          6.6451973654468715,
+          0.11887436227887638
+        ],
+        [
+          6.731611548376592,
+          0.17055465855518526
+        ],
+        [
+          6.8123906504571305,
+          0.2306629001005861
+        ],
+        [
+          6.886715711823114,
+          0.29858969369163524
+        ],
+        [
+          6.953833205378026,
+          0.37364637955988167
+        ],
+        [
+          7.013062676250865,
+          0.4550720132064294
+        ],
+        [
+          7.063803640427291,
+          0.5420410800581839
+        ],
+        [
+          7.105541672615113,
+          0.6336718647525577
+        ],
+        [
+          7.137853621623724,
+          0.7290353902006198
+        ],
+        [
+          7.160411900382602,
+          0.8271648358021058
+        ],
+        [
+          7.172987807105525,
+          0.9270653393279373
+        ],
+        [
+          7.2147317774209245,
+          1.483651610199922
+        ],
+        [
+          7.2173103248694455,
+          1.5795184647297817
+        ],
+        [
+          7.21069381268246,
+          1.6751914727878177
+        ],
+        [
+          7.194943093602096,
+          1.769790719892882
+        ],
+        [
+          7.1702030286094045,
+          1.862446167053591
+        ],
+        [
+          7.136701154623036,
+          1.9523056526062863
+        ],
+        [
+          7.094745591818833,
+          2.0385427296333756
+        ],
+        [
+          7.044722209816927,
+          2.120364266880514
+        ],
+        [
+          6.987091078799208,
+          2.1970177432662084
+        ],
+        [
+          6.9223822381966205,
+          2.2677981688954905
+        ],
+        [
+          6.851190821862065,
+          2.332054568924388
+        ],
+        [
+          6.774171584563244,
+          2.389195970642419
+        ],
+        [
+          6.692032880135808,
+          2.438696838709311
+        ],
+        [
+          6.605530146680382,
+          2.4801019085574953
+        ],
+        [
+          6.5154589587207665,
+          2.513030373507097
+        ],
+        [
+          6.422647710223332,
+          2.5371793870840746
+        ],
+        [
+          6.3279499957726335,
+          2.552326848330352
+        ],
+        [
+          6.232236759974344,
+          2.5583334444891364
+        ],
+        [
+          4.339843439009594,
+          2.586162758032736
+        ],
+        [
+          4.240850274218168,
+          2.5827122330285666
+        ],
+        [
+          4.1426841141481034,
+          2.569485071000183
+        ],
+        [
+          4.046308121261925,
+          2.5466110509461966
+        ],
+        [
+          3.9526678937023183,
+          2.5143146025220755
+        ],
+        [
+          3.8626821875060227,
+          2.472912604036728
+        ],
+        [
+          3.777233902180468,
+          2.4228112733842457
+        ],
+        [
+          3.6971614180886436,
+          2.3645021824155865
+        ],
+        [
+          3.623250370635903,
+          2.298557433855405
+        ],
+        [
+          3.5562259419666997,
+          2.225624048085967
+        ],
+        [
+          3.496745745801693,
+          2.146417614872502
+        ],
+        [
+          3.445393375226005,
+          2.0617152723164422
+        ],
+        [
+          3.4026726767348534,
+          1.9723480819239114
+        ],
+        [
+          3.3690028067170603,
+          1.879192874601874
+        ],
+        [
+          3.3447141188800154,
+          1.783163647585401
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "table",
+    "label": "Meja 5",
+    "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "metrics": {
+      "interactionAreaM2": 7.994735586254205,
+      "meanVisitDurationSec": 0.0,
+      "medianVisitDurationSec": 0.0,
+      "p95VisitDurationSec": 0.0,
+      "tableAreaM2": 1.0422439341734333,
+      "uniqueVisitors": 0,
+      "visitCount": 0
+    }
+  },
+  "selectedAreaId": "table-05",
+  "sessionId": "eval-table-usage-05",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 542,
+      "durationMs": 46013.56824999675,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6518,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 46016.10041600361
+  }
+}

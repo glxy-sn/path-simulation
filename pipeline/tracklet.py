@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 
 import numpy as np
 
@@ -61,11 +62,11 @@ class Tracklet:
     def key(self) -> tuple[int, int]:
         return self.camera_idx, self.local_track_id
 
-    @property
+    @cached_property
     def start_time(self) -> float:
         return min(o[0] for o in self.floor_observations)
 
-    @property
+    @cached_property
     def end_time(self) -> float:
         return max(o[0] for o in self.floor_observations)
 
@@ -73,12 +74,12 @@ class Tracklet:
     def duration(self) -> float:
         return self.end_time - self.start_time
 
-    @property
+    @cached_property
     def start_position(self) -> tuple[float, float]:
         first = min(self.floor_observations, key=lambda value: value[0])
         return first[1], first[2]
 
-    @property
+    @cached_property
     def end_position(self) -> tuple[float, float]:
         last = max(self.floor_observations, key=lambda value: value[0])
         return last[1], last[2]

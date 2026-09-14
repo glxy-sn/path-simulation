@@ -8,13 +8,13 @@ import cv2
 from ultralytics import YOLO
 
 
-def load_model(cfg):
+def load_model(cfg, model_path=None):
     try:
         import torch
-        torch.set_num_threads(1)     # hindari over-subscription thread (segfault/lambat)
+        torch.set_num_threads(getattr(cfg,"TORCH_THREADS",1))     # hindari over-subscription thread (segfault/lambat)
     except Exception:
         pass
-    return YOLO(cfg.YOLO_MODEL)
+    return YOLO(str(model_path or cfg.YOLO_MODEL))
 
 
 def seek_accurate(cap, target_frame):
@@ -58,7 +58,7 @@ def _boxes_from_result(res):
 
 
 def detect_video(model, video_path: str, cfg, on_frame=None,
-                 start_sec: float = 0.0, duration_sec=None) -> dict:
+                 start_sec: float = 0.0, duration_sec=None, on_batch=None) -> dict:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Tidak bisa membuka video: {video_path}")
@@ -99,30 +99,38 @@ def detect_video(model, video_path: str, cfg, on_frame=None,
             imgsz=cfg.IMGSZ, conf=cfg.CONF, iou=cfg.IOU,
             classes=[cfg.PERSON_CLASS], device=cfg.DEVICE, verbose=False,
         )
+        batch_dets = []
         for (fi, t_rel), res in zip(buf_meta, results):
-            dets.append((fi, t_rel, _boxes_from_result(res)))
+            item = (fi, t_rel, _boxes_from_result(res))
+            dets.append(item)
+            batch_dets.append(item)
             done += 1
             if on_frame:
                 on_frame(done, to_process)
+        if on_batch:
+            on_batch(batch_dets, buf_frames)
         buf_frames.clear()
         buf_meta.clear()
 
     idx = start_frame
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if end_frame and idx >= end_frame:
-            break
-        if (idx - start_frame) % stride == 0:
-            buf_frames.append(frame)
-            buf_meta.append((idx, (idx - start_frame) / fps))
-            if len(buf_frames) >= batch_size:
-                flush()
-        idx += 1
-    flush()
+    try:
+        while not end_frame or idx < end_frame:
+            if (idx - start_frame) % stride:
+                if not cap.grab():
+                    break
+            else:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                buf_frames.append(frame)
+                buf_meta.append((idx, (idx - start_frame) / fps))
+                if len(buf_frames) >= batch_size:
+                    flush()
+            idx += 1
+        flush()
+    finally:
+        cap.release()
 
-    cap.release()
     return {
         "fps": fps, "total": total, "stride": stride,
         "frame_w": frame_w, "frame_h": frame_h, "dets": dets,

@@ -1,0 +1,182 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area kehadiran 1 memiliki jumlah kunjungan tertinggi dengan visitCount=37.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073326.947274Z-d9e06f4a/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073326.947274Z-d9e06f4a/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073326.947274Z-d9e06f4a/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073326.947274Z-d9e06f4a/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073326.947274Z-d9e06f4a",
+    "runId": "20260813T073326.947274Z-d9e06f4a"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0008",
+    "72ebb6668052-v2-evidence-0011",
+    "72ebb6668052-v2-evidence-0005",
+    "72ebb6668052-v2-evidence-0007",
+    "72ebb6668052-v2-evidence-0009",
+    "72ebb6668052-v2-evidence-0010"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0008",
+      "72ebb6668052-v2-evidence-0011",
+      "72ebb6668052-v2-evidence-0005",
+      "72ebb6668052-v2-evidence-0007",
+      "72ebb6668052-v2-evidence-0009",
+      "72ebb6668052-v2-evidence-0010"
+    ],
+    "selectedAreaIdReportedByModel": "presence-01",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Area observasional dinamis; bukan nama tempat atau zona semantik."
+  ],
+  "metricSummary": {
+    "meanVisitDurationSec": "48.6",
+    "medianVisitDurationSec": "14.4",
+    "observedPresenceSec": "1.8e+03",
+    "p95VisitDurationSec": "258",
+    "pointCount": "9e+03",
+    "relativeIntensity": "1",
+    "uniqueVisitors": "17",
+    "visitCount": "37"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which presence area has the greatest number of visits?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "presence-01",
+    "confidence": 0.8741473161992697,
+    "confidenceBasis": "density_contour_with_unique_visitor_support",
+    "geometryM": {
+      "areaM2": 4.951250000000001,
+      "centroid": [
+        5.06398215938736,
+        5.210878986787847
+      ],
+      "points": [
+        [
+          5.0,
+          6.775
+        ],
+        [
+          4.6000000000000005,
+          6.525
+        ],
+        [
+          4.2,
+          6.425000000000001
+        ],
+        [
+          4.025,
+          6.25
+        ],
+        [
+          4.175,
+          5.8500000000000005
+        ],
+        [
+          4.175,
+          5.550000000000001
+        ],
+        [
+          4.025,
+          4.95
+        ],
+        [
+          4.425,
+          4.15
+        ],
+        [
+          5.1000000000000005,
+          3.5250000000000004
+        ],
+        [
+          5.800000000000001,
+          3.575
+        ],
+        [
+          5.875,
+          3.85
+        ],
+        [
+          5.825,
+          4.65
+        ],
+        [
+          5.925000000000001,
+          4.95
+        ],
+        [
+          5.9750000000000005,
+          5.65
+        ],
+        [
+          5.825,
+          5.8500000000000005
+        ],
+        [
+          5.775,
+          6.75
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "presence_hotspot",
+    "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+    "metrics": {
+      "meanVisitDurationSec": 48.57809787845469,
+      "medianVisitDurationSec": 14.444390087983777,
+      "observedPresenceSec": 1802.1863703338304,
+      "p95VisitDurationSec": 257.63215224052215,
+      "pointCount": 8995,
+      "relativeIntensity": 1.0,
+      "uniqueVisitors": 17,
+      "visitCount": 37
+    },
+    "timeRangeSec": {
+      "end": 542.7193744227725,
+      "start": 0.0
+    }
+  },
+  "selectedAreaId": "presence-01",
+  "sessionId": "eval-presence-high-02",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 480,
+      "durationMs": 47022.93175000523,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6505,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 47025.88079198904
+  }
+}

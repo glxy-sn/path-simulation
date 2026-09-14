@@ -1,0 +1,158 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area yang paling diminati secara emosional adalah **Area kehadiran 2** dengan **meanVisitDurationSec=68.7524** (rata-rata waktu kunjungan terpanjang di antara area presence_hotspot). Meski medianVisitDurationSec-nya rendah (5.59634s), metrik ini mencerminkan rata-rata waktu tinggi, yang bisa diinterpretasi sebagai indikator preferensi kunjungan yang lebih dalam. Area ini juga memiliki **relativeIntensity=0.34446** (intensitas kunjungan relatif tinggi) dan **uniqueVisitors=6**, menunjukkan konsistensi pengunjungan. \n\nNamun, perlu dicatat bahwa metrik seperti **visitCount=9** dan **uniqueVisitors** tidak secara langsung mengukur emosi, hanya menggambarkan frekuensi kunjungan. Jika pertanyaan mengacu pada \"ramai\" sebagai indikator preferensi, **Area kehadiran 1** (dengan **relativeIntensity=1**) mungkin lebih relevan, tetapi metrik ini lebih berkaitan dengan kepadatan daripada preferensi emosional.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075606.520157Z-ab2dace0/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075606.520157Z-ab2dace0/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075606.520157Z-ab2dace0/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075606.520157Z-ab2dace0/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075606.520157Z-ab2dace0",
+    "runId": "20260813T075606.520157Z-ab2dace0"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0008",
+    "72ebb6668052-v2-evidence-0011",
+    "72ebb6668052-v2-evidence-0005",
+    "72ebb6668052-v2-evidence-0007",
+    "72ebb6668052-v2-evidence-0009",
+    "72ebb6668052-v2-evidence-0010"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0008",
+      "72ebb6668052-v2-evidence-0011",
+      "72ebb6668052-v2-evidence-0005",
+      "72ebb6668052-v2-evidence-0007",
+      "72ebb6668052-v2-evidence-0009",
+      "72ebb6668052-v2-evidence-0010"
+    ],
+    "selectedAreaIdReportedByModel": "presence-02",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Area observasional dinamis; bukan nama tempat atau zona semantik."
+  ],
+  "metricSummary": {
+    "meanVisitDurationSec": "68.8",
+    "medianVisitDurationSec": "5.6",
+    "observedPresenceSec": "621",
+    "p95VisitDurationSec": "304",
+    "pointCount": "3.1e+03",
+    "relativeIntensity": "0.344",
+    "uniqueVisitors": "6",
+    "visitCount": "9"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which area do visitors emotionally prefer?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "presence-02",
+    "confidence": 0.8741473161992697,
+    "confidenceBasis": "density_contour_with_unique_visitor_support",
+    "geometryM": {
+      "areaM2": 1.7075000000000002,
+      "centroid": [
+        6.461746583699365,
+        6.333250976085896
+      ],
+      "points": [
+        [
+          6.775,
+          7.050000000000001
+        ],
+        [
+          6.300000000000001,
+          7.075
+        ],
+        [
+          5.775,
+          6.75
+        ],
+        [
+          5.825,
+          5.8500000000000005
+        ],
+        [
+          5.95,
+          5.675000000000001
+        ],
+        [
+          6.300000000000001,
+          5.575
+        ],
+        [
+          6.65,
+          5.625
+        ],
+        [
+          7.125,
+          6.0
+        ],
+        [
+          7.2250000000000005,
+          6.300000000000001
+        ],
+        [
+          7.175000000000001,
+          6.65
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "presence_hotspot",
+    "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+    "metrics": {
+      "meanVisitDurationSec": 68.75239987948083,
+      "medianVisitDurationSec": 5.596342604343192,
+      "observedPresenceSec": 620.781258132067,
+      "p95VisitDurationSec": 303.5616124098716,
+      "pointCount": 3095,
+      "relativeIntensity": 0.34446007824211644,
+      "uniqueVisitors": 6,
+      "visitCount": 9
+    },
+    "timeRangeSec": {
+      "end": 542.6453632425611,
+      "start": 0.0
+    }
+  },
+  "selectedAreaId": "presence-02",
+  "sessionId": "eval-unsupported-05",
+  "supportLevel": "partially_supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 1628,
+      "durationMs": 116198.41541699134,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6502,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 116200.97112499934
+  }
+}

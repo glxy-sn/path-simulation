@@ -1,0 +1,630 @@
+{
+  "cards": [
+    {
+      "areaId": "low-flow-01",
+      "cardId": "72ebb6668052-v2-evidence-0021",
+      "confidence": 0.6556104871494522,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 5.948048780487804,
+        "centroid": [
+          8.193485964362427,
+          4.924037291230566
+        ],
+        "points": [
+          [
+            8.425,
+            7.45
+          ],
+          [
+            7.634756097560978,
+            6.359756097560978
+          ],
+          [
+            7.800000000000001,
+            6.425000000000001
+          ],
+          [
+            7.925000000000001,
+            6.25
+          ],
+          [
+            7.875,
+            5.75
+          ],
+          [
+            7.275,
+            5.3500000000000005
+          ],
+          [
+            7.025,
+            4.9
+          ],
+          [
+            7.025,
+            4.3500000000000005
+          ],
+          [
+            7.175000000000001,
+            3.9000000000000004
+          ],
+          [
+            7.425000000000001,
+            3.45
+          ],
+          [
+            7.9,
+            3.125
+          ],
+          [
+            8.35,
+            3.1750000000000003
+          ],
+          [
+            8.9,
+            3.475
+          ],
+          [
+            9.125,
+            3.7
+          ],
+          [
+            9.225,
+            4.0
+          ],
+          [
+            8.825000000000001,
+            6.6000000000000005
+          ],
+          [
+            8.675,
+            7.1000000000000005
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+      "metrics": {
+        "meanDensity": 0.6626475143907534,
+        "meanSpeedMps": 0.8258390128911874,
+        "meanVisitDurationSec": 67.84455022328724,
+        "medianVisitDurationSec": 5.796211983069725,
+        "observedSupportAreaM2": 5.948048780487804,
+        "p95VisitDurationSec": 331.10361279838907,
+        "pointCount": 392,
+        "relativeIntensity": 0.008223067460455712,
+        "totalPathLengthM": 64.75869340362338,
+        "uniqueVisitors": 8,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "low_flow",
+        "quiet_area",
+        "least_traversed_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.1543925722348017,
+      "statement": "Kandidat arus pergerakan rendah di sekitar (8.19 m, 4.92 m) dengan area ID low-flow-01."
+    },
+    {
+      "areaId": "low-flow-02",
+      "cardId": "72ebb6668052-v2-evidence-0022",
+      "confidence": 0.6556104871494522,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 4.82625,
+        "centroid": [
+          1.315017698351032,
+          4.322245963912629
+        ],
+        "points": [
+          [
+            0.9750000000000001,
+            0.05
+          ],
+          [
+            2.4250000000000003,
+            7.45
+          ],
+          [
+            2.075,
+            7.2
+          ],
+          [
+            1.925,
+            6.65
+          ],
+          [
+            1.5250000000000001,
+            6.4
+          ],
+          [
+            1.475,
+            6.0
+          ],
+          [
+            1.0250000000000001,
+            5.3500000000000005
+          ],
+          [
+            0.775,
+            4.7
+          ],
+          [
+            0.35000000000000003,
+            4.425
+          ],
+          [
+            0.17500000000000002,
+            4.2
+          ],
+          [
+            0.17500000000000002,
+            3.95
+          ],
+          [
+            0.625,
+            3.4000000000000004
+          ],
+          [
+            0.8250000000000001,
+            2.5
+          ],
+          [
+            1.075,
+            2.15
+          ],
+          [
+            1.0250000000000001,
+            1.55
+          ],
+          [
+            1.125,
+            1.3
+          ],
+          [
+            1.125,
+            1.0
+          ],
+          [
+            0.9750000000000001,
+            0.5
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+      "metrics": {
+        "meanDensity": 0.7119507055495254,
+        "meanSpeedMps": 0.8083324715320397,
+        "meanVisitDurationSec": 23.98445084365979,
+        "medianVisitDurationSec": 10.29327300441689,
+        "observedSupportAreaM2": 4.826250000000001,
+        "p95VisitDurationSec": 72.42266938156246,
+        "pointCount": 94,
+        "relativeIntensity": 0.008834891179868706,
+        "totalPathLengthM": 15.879551053374877,
+        "uniqueVisitors": 5,
+        "visitCount": 10
+      },
+      "questionTypes": [
+        "low_flow",
+        "quiet_area",
+        "least_traversed_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.15220773871421997,
+      "statement": "Kandidat arus pergerakan rendah di sekitar (1.32 m, 4.32 m) dengan area ID low-flow-02."
+    },
+    {
+      "areaId": "flow-02",
+      "cardId": "72ebb6668052-v2-evidence-0017",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 2.446249999999999,
+        "centroid": [
+          7.982907511497189,
+          4.387255152444218
+        ],
+        "points": [
+          [
+            7.800000000000001,
+            5.375
+          ],
+          [
+            7.550000000000001,
+            5.275
+          ],
+          [
+            7.325,
+            5.050000000000001
+          ],
+          [
+            7.175000000000001,
+            4.65
+          ],
+          [
+            7.2250000000000005,
+            4.3
+          ],
+          [
+            7.4750000000000005,
+            3.7
+          ],
+          [
+            7.6000000000000005,
+            3.5250000000000004
+          ],
+          [
+            8.0,
+            3.325
+          ],
+          [
+            8.35,
+            3.4250000000000003
+          ],
+          [
+            8.575000000000001,
+            3.6500000000000004
+          ],
+          [
+            8.725,
+            3.95
+          ],
+          [
+            8.725,
+            4.4
+          ],
+          [
+            8.575000000000001,
+            5.050000000000001
+          ],
+          [
+            8.35,
+            5.325
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanSpeedMps": 0.7971805368154589,
+        "meanVisitDurationSec": 84.68751104327472,
+        "medianVisitDurationSec": 7.9947751490615815,
+        "p95VisitDurationSec": 380.09159752426433,
+        "pointCount": 337,
+        "relativeIntensity": 0.3123307051132767,
+        "totalPathLengthM": 53.750077470248605,
+        "uniqueVisitors": 6,
+        "visitCount": 7
+      },
+      "questionTypes": [
+        "most_traversed_area",
+        "flow",
+        "display_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.10391284764691179,
+      "statement": "Arus pergerakan tinggi di sekitar (7.98 m, 4.39 m) dengan area ID flow-02."
+    },
+    {
+      "areaId": "flow-05",
+      "cardId": "72ebb6668052-v2-evidence-0020",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.40375,
+        "centroid": [
+          2.6620881567230628,
+          2.5064633422380536
+        ],
+        "points": [
+          [
+            2.9250000000000003,
+            3.2
+          ],
+          [
+            2.5,
+            3.125
+          ],
+          [
+            2.125,
+            2.85
+          ],
+          [
+            2.025,
+            2.6500000000000004
+          ],
+          [
+            2.025,
+            2.2
+          ],
+          [
+            2.2,
+            1.7750000000000001
+          ],
+          [
+            2.5,
+            1.725
+          ],
+          [
+            2.7,
+            1.975
+          ],
+          [
+            3.0,
+            2.1750000000000003
+          ],
+          [
+            3.475,
+            2.3000000000000003
+          ],
+          [
+            3.225,
+            3.0
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanSpeedMps": 0.6759909442660955,
+        "meanVisitDurationSec": 30.354801583094506,
+        "medianVisitDurationSec": 9.348306991752246,
+        "p95VisitDurationSec": 117.37930632082949,
+        "pointCount": 135,
+        "relativeIntensity": 0.10600069204318988,
+        "totalPathLengthM": 18.242027812011067,
+        "uniqueVisitors": 6,
+        "visitCount": 10
+      },
+      "questionTypes": [
+        "most_traversed_area",
+        "flow",
+        "display_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.10191922065562263,
+      "statement": "Arus pergerakan tinggi di sekitar (2.66 m, 2.51 m) dengan area ID flow-05."
+    },
+    {
+      "areaId": "flow-03",
+      "cardId": "72ebb6668052-v2-evidence-0018",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 3.0375,
+        "centroid": [
+          3.197990397805212,
+          5.863189300411522
+        ],
+        "points": [
+          [
+            2.875,
+            6.9
+          ],
+          [
+            2.6500000000000004,
+            6.925000000000001
+          ],
+          [
+            2.5250000000000004,
+            6.800000000000001
+          ],
+          [
+            2.1750000000000003,
+            5.95
+          ],
+          [
+            1.8250000000000002,
+            5.65
+          ],
+          [
+            1.7750000000000001,
+            5.3500000000000005
+          ],
+          [
+            1.9500000000000002,
+            5.175000000000001
+          ],
+          [
+            2.0500000000000003,
+            5.175000000000001
+          ],
+          [
+            2.275,
+            5.550000000000001
+          ],
+          [
+            2.5,
+            5.625
+          ],
+          [
+            3.3000000000000003,
+            5.025
+          ],
+          [
+            4.1000000000000005,
+            4.925000000000001
+          ],
+          [
+            4.275,
+            5.45
+          ],
+          [
+            4.2250000000000005,
+            6.5
+          ],
+          [
+            3.45,
+            6.425000000000001
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanSpeedMps": 0.7094154521330059,
+        "meanVisitDurationSec": 41.30946046186423,
+        "medianVisitDurationSec": 2.9984495824462556,
+        "p95VisitDurationSec": 206.99446045287462,
+        "pointCount": 342,
+        "relativeIntensity": 0.2833063214573195,
+        "totalPathLengthM": 48.755170326975225,
+        "uniqueVisitors": 7,
+        "visitCount": 12
+      },
+      "questionTypes": [
+        "most_traversed_area",
+        "flow",
+        "display_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.10118397197358346,
+      "statement": "Arus pergerakan tinggi di sekitar (3.20 m, 5.86 m) dengan area ID flow-03."
+    },
+    {
+      "areaId": "flow-04",
+      "cardId": "72ebb6668052-v2-evidence-0019",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 2.045625,
+        "centroid": [
+          2.008190752622467,
+          0.7302474793767187
+        ],
+        "points": [
+          [
+            1.225,
+            0.0
+          ],
+          [
+            2.725,
+            0.0
+          ],
+          [
+            2.625,
+            0.5
+          ],
+          [
+            2.6750000000000003,
+            1.35
+          ],
+          [
+            2.45,
+            1.725
+          ],
+          [
+            2.2,
+            1.7750000000000001
+          ],
+          [
+            2.0500000000000003,
+            1.5750000000000002
+          ],
+          [
+            1.475,
+            1.1500000000000001
+          ],
+          [
+            1.225,
+            0.7000000000000001
+          ],
+          [
+            1.175,
+            0.1
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanSpeedMps": 0.6985600386960092,
+        "meanVisitDurationSec": 27.51304647165838,
+        "medianVisitDurationSec": 14.992247912231269,
+        "p95VisitDurationSec": 83.3269138961815,
+        "pointCount": 208,
+        "relativeIntensity": 0.17339805484665996,
+        "totalPathLengthM": 29.840674415338498,
+        "uniqueVisitors": 7,
+        "visitCount": 22
+      },
+      "questionTypes": [
+        "most_traversed_area",
+        "flow",
+        "display_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.1008947683200394,
+      "statement": "Arus pergerakan tinggi di sekitar (2.01 m, 0.73 m) dengan area ID flow-04."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

@@ -1,0 +1,1 @@
+Area arus rendah 1 memiliki relatif intensity terkecil dengan nilai 0.00822307 dibandingkan Area arus rendah 2 (0.00883489). Kedua area termasuk kategori low_flow_area berdasarkan areaCatalog. Relatif intensity diukur sebagai skala normalisasi aktivitas terhadap area lain.

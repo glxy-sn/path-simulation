@@ -1,0 +1,120 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area keramaian 2 mencapai peakConcurrentTracks tertinggi sebesar 3. Metrik ini diukur dalam area crowd_zone yang tercatat dalam areaCatalog.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073407.117328Z-25704fb7/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073407.117328Z-25704fb7/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073407.117328Z-25704fb7/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073407.117328Z-25704fb7/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073407.117328Z-25704fb7",
+    "runId": "20260813T073407.117328Z-25704fb7"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0015",
+    "72ebb6668052-v2-evidence-0014",
+    "72ebb6668052-v2-evidence-0013",
+    "72ebb6668052-v2-evidence-0003",
+    "72ebb6668052-v2-evidence-0001",
+    "72ebb6668052-v2-evidence-0002"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0015",
+      "72ebb6668052-v2-evidence-0014",
+      "72ebb6668052-v2-evidence-0013",
+      "72ebb6668052-v2-evidence-0003",
+      "72ebb6668052-v2-evidence-0001",
+      "72ebb6668052-v2-evidence-0002"
+    ],
+    "selectedAreaIdReportedByModel": "crowd-02",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+    "Co-moving proxy tidak membuktikan hubungan sosial.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik."
+  ],
+  "metricSummary": {
+    "meanVisitDurationSec": "7.84",
+    "medianVisitDurationSec": "4.9",
+    "observedCrowdedSeconds": "19",
+    "p95VisitDurationSec": "21",
+    "peakConcurrentTracks": "3",
+    "uniqueVisitors": "10",
+    "visitCount": "26"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which local crowd area reached the highest concurrent track count?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "crowd-02",
+    "confidence": 0.8741473161992697,
+    "confidenceBasis": "unique_concurrent_track_persistence",
+    "geometryM": {
+      "angleDeg": -155.54123950823893,
+      "center": [
+        5.427262783050537,
+        6.221031043932247
+      ],
+      "radiiM": [
+        0.4,
+        0.4
+      ],
+      "type": "ellipse"
+    },
+    "kind": "crowd_zone",
+    "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+    "metrics": {
+      "meanVisitDurationSec": 7.844272832327153,
+      "medianVisitDurationSec": 4.89716542598444,
+      "observedCrowdedSeconds": 19,
+      "p95VisitDurationSec": 21.03843973425103,
+      "peakConcurrentTracks": 3,
+      "uniqueVisitors": 10,
+      "visitCount": 26
+    },
+    "timeRangeSec": {
+      "end": 536,
+      "start": 211
+    }
+  },
+  "selectedAreaId": "crowd-02",
+  "sessionId": "eval-crowd-high-01",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 396,
+      "durationMs": 39848.44724999857,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6142,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 39850.54787500121
+  }
+}

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 
+from model_registry import DEFAULT_DETECTION_MODEL_ID
 from models import CalibrationPreviewRequest, CameraInput
 from pipeline.preview import (
     CalibrationPreviewManager,
@@ -65,6 +66,7 @@ def cached_preview(camera_id="camera-1", source_time=4.0):
     return _CachedPreview(
         created_at=time.monotonic(),
         global_time=4.0,
+        detection_model=DEFAULT_DETECTION_MODEL_ID,
         cameras=[
             _CachedCamera(
                 camera_id=camera_id,
@@ -94,9 +96,9 @@ class PreviewAssociationTests(unittest.TestCase):
 
     def test_single_camera_detection_skips_reid_and_has_no_embeddings(self):
         manager = CalibrationPreviewManager(config())
-        manager._detector = object()
+        manager._detectors[DEFAULT_DETECTION_MODEL_ID] = object()
         with patch("pipeline.preview.make_tracker") as make_tracker:
-            manager._load_models(needs_reid=False)
+            manager._load_models(DEFAULT_DETECTION_MODEL_ID, needs_reid=False)
         make_tracker.assert_not_called()
         with patch(
             "pipeline.preview._boxes_from_result",

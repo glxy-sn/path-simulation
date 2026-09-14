@@ -1,0 +1,236 @@
+[
+  {
+    "run": "before",
+    "timing": {
+      "detect_video": 6.558819625002798,
+      "track_from_dets": 2.228871250001248,
+      "fuse_tracklets": 0.0032588329922873527,
+      "compute_analytics": 0.08617870800662786,
+      "render_combined_video": 5.932416541007115,
+      "render_path_video": 0.12701854199985974,
+      "total": 15.185786874993937
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "quality-final",
+    "timing": {
+      "detect_video": 6.91330008400837,
+      "fuse_tracklets": 0.004463749995920807,
+      "compute_analytics": 0.052796624979237095,
+      "render_combined_video": 3.808827750006458,
+      "render_path_video": 0.16825012498884462,
+      "total": 11.985404750012094
+    },
+    "performance": {
+      "elapsedSeconds": 11.984824957995443,
+      "stageSeconds": {
+        "cacheRead": 5.5957993026822805e-05,
+        "detectorLoad": 0.021197209018282592,
+        "trackerLoad": 0.825825417006854,
+        "trackingReID": 1.1596906670311,
+        "decodeDetectionTracking": 6.913325000961777,
+        "cacheWrite": 0.04585983295692131,
+        "fusion": 0.004465916019398719,
+        "analytics": 0.05280295800184831,
+        "privacyAndVideoEncoding": 3.9773564169881865
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "cached-repeat",
+    "timing": {
+      "fuse_tracklets": 0.002585625014035031,
+      "compute_analytics": 0.02126979097374715,
+      "render_combined_video": 4.405725707998499,
+      "render_path_video": 0.17564629099797457,
+      "total": 4.720795417000772
+    },
+    "performance": {
+      "elapsedSeconds": 4.720416374999331,
+      "stageSeconds": {
+        "cacheRead": 0.0036435829824768007,
+        "fusion": 0.0025874160055536777,
+        "analytics": 0.021272082987707108,
+        "privacyAndVideoEncoding": 4.581615333008813
+      },
+      "cameraCacheHits": 2
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "verified-final",
+    "timing": {
+      "detect_video": 6.76484824999352,
+      "fuse_tracklets": 0.0034213339968118817,
+      "compute_analytics": 0.07557024998823181,
+      "render_combined_video": 3.571841042023152,
+      "render_path_video": 0.17713295901194215,
+      "total": 11.750663667015033
+    },
+    "performance": {
+      "elapsedSeconds": 11.750035541015677,
+      "stageSeconds": {
+        "cacheRead": 0.00022258399985730648,
+        "detectorLoad": 0.022829291003290564,
+        "trackerLoad": 0.7651315410330426,
+        "trackingReID": 1.1997210829285905,
+        "decodeDetectionTracking": 6.764881541981595,
+        "cacheWrite": 0.04784524903516285,
+        "fusion": 0.003426166978897527,
+        "analytics": 0.07557541702408344,
+        "privacyModelLoad": 0.1745214999828022,
+        "privacyAndVideoEncoding": 3.7492782500048634,
+        "privacyInference": 2.944410249008797
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "1280-3fps",
+    "timing": {
+      "detect_video": 2.812074041023152,
+      "fuse_tracklets": 0.002488917001755908,
+      "compute_analytics": 0.020967999997083098,
+      "total": 3.742252041003667
+    },
+    "performance": {
+      "elapsedSeconds": 3.7418917909963056,
+      "stageSeconds": {
+        "cacheRead": 4.362498293630779e-05,
+        "detectorLoad": 0.02190566700301133,
+        "trackerLoad": 0.7268621240218636,
+        "trackingReID": 0.5985066250141244,
+        "decodeDetectionTracking": 2.8120822079945356,
+        "cacheWrite": 0.04941524998866953,
+        "fusion": 0.0024906250182539225,
+        "analytics": 0.020971084013581276
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 11,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 11,
+      "captureRate": 0.9568219548663707
+    },
+    "observations": 128
+  },
+  {
+    "run": "reid-mps",
+    "timing": {
+      "detect_video": 7.134200208995026,
+      "fuse_tracklets": 0.003006749990163371,
+      "compute_analytics": 0.035637416993267834,
+      "total": 8.34136683298857
+    },
+    "performance": {
+      "elapsedSeconds": 8.340988624986494,
+      "stageSeconds": {
+        "cacheRead": 5.8958015870302916e-05,
+        "detectorLoad": 0.014325416996143758,
+        "trackerLoad": 0.9772756250167731,
+        "trackingReID": 2.1315117070043925,
+        "decodeDetectionTracking": 7.134226207999745,
+        "cacheWrite": 0.0454255839867983,
+        "fusion": 0.003012208006111905,
+        "analytics": 0.035642583010485396
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "cpu-threads2",
+    "timing": {
+      "detect_video": 5.906969334027963,
+      "fuse_tracklets": 0.002803250012220815,
+      "compute_analytics": 0.02305499999783933,
+      "total": 6.8070443750184495
+    },
+    "performance": {
+      "elapsedSeconds": 6.806671165977605,
+      "stageSeconds": {
+        "cacheRead": 8.92080133780837e-05,
+        "detectorLoad": 0.014701666019391268,
+        "trackerLoad": 0.7007244580308907,
+        "trackingReID": 1.0928265830152668,
+        "decodeDetectionTracking": 5.906978957966203,
+        "cacheWrite": 0.04576229097438045,
+        "fusion": 0.0028084169898647815,
+        "analytics": 0.02306070798658766
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  },
+  {
+    "run": "reid-refresh",
+    "timing": {
+      "detect_video": 6.00952054199297,
+      "fuse_tracklets": 0.0028112499858252704,
+      "compute_analytics": 0.024018124997382984,
+      "total": 6.906591417005984
+    },
+    "performance": {
+      "elapsedSeconds": 6.9062695000029635,
+      "stageSeconds": {
+        "cacheRead": 7.670800550840795e-05,
+        "detectorLoad": 0.01405749999685213,
+        "trackerLoad": 0.696581917029107,
+        "trackingReID": 0.9583638329932,
+        "decodeDetectionTracking": 6.009551917028148,
+        "cacheWrite": 0.04330824999487959,
+        "fusion": 0.0028170830046292394,
+        "analytics": 0.024025416001677513
+      },
+      "cameraCacheHits": 0
+    },
+    "summary": {
+      "totalVisitors": 10,
+      "avgDwellSeconds": 3,
+      "peakOccupancy": 10,
+      "captureRate": 1.0
+    },
+    "observations": 198
+  }
+]

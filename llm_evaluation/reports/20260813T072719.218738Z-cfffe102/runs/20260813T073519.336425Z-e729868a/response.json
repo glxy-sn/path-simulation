@@ -1,0 +1,120 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Area keramaian 1 memiliki durasi terpanjang dalam observasi kepadatan dengan **26 detik** (metric: `observedCrowdedSeconds`). Dibandingkan Area keramaian 2 (19 detik) dan Area keramaian 3 (14 detik), Area keramaian 1 adalah area yang paling lama dalam keadaan terisi.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073519.336425Z-e729868a/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073519.336425Z-e729868a/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073519.336425Z-e729868a/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073519.336425Z-e729868a/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T073519.336425Z-e729868a",
+    "runId": "20260813T073519.336425Z-e729868a"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0015",
+    "72ebb6668052-v2-evidence-0014",
+    "72ebb6668052-v2-evidence-0013",
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0021",
+    "72ebb6668052-v2-evidence-0022"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0015",
+      "72ebb6668052-v2-evidence-0014",
+      "72ebb6668052-v2-evidence-0013",
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0021",
+      "72ebb6668052-v2-evidence-0022"
+    ],
+    "selectedAreaIdReportedByModel": "crowd-01",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+    "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui."
+  ],
+  "metricSummary": {
+    "meanVisitDurationSec": "20.8",
+    "medianVisitDurationSec": "8.3",
+    "observedCrowdedSeconds": "26",
+    "p95VisitDurationSec": "79.4",
+    "peakConcurrentTracks": "1",
+    "uniqueVisitors": "8",
+    "visitCount": "26"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Which crowd area stayed crowded for the longest observed duration?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "crowd-01",
+    "confidence": 0.8741473161992697,
+    "confidenceBasis": "unique_concurrent_track_persistence",
+    "geometryM": {
+      "angleDeg": 95.93796607416523,
+      "center": [
+        5.4012208020298305,
+        5.150262742214535
+      ],
+      "radiiM": [
+        0.4,
+        0.4
+      ],
+      "type": "ellipse"
+    },
+    "kind": "crowd_zone",
+    "limitation": "Crowd zone adalah pola okupansi lokal anonim, bukan kapasitas desain atau identitas sosial.",
+    "metrics": {
+      "meanVisitDurationSec": 20.819322267474192,
+      "medianVisitDurationSec": 8.295124419215654,
+      "observedCrowdedSeconds": 26,
+      "p95VisitDurationSec": 79.4089397751184,
+      "peakConcurrentTracks": 1,
+      "uniqueVisitors": 8,
+      "visitCount": 26
+    },
+    "timeRangeSec": {
+      "end": 436,
+      "start": 296
+    }
+  },
+  "selectedAreaId": "crowd-01",
+  "sessionId": "eval-crowd-high-02",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 817,
+      "durationMs": 71924.23533399415,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6553,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 71927.29191700346
+  }
+}

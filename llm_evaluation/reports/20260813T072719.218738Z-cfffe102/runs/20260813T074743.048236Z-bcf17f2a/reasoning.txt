@@ -1,0 +1,7 @@
+Okay, let's tackle this question. The user is asking for the peak occupancy during the observation. First, I need to look through the provided data to find relevant information.
+
+Looking at the "retrievedEvidence" section, there's a card with the question type "peak_occupancy". The statement says, "Puncak okupansi adalah 13 track pada detik 310–320." Translating that, it means the peak occupancy was 13 tracks between seconds 310 and 320. The metrics listed include peakBinStartSec and peakBinEndSec as 310.0 and 320.0, with peakCount of 13. 
+
+I should check if there are other areas mentioned that might have higher occupancy. The areaCatalog lists various areas with different metrics, but the peak occupancy here is a global measure, not tied to a specific area. The other areas have metrics like uniqueVisitors or visitCount, but those are per area. The question is about overall peak occupancy, so the global peak of 13 tracks is the key here. 
+
+The answer should reference the peakCount from the evidence, which is 13, and note that it's during the specified time bin. Also, the marker should indicate it's supported by the data and the relevant area is none since it's a global metric.

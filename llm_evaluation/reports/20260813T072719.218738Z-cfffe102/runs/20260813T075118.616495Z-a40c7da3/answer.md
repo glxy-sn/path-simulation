@@ -1,0 +1,1 @@
+Tidak ada data yang menyediakan informasi tentang jumlah kursi atau kapasitas penampung di area meja. Meskipun beberapa tabel memiliki nilai uniqueVisitors (jumlah pengunjung unik) dan visitCount (jumlah kunjungan), metrik ini tidak mencerminkan jumlah kursi yang tersedia. CCTV hanya menghitung interaksi dan kehadiran, bukan fasilitas fisik seperti kursi.

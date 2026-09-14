@@ -1,0 +1,1 @@
+Valid spatial observation ratio adalah **0.8741** (87.41%), dihitung sebagai rasio validObservationCount (25.373) terhadap rawObservationCount (29.026) dalam data kualitas. Nilai ini mencerminkan proporsi data observasi yang valid (tanpa anomali atau kesalahan) dibandingkan total data mentah.

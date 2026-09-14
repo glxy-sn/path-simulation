@@ -48,7 +48,7 @@ def _valid_crop_indices(dets_in: np.ndarray, frame: np.ndarray) -> tuple[list[in
     return valid, warnings
 
 
-def extract_embeddings_once(tracker, dets_in: np.ndarray, frame: np.ndarray):
+def extract_embeddings_once(tracker, dets_in: np.ndarray, frame: np.ndarray, reuse=None, time=0.0):
     """Return filtered detections, their embeddings, original indices, and crop warnings."""
     valid_indices, warnings = _valid_crop_indices(dets_in, frame)
     if not valid_indices:
@@ -57,7 +57,8 @@ def extract_embeddings_once(tracker, dets_in: np.ndarray, frame: np.ndarray):
     filtered = dets_in[valid_indices]
     try:
         embeddings = np.asarray(
-            tracker.model.get_features(filtered[:, :4], frame), dtype=np.float32
+            (reuse.features(tracker.model, filtered[:, :4], frame, time) if reuse is not None
+             else tracker.model.get_features(filtered[:, :4], frame)), dtype=np.float32
         )
     except Exception as exc:
         raise RuntimeError(f"OSNet gagal menghitung descriptor: {exc}") from exc
@@ -85,103 +86,108 @@ def extract_embeddings_once(tracker, dets_in: np.ndarray, frame: np.ndarray):
     )
 
 
+class TrackingSession:
+    """Ordered tracking consumer shared by streaming and legacy callers."""
+    def __init__(self, cfg, tracker=None):
+        self.cfg = cfg
+        self.tracker = tracker or make_tracker(cfg)
+        from .reid_reuse import DescriptorReuse
+        interval = getattr(cfg,"REID_REFRESH_SEC",0.0)
+        self.reuse = DescriptorReuse(interval) if interval > 0 else None
+        tracks = defaultdict(list)
+        samplers = defaultdict(
+            lambda: TrackAppearanceSampler(
+                bin_seconds=cfg.REID_SAMPLE_BIN_SEC,
+                max_samples=cfg.REID_MAX_SAMPLES,
+                min_confidence=cfg.REID_SAMPLE_CONF,
+            )
+        )
+        per_frame: dict[int, list[tuple[int, float, float, float, float, float]]] = {}
+        warnings: list[dict] = []
+        self.tracks, self.samplers = tracks, samplers
+        self.per_frame, self.warnings = per_frame, warnings
+
+    def consume(self, frame_index, time, boxes, frame):
+        cfg, tracker = self.cfg, self.tracker
+        tracks, samplers = self.tracks, self.samplers
+        per_frame, warnings = self.per_frame, self.warnings
+        if len(boxes):
+            classes = np.zeros((len(boxes), 1), dtype=np.float32)
+            dets_in = np.hstack([boxes, classes]).astype(np.float32)
+        else:
+            dets_in = np.empty((0, 6), dtype=np.float32)
+
+        embeddings = None
+        if len(dets_in) and getattr(cfg, "WITH_REID", True):
+            dets_in, embeddings, _original_indices, crop_warnings = extract_embeddings_once(
+                tracker, dets_in, frame, reuse=self.reuse, time=time
+            )
+            warnings.extend(
+                {"frame": frame_index, "reason": reason} for reason in crop_warnings
+            )
+
+        try:
+            out = tracker.update(dets_in, frame, embs=embeddings)
+        except Exception as exc:
+            raise RuntimeError(
+                f"BoT-SORT gagal pada frame {frame_index}: {type(exc).__name__}: {exc}"
+            ) from exc
+
+        time = float(time)
+        for row in out:
+            x1, y1, x2, y2 = [float(value) for value in row[:4]]
+            track_id = int(row[4])
+            confidence = float(row[5]) if len(row) > 5 else 0.0
+            tracks[track_id].append((time, x1, y1, x2, y2, confidence))
+            per_frame.setdefault(frame_index, []).append(
+                (track_id, x1, y1, x2, y2, confidence)
+            )
+
+            if embeddings is not None and len(row) > 7:
+                detection_index = int(row[7])
+                if 0 <= detection_index < len(embeddings):
+                    samplers[track_id].add(
+                        time, confidence, embeddings[detection_index]
+                    )
+                else:
+                    warnings.append(
+                        {
+                            "frame": frame_index,
+                            "trackId": track_id,
+                            "reason": f"det_ind {detection_index} di luar descriptor batch",
+                        }
+                    )
+
+    def result(self):
+        samples = {tid: sampler.samples() for tid, sampler in self.samplers.items()}
+        return dict(self.tracks), self.per_frame, samples, self.warnings
+
+
 def track_from_dets(video_path: str, dets, cfg, on_frame=None, tracker=None):
-    """
-    Return tracks, per-frame boxes, sampled descriptors, and non-fatal crop warnings.
-
-    The exact embedding array passed to tracker.update is later recovered through
-    BoxMOT's det_ind output; embeddings are never serialized.
-    """
-    tracker = tracker or make_tracker(cfg)
-    dmap = {frame_index: boxes for (frame_index, _time, boxes) in dets}
-    tmap = {frame_index: time for (frame_index, time, _boxes) in dets}
-    frames_needed = set(dmap)
-
+    session = TrackingSession(cfg, tracker)
+    if not dets:
+        return session.result()
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Tidak bisa membuka video: {video_path}")
-
-    tracks = defaultdict(list)
-    samplers = defaultdict(
-        lambda: TrackAppearanceSampler(
-            bin_seconds=cfg.REID_SAMPLE_BIN_SEC,
-            max_samples=cfg.REID_MAX_SAMPLES,
-            min_confidence=cfg.REID_SAMPLE_CONF,
-        )
-    )
-    per_frame: dict[int, list[tuple[int, float, float, float, float, float]]] = {}
-    warnings: list[dict] = []
-    done = 0
-
-    if not frames_needed:
-        cap.release()
-        return {}, per_frame, {}, warnings
-
-    minimum, maximum = min(frames_needed), max(frames_needed)
-    seek_accurate(cap, minimum)
-    frame_index = minimum
+    seek_accurate(cap, dets[0][0])
+    position = dets[0][0]
     try:
-        while True:
+        for done, (target, time, boxes) in enumerate(dets, 1):
+            while position < target:
+                if not cap.grab():
+                    return session.result()
+                position += 1
             ok, frame = cap.read()
-            if not ok or frame_index > maximum:
+            position += 1
+            if not ok:
                 break
-            if frame_index in frames_needed:
-                boxes = dmap[frame_index]
-                if len(boxes):
-                    classes = np.zeros((len(boxes), 1), dtype=np.float32)
-                    dets_in = np.hstack([boxes, classes]).astype(np.float32)
-                else:
-                    dets_in = np.empty((0, 6), dtype=np.float32)
-
-                embeddings = None
-                if len(dets_in) and getattr(cfg, "WITH_REID", True):
-                    dets_in, embeddings, _original_indices, crop_warnings = extract_embeddings_once(
-                        tracker, dets_in, frame
-                    )
-                    warnings.extend(
-                        {"frame": frame_index, "reason": reason} for reason in crop_warnings
-                    )
-
-                try:
-                    out = tracker.update(dets_in, frame, embs=embeddings)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"BoT-SORT gagal pada frame {frame_index}: {type(exc).__name__}: {exc}"
-                    ) from exc
-
-                time = float(tmap[frame_index])
-                for row in out:
-                    x1, y1, x2, y2 = [float(value) for value in row[:4]]
-                    track_id = int(row[4])
-                    confidence = float(row[5]) if len(row) > 5 else 0.0
-                    tracks[track_id].append((time, x1, y1, x2, y2, confidence))
-                    per_frame.setdefault(frame_index, []).append(
-                        (track_id, x1, y1, x2, y2, confidence)
-                    )
-
-                    if embeddings is not None and len(row) > 7:
-                        detection_index = int(row[7])
-                        if 0 <= detection_index < len(embeddings):
-                            samplers[track_id].add(
-                                time, confidence, embeddings[detection_index]
-                            )
-                        else:
-                            warnings.append(
-                                {
-                                    "frame": frame_index,
-                                    "trackId": track_id,
-                                    "reason": f"det_ind {detection_index} di luar descriptor batch",
-                                }
-                            )
-                done += 1
-                if on_frame:
-                    on_frame(done, len(dets))
-            frame_index += 1
+            session.consume(target, time, boxes, frame)
+            if on_frame:
+                on_frame(done, len(dets))
     finally:
         cap.release()
-
-    samples = {track_id: sampler.samples() for track_id, sampler in samplers.items()}
-    return dict(tracks), per_frame, samples, warnings
+    return session.result()
 
 
 def build_tracklets(camera_idx, tracks, samples, H, calibration_uncertainty_m):

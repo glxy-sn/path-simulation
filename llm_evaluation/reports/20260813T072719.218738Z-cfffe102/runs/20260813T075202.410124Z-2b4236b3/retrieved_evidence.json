@@ -1,0 +1,548 @@
+{
+  "cards": [
+    {
+      "areaId": "presence-05",
+      "cardId": "72ebb6668052-v2-evidence-0008",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 2.0706250000000006,
+        "centroid": [
+          3.2351921722507297,
+          5.806016701881478
+        ],
+        "points": [
+          [
+            2.9250000000000003,
+            6.550000000000001
+          ],
+          [
+            2.6,
+            6.575
+          ],
+          [
+            2.375,
+            6.45
+          ],
+          [
+            2.225,
+            6.2
+          ],
+          [
+            2.225,
+            5.9
+          ],
+          [
+            2.325,
+            5.7
+          ],
+          [
+            3.3000000000000003,
+            5.125
+          ],
+          [
+            4.0,
+            4.9750000000000005
+          ],
+          [
+            4.175,
+            5.550000000000001
+          ],
+          [
+            4.175,
+            5.8500000000000005
+          ],
+          [
+            4.025,
+            6.2
+          ],
+          [
+            3.6500000000000004,
+            6.175000000000001
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 53.07990862364131,
+        "medianVisitDurationSec": 2.9984495824462556,
+        "observedPresenceSec": 481.516941149505,
+        "p95VisitDurationSec": 208.5995052885184,
+        "pointCount": 2406,
+        "relativeIntensity": 0.2671848755910359,
+        "uniqueVisitors": 4,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08461975921606629,
+      "statement": "Kehadiran tinggi di sekitar (3.24 m, 5.81 m) dengan area ID presence-05."
+    },
+    {
+      "areaId": "presence-08",
+      "cardId": "72ebb6668052-v2-evidence-0011",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 0.9400000000000001,
+        "centroid": [
+          0.7074745124113474,
+          4.050249335106383
+        ],
+        "points": [
+          [
+            0.925,
+            4.55
+          ],
+          [
+            0.55,
+            4.575
+          ],
+          [
+            0.35000000000000003,
+            4.4750000000000005
+          ],
+          [
+            0.125,
+            4.2
+          ],
+          [
+            0.17500000000000002,
+            3.8000000000000003
+          ],
+          [
+            0.55,
+            3.5250000000000004
+          ],
+          [
+            1.05,
+            3.575
+          ],
+          [
+            1.2750000000000001,
+            3.9000000000000004
+          ],
+          [
+            1.2750000000000001,
+            4.15
+          ],
+          [
+            1.175,
+            4.3500000000000005
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 28.831157881303668,
+        "medianVisitDurationSec": 19.0875256683847,
+        "observedPresenceSec": 233.04788641587027,
+        "p95VisitDurationSec": 73.56192484030375,
+        "pointCount": 1166,
+        "relativeIntensity": 0.12931397676295894,
+        "uniqueVisitors": 3,
+        "visitCount": 8
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08434181280070073,
+      "statement": "Kehadiran tinggi di sekitar (0.71 m, 4.05 m) dengan area ID presence-08."
+    },
+    {
+      "areaId": "presence-02",
+      "cardId": "72ebb6668052-v2-evidence-0005",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.7075000000000002,
+        "centroid": [
+          6.461746583699365,
+          6.333250976085896
+        ],
+        "points": [
+          [
+            6.775,
+            7.050000000000001
+          ],
+          [
+            6.300000000000001,
+            7.075
+          ],
+          [
+            5.775,
+            6.75
+          ],
+          [
+            5.825,
+            5.8500000000000005
+          ],
+          [
+            5.95,
+            5.675000000000001
+          ],
+          [
+            6.300000000000001,
+            5.575
+          ],
+          [
+            6.65,
+            5.625
+          ],
+          [
+            7.125,
+            6.0
+          ],
+          [
+            7.2250000000000005,
+            6.300000000000001
+          ],
+          [
+            7.175000000000001,
+            6.65
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 68.75239987948083,
+        "medianVisitDurationSec": 5.596342604343192,
+        "observedPresenceSec": 620.781258132067,
+        "p95VisitDurationSec": 303.5616124098716,
+        "pointCount": 3095,
+        "relativeIntensity": 0.34446007824211644,
+        "uniqueVisitors": 6,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08388523303261243,
+      "statement": "Kehadiran tinggi di sekitar (6.46 m, 6.33 m) dengan area ID presence-02."
+    },
+    {
+      "areaId": "presence-04",
+      "cardId": "72ebb6668052-v2-evidence-0007",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 2.10625,
+        "centroid": [
+          7.891708704253215,
+          4.3518224530168155
+        ],
+        "points": [
+          [
+            7.6000000000000005,
+            5.375
+          ],
+          [
+            7.4,
+            5.275
+          ],
+          [
+            7.2250000000000005,
+            5.050000000000001
+          ],
+          [
+            7.175000000000001,
+            4.75
+          ],
+          [
+            7.325,
+            4.3500000000000005
+          ],
+          [
+            7.375,
+            3.9000000000000004
+          ],
+          [
+            7.525,
+            3.6
+          ],
+          [
+            7.800000000000001,
+            3.375
+          ],
+          [
+            8.15,
+            3.325
+          ],
+          [
+            8.425,
+            3.5
+          ],
+          [
+            8.575000000000001,
+            3.75
+          ],
+          [
+            8.575000000000001,
+            4.3
+          ],
+          [
+            8.225,
+            5.1000000000000005
+          ],
+          [
+            8.0,
+            5.325
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 73.07724159689185,
+        "medianVisitDurationSec": 8.294579217151444,
+        "observedPresenceSec": 585.4174102900411,
+        "p95VisitDurationSec": 349.7913997093206,
+        "pointCount": 2927,
+        "relativeIntensity": 0.32483733088137856,
+        "uniqueVisitors": 6,
+        "visitCount": 8
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08340998485353732,
+      "statement": "Kehadiran tinggi di sekitar (7.89 m, 4.35 m) dengan area ID presence-04."
+    },
+    {
+      "areaId": "presence-06",
+      "cardId": "72ebb6668052-v2-evidence-0009",
+      "confidence": 0.8741473161992697,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.115,
+        "centroid": [
+          2.4208753736920783,
+          2.572360799701047
+        ],
+        "points": [
+          [
+            2.575,
+            3.1500000000000004
+          ],
+          [
+            2.15,
+            3.125
+          ],
+          [
+            1.975,
+            3.0
+          ],
+          [
+            1.8250000000000002,
+            2.7
+          ],
+          [
+            1.8250000000000002,
+            2.45
+          ],
+          [
+            1.925,
+            2.25
+          ],
+          [
+            2.2,
+            1.975
+          ],
+          [
+            2.5500000000000003,
+            1.975
+          ],
+          [
+            2.75,
+            2.075
+          ],
+          [
+            3.0250000000000004,
+            2.45
+          ],
+          [
+            3.0250000000000004,
+            2.75
+          ],
+          [
+            2.9250000000000003,
+            2.95
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 32.261739496808644,
+        "medianVisitDurationSec": 15.39204118989079,
+        "observedPresenceSec": 293.5539199122441,
+        "p95VisitDurationSec": 101.90730647540683,
+        "pointCount": 1459,
+        "relativeIntensity": 0.16288765953649248,
+        "uniqueVisitors": 4,
+        "visitCount": 9
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08204901953971155,
+      "statement": "Kehadiran tinggi di sekitar (2.42 m, 2.57 m) dengan area ID presence-06."
+    },
+    {
+      "areaId": "presence-07",
+      "cardId": "72ebb6668052-v2-evidence-0010",
+      "confidence": 0.5244883897195618,
+      "evidenceRefs": [
+        "spatial_areas.json",
+        "area_visits.parquet"
+      ],
+      "geometryM": {
+        "areaM2": 1.1356249999999997,
+        "centroid": [
+          5.482218858924969,
+          2.963126031920749
+        ],
+        "points": [
+          [
+            5.825,
+            3.5500000000000003
+          ],
+          [
+            5.1000000000000005,
+            3.5250000000000004
+          ],
+          [
+            4.925000000000001,
+            3.1500000000000004
+          ],
+          [
+            4.925000000000001,
+            2.75
+          ],
+          [
+            5.025,
+            2.5500000000000003
+          ],
+          [
+            5.3500000000000005,
+            2.325
+          ],
+          [
+            5.75,
+            2.375
+          ],
+          [
+            6.075,
+            2.8000000000000003
+          ],
+          [
+            6.025,
+            3.2
+          ]
+        ],
+        "type": "polygon"
+      },
+      "jobId": "72ebb6668052",
+      "limitation": "Area observasional dinamis; bukan nama tempat atau zona semantik.",
+      "metrics": {
+        "meanVisitDurationSec": 95.67628713478486,
+        "medianVisitDurationSec": 61.55392564358513,
+        "observedPresenceSec": 287.8321058054238,
+        "p95VisitDurationSec": 161.05026380656386,
+        "pointCount": 1440,
+        "relativeIntensity": 0.1597127303499176,
+        "uniqueVisitors": 1,
+        "visitCount": 3
+      },
+      "questionTypes": [
+        "most_occupied_area",
+        "presence",
+        "favorite_area"
+      ],
+      "retrievalMode": "tfidf",
+      "retrievalScore": 0.08172267324398973,
+      "statement": "Kehadiran tinggi di sekitar (5.48 m, 2.96 m) dengan area ID presence-07."
+    }
+  ],
+  "catalogAreaIds": [
+    "presence-01",
+    "presence-02",
+    "presence-03",
+    "presence-04",
+    "presence-05",
+    "presence-06",
+    "presence-07",
+    "presence-08",
+    "low-presence-01",
+    "crowd-01",
+    "crowd-02",
+    "crowd-03",
+    "flow-01",
+    "flow-02",
+    "flow-03",
+    "flow-04",
+    "flow-05",
+    "low-flow-01",
+    "low-flow-02",
+    "stop-cluster-01",
+    "stop-cluster-02",
+    "stop-cluster-03",
+    "stop-cluster-04",
+    "stop-cluster-05",
+    "stop-cluster-06",
+    "stop-cluster-07",
+    "stop-cluster-08",
+    "stop-cluster-09",
+    "stop-cluster-10",
+    "stop-cluster-11",
+    "stop-cluster-12",
+    "route-01",
+    "route-02",
+    "route-03",
+    "table-01",
+    "table-02",
+    "table-03",
+    "table-04",
+    "table-05"
+  ],
+  "selectionReason": "complete spatial area catalog + TF-IDF evidence -> Qwen general reasoning"
+}

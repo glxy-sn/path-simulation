@@ -1,0 +1,26 @@
+Okay, let's tackle this question. The user is asking which stop cluster has the most stop episodes. First, I need to understand what "stop episodes" refer to. From the data provided, there's a section under "stop-cluster" entries. Each stop cluster has a metric called "episodeCount". 
+
+Looking at the areaCatalog, there are several stop clusters listed from stop-cluster-01 to stop-cluster-12. Each has an "episodeCount" value. My task is to find which one has the highest number here.
+
+Let me go through each stop cluster's episodeCount:
+
+- stop-cluster-01: 30
+- stop-cluster-02: 24
+- stop-cluster-03: 17
+- stop-cluster-04: 19
+- stop-cluster-05: 10
+- stop-cluster-06: 8
+- stop-cluster-07: 13
+- stop-cluster-08: 9
+- stop-cluster-09: 10
+- stop-cluster-10: 16
+- stop-cluster-11: 13
+- stop-cluster-12: 7
+
+Comparing these numbers, the highest value is 30 for stop-cluster-01. I should check if there are any other areas that might be considered stop clusters. The other areas like presence hotspots, crowd zones, flow hotspots, etc., don't have the "stop_cluster" kind, so they're not relevant here. 
+
+Wait, the user mentioned "stop cluster," so only the entries with kind "stop_cluster" are relevant. The other areas are different types. So stop-cluster-01 is the one with the highest episodeCount of 30. 
+
+I should also check the retrievedEvidence to see if any of those clusters are mentioned, but the evidence seems to focus on other metrics like dwell time or visit duration. The question is specifically about the number of stop episodes, so the episodeCount in the areaCatalog is the key metric here. 
+
+No other data in the provided information contradicts this. Therefore, the answer should be stop-cluster-01 with 30 episodes. The supporting data is in the areaCatalog under stop-cluster-01's episodeCount. The marker would be [[AREA_ID:stop-cluster-01]] since it's the most relevant area. The support is fully supported because the data directly provides the episodeCount for each stop cluster.

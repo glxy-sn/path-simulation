@@ -1,0 +1,1 @@
+Median observed duration per track adalah 43.6 detik, sesuai dengan nilai **medianObservedDurationSec** dalam **analysisSummary** dan **retrievedEvidence**. Data ini dihitung dari total durasi henti (stop) yang valid, dengan catatan bahwa durasi tidak mencakup gap antar tracking.

@@ -1,0 +1,40 @@
+{
+  "configuration": {
+    "answerTokenBudget": 4096,
+    "maximumModelCalls": 1,
+    "semanticTopK": 6,
+    "thinking": true
+  },
+  "files": [
+    "answer.md",
+    "floorplan_overlay.png",
+    "grounding.json",
+    "reasoning.txt",
+    "response.json",
+    "retrieved_evidence.json",
+    "run_manifest.json"
+  ],
+  "jobId": "72ebb6668052",
+  "models": {
+    "answerer": "Qwen3-8B-Q4_K_M",
+    "retrieval": "tfidf"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "runId": "20260813T072816.948245Z-d9240fce",
+  "schemaVersion": "2.1",
+  "sessionId": "eval-flow-high-01",
+  "usageAndLatency": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 617,
+      "durationMs": 57707.99941600126,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6721,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 57726.67516699585
+  }
+}

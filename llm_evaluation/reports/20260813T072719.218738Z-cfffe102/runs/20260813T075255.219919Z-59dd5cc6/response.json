@@ -1,0 +1,434 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "The named food counter is likely located at one of the labeled tables in the areaCatalog, as these are the only explicitly named areas. The tables (Meja 1 to Meja 5) have labels like \"Meja 1\" to \"Meja 5,\" which could correspond to food counters. However, the data does not explicitly state which table is the food counter. Among the tables, Meja 3 has the highest mean visit duration (65.358 seconds) and unique visitors (7), suggesting it might be a busy area, but this is speculative.toare the possible locations, but the exact identification of the food counter is not confirmed in the data.",
+  "artifacts": {
+    "floorplanOverlay": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075255.219919Z-59dd5cc6/floorplan_overlay.png",
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075255.219919Z-59dd5cc6/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075255.219919Z-59dd5cc6/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075255.219919Z-59dd5cc6/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T075255.219919Z-59dd5cc6",
+    "runId": "20260813T075255.219919Z-59dd5cc6"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0001",
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0003",
+    "72ebb6668052-v2-evidence-0004",
+    "72ebb6668052-v2-evidence-0005",
+    "72ebb6668052-v2-evidence-0006"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0001",
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0003",
+      "72ebb6668052-v2-evidence-0004",
+      "72ebb6668052-v2-evidence-0005",
+      "72ebb6668052-v2-evidence-0006"
+    ],
+    "selectedAreaIdReportedByModel": "table-01",
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+    "Co-moving proxy tidak membuktikan hubungan sosial.",
+    "Area observasional dinamis; bukan nama tempat atau zona semantik."
+  ],
+  "metricSummary": {
+    "interactionAreaM2": "8.63",
+    "meanVisitDurationSec": "15.5",
+    "medianVisitDurationSec": "8.89",
+    "p95VisitDurationSec": "53.4",
+    "tableAreaM2": "1.69",
+    "uniqueVisitors": "8",
+    "visitCount": "28"
+  },
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "Where is the named food counter located?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": {
+    "areaId": "table-01",
+    "confidence": 1.0,
+    "confidenceBasis": "manual_verified_polygon",
+    "geometryM": {
+      "areaM2": 1.6928961245486556,
+      "centroid": [
+        2.1816777912837018,
+        3.96464328178908
+      ],
+      "points": [
+        [
+          1.7091836734693868,
+          3.0612244897959187
+        ],
+        [
+          2.655380333951762,
+          3.0612244897959187
+        ],
+        [
+          2.6414656771799616,
+          4.87012987012987
+        ],
+        [
+          1.7230983302411862,
+          4.88404452690167
+        ]
+      ],
+      "type": "polygon"
+    },
+    "interactionGeometryM": {
+      "areaM2": 8.63304888706623,
+      "centroid": [
+        2.1807322993832936,
+        3.964657382539038
+      ],
+      "holes": [
+        [
+          [
+            2.6414656771799616,
+            4.87012987012987
+          ],
+          [
+            2.655380333951762,
+            3.0612244897959187
+          ],
+          [
+            1.7091836734693868,
+            3.0612244897959187
+          ],
+          [
+            1.7230983302411862,
+            4.88404452690167
+          ]
+        ]
+      ],
+      "points": [
+        [
+          0.7287405249883567,
+          4.990122588407224
+        ],
+        [
+          0.7231274647991484,
+          4.891677892286724
+        ],
+        [
+          0.709212808027349,
+          3.068857855180972
+        ],
+        [
+          0.7133229911240926,
+          2.970331688327568
+        ],
+        [
+          0.7271172214175575,
+          2.8726893902671256
+        ],
+        [
+          0.7504613596856893,
+          2.7768804639166444
+        ],
+        [
+          0.7831284005443382,
+          2.683836583938148
+        ],
+        [
+          0.8248006799155256,
+          2.5944625368555454
+        ],
+        [
+          0.8750729640879708,
+          2.5096274226398005
+        ],
+        [
+          0.9334563903309284,
+          2.430156203320813
+        ],
+        [
+          0.9993832207416313,
+          2.3568216808098432
+        ],
+        [
+          1.072212363098501,
+          2.2903369819425374
+        ],
+        [
+          1.1512356050336994,
+          2.2313486238202382
+        ],
+        [
+          1.2356845009020623,
+          2.180430226884279
+        ],
+        [
+          1.3247378443764413,
+          2.138076936859208
+        ],
+        [
+          1.417529654103701,
+          2.1047006098076353
+        ],
+        [
+          1.5131575947664642,
+          2.08062580711867
+        ],
+        [
+          1.610691751661679,
+          2.0660866393758752
+        ],
+        [
+          1.7091836734693868,
+          2.0612244897959187
+        ],
+        [
+          2.655380333951762,
+          2.0612244897959187
+        ],
+        [
+          2.753875907694429,
+          2.0660870008261267
+        ],
+        [
+          2.851413609809595,
+          2.080627245889713
+        ],
+        [
+          2.9470448839924677,
+          2.10470382078267
+        ],
+        [
+          3.0398397139919533,
+          2.138082580283025
+        ],
+        [
+          3.1288956680392146,
+          2.1804389152182875
+        ],
+        [
+          3.2133466750165303,
+          2.2313609092968134
+        ],
+        [
+          3.292371447018021,
+          2.290353345002829
+        ],
+        [
+          3.3652014663926533,
+          2.356842519597696
+        ],
+        [
+          3.431128459595349,
+          2.4301818243916995
+        ],
+        [
+          3.489511285162834,
+          2.5096580330278226
+        ],
+        [
+          3.539782168828516,
+          2.5944982376238013
+        ],
+        [
+          3.5814522251397487,
+          2.683877365318329
+        ],
+        [
+          3.6141162118796473,
+          2.7769262021228363
+        ],
+        [
+          3.6374564710565847,
+          2.872739846046702
+        ],
+        [
+          3.65124601813517,
+          2.9703865072890787
+        ],
+        [
+          3.6553507494658595,
+          3.0689165699152583
+        ],
+        [
+          3.641436092694059,
+          4.877821950249209
+        ],
+        [
+          3.6360168521674545,
+          4.974379380109523
+        ],
+        [
+          3.621295867467011,
+          5.069961795011868
+        ],
+        [
+          3.5974108196262597,
+          5.163675240785458
+        ],
+        [
+          3.5645850984618153,
+          5.2546432431772265
+        ],
+        [
+          3.5231257132742266,
+          5.342015005257328
+        ],
+        [
+          3.473420421480426,
+          5.424973364672204
+        ],
+        [
+          3.415934102032829,
+          5.502742436323365
+        ],
+        [
+          3.351204407543432,
+          5.574594868992162
+        ],
+        [
+          3.279836735777312,
+          5.6398586480414785
+        ],
+        [
+          3.2024985675456588,
+          5.697923380570675
+        ],
+        [
+          3.1199132239543705,
+          5.7482460042405865
+        ],
+        [
+          3.0328531013948186,
+          5.790355866375607
+        ],
+        [
+          2.9421324475479254,
+          5.823859125839528
+        ],
+        [
+          2.8485997459654575,
+          5.8484424365156675
+        ],
+        [
+          2.7531297804533046,
+          5.863875877940799
+        ],
+        [
+          2.65661545347623,
+          5.8700151056835175
+        ],
+        [
+          1.7382481065374542,
+          5.883929762455318
+        ],
+        [
+          1.6397010849473326,
+          5.880560908842979
+        ],
+        [
+          1.5419649234844641,
+          5.8675030613385335
+        ],
+        [
+          1.4459898976170824,
+          5.844883179625744
+        ],
+        [
+          1.3527091595304148,
+          5.812921193752651
+        ],
+        [
+          1.2630296652142996,
+          5.771927865781491
+        ],
+        [
+          1.1778233562528606,
+          5.722301768291228
+        ],
+        [
+          1.0979186820545148,
+          5.664525409110318
+        ],
+        [
+          1.0240925449505114,
+          5.59916053995841
+        ],
+        [
+          0.9570627464787288,
+          5.526842694610409
+        ],
+        [
+          0.897481008296484,
+          5.448275009687613
+        ],
+        [
+          0.845926635579076,
+          5.3642213881555225
+        ],
+        [
+          0.8029008845139819,
+          5.275499071998708
+        ],
+        [
+          0.7688220886547966,
+          5.182970696287615
+        ],
+        [
+          0.7440215915207171,
+          5.087535901894544
+        ]
+      ],
+      "type": "polygon"
+    },
+    "kind": "table",
+    "label": "Meja 1",
+    "limitation": "Pemakaian dihitung dari interaction zone; kapasitas kursi tidak tersedia.",
+    "metrics": {
+      "interactionAreaM2": 8.633048887066225,
+      "meanVisitDurationSec": 15.502239031402615,
+      "medianVisitDurationSec": 8.894187353331077,
+      "p95VisitDurationSec": 53.39067484492415,
+      "tableAreaM2": 1.6928961245486556,
+      "uniqueVisitors": 8,
+      "visitCount": 28
+    }
+  },
+  "selectedAreaId": "table-01",
+  "sessionId": "eval-unsupported-03",
+  "supportLevel": "partially_supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 678,
+      "durationMs": 52801.38083299971,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6195,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 52803.47424998763
+  }
+}

@@ -11,6 +11,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from config import Config
+from model_registry import resolve_detection_model
 from models import (
     CalibrationPreviewResponse,
     PreviewCameraOut,
@@ -49,6 +50,7 @@ class _CachedCamera:
 class _CachedPreview:
     created_at: float
     global_time: float
+    detection_model: str
     cameras: list[_CachedCamera]
     inference_warnings: list[str]
 
@@ -56,24 +58,31 @@ class _CachedPreview:
 class CalibrationPreviewManager:
     def __init__(self, cfg=Config):
         self.cfg = cfg
-        self._detector = None
+        self._detectors: dict[str, object] = {}
         self._reid_tracker = None
         self._cache: dict[str, _CachedPreview] = {}
 
-    def _load_models(self, needs_reid: bool):
-        if self._detector is None:
+    def _load_models(self, detection_model: str, needs_reid: bool):
+        spec = resolve_detection_model(detection_model)
+        detector = self._detectors.get(spec.id)
+        if detector is None:
             try:
                 from ultralytics import YOLO
 
-                self._detector = YOLO(self.cfg.PREVIEW_YOLO_MODEL)
+                detector = YOLO(str(spec.path))
+                self._detectors[spec.id] = detector
             except Exception as exc:
                 raise RuntimeError(f"YOLO preview gagal dimuat: {exc}") from exc
         if needs_reid and self._reid_tracker is None:
             self._reid_tracker = make_tracker(self.cfg)
+        return detector, spec
 
     def sample(self, request) -> CalibrationPreviewResponse:
         needs_reid = len(request.cameras) > 1
-        self._load_models(needs_reid=needs_reid)
+        detector, detector_spec = self._load_models(
+            request.detectionModel,
+            needs_reid=needs_reid,
+        )
         loaded = []
         for camera in request.cameras:
             source_time = camera_source_time(camera, request.globalTimeSec)
@@ -81,7 +90,7 @@ class CalibrationPreviewManager:
 
         all_frames = [frame for item in loaded for frame in item["frames"]]
         try:
-            results = self._detector.predict(
+            results = detector.predict(
                 all_frames,
                 imgsz=self.cfg.PREVIEW_IMGSZ,
                 conf=self.cfg.CONF,
@@ -129,6 +138,7 @@ class CalibrationPreviewManager:
         self._cache[token] = _CachedPreview(
             created_at=time.monotonic(),
             global_time=float(request.globalTimeSec),
+            detection_model=detector_spec.id,
             cameras=cached_cameras,
             inference_warnings=inference_warnings,
         )
@@ -331,6 +341,8 @@ class CalibrationPreviewManager:
                     if item.camera_idx == camera_index and item.local_track_id == detection.local_id
                 )
                 _time, world_x, world_y, _confidence = tracklet.floor_observations[0]
+                from .bounds import clamp_world
+                world_x, world_y = clamp_world(world_x, world_y, venue)
                 assigned = identity.get((camera_index, detection.local_id))
                 if assigned:
                     global_id, score, level = assigned
@@ -463,14 +475,14 @@ class CalibrationPreviewManager:
             p1 = (int(x1 * width), int(y1 * height))
             p2 = (int(x2 * width), int(y2 * height))
             color = (90, 190, 90) if marker.globalId is not None else (150, 150, 150)
-            cv2.rectangle(output, p1, p2, color, max(2, width // 900))
-            suffix = "" if marker.identityScore is None else f" {marker.identityScore:.2f}"
+            cv2.rectangle(output, p1, p2, color, max(4, width // 350))
+            label = f"ID {marker.globalId}" if marker.globalId is not None else f"C{marker.cameraIndex + 1}-L{marker.localId}"
             cv2.putText(
                 output,
-                marker.identityLabel + suffix,
+                label,
                 (p1[0], max(18, p1[1] - 7)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.5, width / 2300.0),
+                max(0.38, width / 3000.0),
                 color,
                 max(1, width // 1200),
             )

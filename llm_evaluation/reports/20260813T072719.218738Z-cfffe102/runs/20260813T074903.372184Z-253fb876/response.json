@@ -1,0 +1,81 @@
+{
+  "alternativeInterpretations": [],
+  "answer": "Jumlah global tracks yang teramati adalah 41. Angka ini diambil dari field `trackCount` dalam `analysisSummary`, yang merepresentasikan total jumlah tracks yang terdeteksi secara global dalam data. Metrik ini tidak tergantung pada area tertentu dan mencakup semua tracks yang valid dalam analisis.",
+  "artifacts": {
+    "floorplanOverlay": null,
+    "grounding": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074903.372184Z-253fb876/grounding.json",
+    "response": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074903.372184Z-253fb876/response.json",
+    "retrievedEvidence": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074903.372184Z-253fb876/retrieved_evidence.json",
+    "runDirectory": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/evaluation/reports/20260813T072719.218738Z-cfffe102/runs/20260813T074903.372184Z-253fb876",
+    "runId": "20260813T074903.372184Z-253fb876"
+  },
+  "assumption": "Jawaban dan pemilihan area berasal dari reasoning Qwen atas data yang di-retrieve; backend hanya memvalidasi areaId untuk overlay.",
+  "contextRunIds": [],
+  "coordinateSystem": {
+    "heightM": 7.5,
+    "orientation": "x_right_y_down",
+    "type": "local_metric",
+    "unit": "meter",
+    "widthM": 10.0
+  },
+  "dataGrounding": "grounded",
+  "evidenceCardIds": [
+    "72ebb6668052-v2-evidence-0021",
+    "72ebb6668052-v2-evidence-0022",
+    "72ebb6668052-v2-evidence-0012",
+    "72ebb6668052-v2-evidence-0001",
+    "72ebb6668052-v2-evidence-0002",
+    "72ebb6668052-v2-evidence-0003"
+  ],
+  "grounding": {
+    "catalogAreaCount": 39,
+    "mode": "qwen_general_reasoning",
+    "retrievedEvidenceCardIds": [
+      "72ebb6668052-v2-evidence-0021",
+      "72ebb6668052-v2-evidence-0022",
+      "72ebb6668052-v2-evidence-0012",
+      "72ebb6668052-v2-evidence-0001",
+      "72ebb6668052-v2-evidence-0002",
+      "72ebb6668052-v2-evidence-0003"
+    ],
+    "selectedAreaIdReportedByModel": null,
+    "thinkingAvailable": true
+  },
+  "interpretation": "Qwen menganalisis katalog area dan evidence dari job aktif sesuai pertanyaan pengguna.",
+  "jobId": "72ebb6668052",
+  "limitations": [
+    "Kandidat aktivitas rendah hanya di observed-support envelope; belum tersedia walkable-floor mask yang memastikan seluruh venue dapat dilalui.",
+    "Durasi hanya menjumlah interval valid dan tidak menjembatani gap lebih dari satu detik.",
+    "Co-moving proxy tidak membuktikan hubungan sosial."
+  ],
+  "metricSummary": {},
+  "pipelineVersion": "general-retrieval-qwen-reasoning-v2",
+  "provenance": {
+    "areaSelectionAuthority": "qwen_reasoning_validated",
+    "chatModel": "Qwen3-8B-Q4_K_M",
+    "packagePath": "/Users/daf2a/Documents/Challenge/c2/be/path-simulation/notebooks/output/72ebb6668052/explanatory-v2",
+    "packageSchemaVersion": "2.0",
+    "retrievalModel": "tfidf"
+  },
+  "question": "How many global tracks were observed?",
+  "requiredData": [],
+  "schemaVersion": "2.1",
+  "selectedArea": null,
+  "selectedAreaId": null,
+  "sessionId": "eval-global-03",
+  "supportLevel": "supported",
+  "usage": {
+    "generation": {
+      "areaMarkerValid": true,
+      "completionTokens": 407,
+      "durationMs": 38207.118999998784,
+      "fallback": false,
+      "finishReason": "stop",
+      "modelCallCount": 1,
+      "promptTokens": 6458,
+      "supportMarkerValid": true,
+      "thinkingAvailable": true
+    },
+    "pipelineLatencyMs": 38209.22825000889
+  }
+}
